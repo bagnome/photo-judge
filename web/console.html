@@ -1,0 +1,257 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Photo Judge — Console</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
+ .bar{padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #333}
+ label{color:#9aa0a6;font-size:13px}
+ select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ button{cursor:pointer}
+ button:hover{background:#363a42}
+ button.primary{background:#2d6cdf;border-color:#2d6cdf}
+ button.primary:hover{background:#3b78e6}
+ button.danger{background:#a83232;border-color:#a83232}
+ button.danger:hover{background:#c23b3b}
+ .spacer{flex:1 1 auto}
+ #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
+ .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
+ .toast.show{opacity:1;transform:none}
+ .toast.edit{background:#2d6cdf}
+ .toast.del{background:#a83232}
+ #monpick{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000}
+ #monpick.show{display:flex}
+ .monbox{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:18px 20px;min-width:320px}
+ .monbox h3{margin:0 0 12px;font-size:15px;font-weight:600}
+ .monbtn{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px}
+ .moncancel{color:#9aa0a6}
+ table{width:100%;border-collapse:collapse}
+ th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #2c2f35;font-size:14px;vertical-align:middle}
+ th{color:#9aa0a6;font-weight:500}
+ .status{font-variant-numeric:tabular-nums;color:#9aa0a6}
+ .live{color:#4caf50;font-weight:600}
+ .blk{color:#e0726b;font-weight:600}
+ .muted{color:#777}
+ .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+ .sep{color:#444}
+</style>
+</head>
+<body>
+<header>Photo Judge — Operator Console</header>
+<div class="bar">
+  <label>Session</label>
+  <select id="session"></select>
+  <button id="editsession">Edit date</button>
+  <button id="delsession" class="danger">Delete</button>
+  <span class="sep">|</span>
+  <label>New</label>
+  <input type="date" id="newdate">
+  <button id="newbtn">Create session</button>
+  <span class="sep">|</span>
+  <button id="createscreen" class="primary">➕ Create Screen</button>
+  <button id="panicblack">⬛ Black all</button>
+  <span class="sep">|</span>
+  <button id="openadmin">▤ Upload / Reorder</button>
+  <span class="spacer"></span>
+  <button id="closeapp" class="danger">✕ Close App</button>
+</div>
+<table>
+ <thead><tr><th>Screen</th><th>Category</th><th>Orientation</th><th></th><th>Showing</th><th>Controls</th></tr></thead>
+ <tbody id="rows"></tbody>
+</table>
+<div id="monpick"><div class="monbox" id="monbox"></div></div>
+<div id="toasts"></div>
+
+<script>
+let state = {sessions:[], categories:[], screens:[]};
+let pendingSelect = null;
+let screenMonitor = {};   // screen name -> chosen monitor index (remembered for relaunch)
+const $ = id => document.getElementById(id);
+const post = (url, body) => fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+const currentSession = () => $('session').value;
+
+function toast(msg, kind){
+ const t = document.createElement('div');
+ t.className = 'toast' + (kind ? ' '+kind : '');
+ t.textContent = msg;
+ $('toasts').appendChild(t);
+ requestAnimationFrame(() => t.classList.add('show'));
+ setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, 3200);
+}
+
+function btn(label, fn){ const b=document.createElement('button'); b.textContent=label; b.onclick=fn; return b; }
+function cmd(name, action){ post('/api/screen/cmd', {name, action}); }
+
+function statusText(sc){
+ if(sc.blackout) return '<span class="blk">BLACK</span>';
+ if(!sc.category) return '<span class="muted">idle</span>';
+ if(sc.position <= 0) return 'Title card';
+ if(sc.position > sc.count) return 'End (black)';
+ return '<span class="live">'+sc.position+' / '+sc.count+'</span>';
+}
+
+function render(){
+ // Session dropdown
+ const sel = $('session'); const cur = sel.value;
+ sel.innerHTML = '';
+ state.sessions.forEach(s => {
+   const o = document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o);
+ });
+ if(pendingSelect && state.sessions.some(s=>s.id===pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
+ else if(cur) sel.value = cur;
+
+ // Screen rows
+ const rows = $('rows'); rows.innerHTML = '';
+ if(state.screens.length === 0){
+   rows.innerHTML = '<tr><td colspan="6" class="muted">No screens yet — click “Create Screen”, name it, then use “⧉ Open window” on its row to launch the display.</td></tr>';
+   return;
+ }
+ state.screens.forEach(sc => {
+   const tr = document.createElement('tr');
+
+   const tdN = document.createElement('td'); tdN.textContent = sc.name; tr.appendChild(tdN);
+
+   const tdC = document.createElement('td');
+   const cs = document.createElement('select');
+   const blank = document.createElement('option'); blank.value=''; blank.textContent='—'; cs.appendChild(blank);
+   state.categories.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; cs.appendChild(o); });
+   cs.value = sc.category || ''; tdC.appendChild(cs); tr.appendChild(tdC);
+
+   const tdO = document.createElement('td');
+   const os = document.createElement('select');
+   ['Landscape','Portrait'].forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; os.appendChild(o); });
+   os.value = sc.orientation || 'Landscape'; tdO.appendChild(os); tr.appendChild(tdO);
+
+   const tdL = document.createElement('td');
+   tdL.appendChild(btn('Load', () => {
+     if(!currentSession()){ alert('Create or select a session first.'); return; }
+     if(!cs.value){ alert('Pick a category.'); return; }
+     post('/api/screen/load', {name:sc.name, sessionId:currentSession(), category:cs.value, orientation:os.value});
+   }));
+   tr.appendChild(tdL);
+
+   const tdS = document.createElement('td'); tdS.className='status'; tdS.innerHTML = statusText(sc); tr.appendChild(tdS);
+
+   const tdK = document.createElement('td');
+   const g = document.createElement('div'); g.className='grp';
+   g.appendChild(btn('⧉ Open window', () => openOutputWindow(sc.name)));
+   g.appendChild(btn('◀ Prev', () => cmd(sc.name,'prev')));
+   g.appendChild(btn('Next ▶', () => cmd(sc.name,'next')));
+   g.appendChild(btn(sc.blackout ? 'Reveal' : 'Black', () => cmd(sc.name,'blackout')));
+   g.appendChild(btn('★ Make live', () => cmd(sc.name,'makelive')));
+   const dsb = btn('🗑', () => deleteScreen(sc.name)); dsb.className = 'danger'; dsb.title = 'Delete this screen';
+   g.appendChild(dsb);
+   tdK.appendChild(g); tr.appendChild(tdK);
+
+   rows.appendChild(tr);
+ });
+}
+
+$('newbtn').onclick = async () => {
+ const d = $('newdate').value;
+ if(!d){ alert('Pick a date for the session.'); return; }
+ const r = await post('/api/session/create', {date:d});
+ if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
+ const s = await r.json();
+ pendingSelect = s.id;
+ toast('Session #'+s.id+' ('+s.date+') created');
+};
+
+$('editsession').onclick = async () => {
+ const id = currentSession();
+ if(!id){ alert('No session selected.'); return; }
+ const cur = (state.sessions.find(s => s.id === id) || {}).date || '';
+ const d = prompt('New date for session #'+id+' (YYYY-MM-DD):', cur);
+ if(!d) return;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert('Please use YYYY-MM-DD format (e.g. 2026-06-09).'); return; }
+ const r = await post('/api/session/edit', {id, date:d});
+ if(!r.ok){ alert('Edit failed: '+(await r.text())); return; }
+ pendingSelect = id;
+ toast('Session #'+id+' date changed to '+d, 'edit');
+};
+
+$('delsession').onclick = async () => {
+ const id = currentSession();
+ if(!id){ alert('No session selected.'); return; }
+ const ss = state.sessions.find(s => s.id === id) || {};
+ if(!confirm('Delete session #'+id+' ('+(ss.date||'')+')?\n\nIts photos move to photos\\_deleted (recoverable on disk) and it disappears from the app.')) return;
+ const r = await post('/api/session/delete', {id});
+ if(!r.ok){ alert('Could not delete:\n\n'+(await r.text())); return; }
+ toast('Session #'+id+' deleted — recoverable in photos\\_deleted', 'del');
+};
+
+function chooseMonitor(screens){
+ return new Promise(resolve => {
+   if(screens.length <= 1){ resolve(0); return; }
+   const box = $('monbox');
+   box.innerHTML = '<h3>Place this screen on which monitor?</h3>';
+   screens.forEach((s, i) => {
+     const tags = [s.width+'×'+s.height];
+     if(s.isPrimary) tags.push('primary');
+     if(s.isInternal) tags.push('built-in');
+     const b = document.createElement('button'); b.className = 'monbtn';
+     b.textContent = 'Monitor '+(i+1)+' — '+tags.join(', ')+'  ·  at ('+s.left+', '+s.top+')';
+     b.onclick = () => { $('monpick').classList.remove('show'); resolve(i); };
+     box.appendChild(b);
+   });
+   const c = document.createElement('button'); c.className = 'monbtn moncancel'; c.textContent = 'Leave where it opened';
+   c.onclick = () => { $('monpick').classList.remove('show'); resolve(-1); };
+   box.appendChild(c);
+   $('monpick').classList.add('show');
+ });
+}
+
+// Open synchronously (survives pop-up blockers), then best-effort place it on a
+// chosen monitor via the Window Management API. Because the window then physically
+// sits on that monitor, a plain fullscreen in the output page lands there.
+async function openOutputWindow(name){
+ const w = window.open('/output?screen='+encodeURIComponent(name), 'pjwin_'+name, 'width=1024,height=640');
+ if(!w){ alert('Your browser blocked the pop-up window.\n\nAllow pop-ups for this site, then click “⧉ Open window” on the screen’s row to launch it.'); return; }
+ w.focus();
+ if(!('getScreenDetails' in window)) return;                 // older browser: drag + F fallback
+ let screens;
+ try { screens = (await window.getScreenDetails()).screens; } catch(e){ return; } // permission denied
+ if(!screens || !screens.length) return;
+ let idx = (name in screenMonitor) ? screenMonitor[name]
+         : (screens.length === 1 ? 0 : await chooseMonitor(screens));
+ if(idx === -1) return;                                       // operator left it where it opened
+ if(idx == null || !screens[idx]) idx = 0;
+ screenMonitor[name] = idx;
+ const s = screens[idx];
+ try { w.moveTo(s.availLeft, s.availTop); w.resizeTo(s.availWidth, s.availHeight); w.focus(); } catch(e){}
+}
+
+$('createscreen').onclick = async () => {
+ const name = prompt('Name this screen (e.g. "Landscape monitor"):');
+ if(!name || !name.trim()) return;
+ const r = await post('/api/screen/create', {name: name.trim()});
+ if(!r.ok){ alert('Could not create screen: '+(await r.text())); return; }
+ toast('Screen “'+name.trim()+'” created — use ⧉ Open window on its row to launch it');
+};
+
+function deleteScreen(name){
+ if(!confirm('Delete screen “'+name+'”?\n\nIf its output window is open it will go black. Screens are saved between launches, so this removes it for good.')) return;
+ post('/api/screen/delete', {name}).then(r => {
+   if(r.ok) toast('Screen “'+name+'” deleted', 'del');
+   else toast('Could not delete screen', 'del');
+ });
+}
+
+$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout) cmd(sc.name,'blackout'); }); };
+$('openadmin').onclick = () => window.open('/admin', '_blank');
+
+$('closeapp').onclick = async () => {
+ if(!confirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.')) return;
+ try { await post('/api/shutdown', {}); } catch(e){}
+ if(es) es.close();
+ document.body.innerHTML = '<div style="padding:48px;font-family:system-ui;color:#9aa0a6;font-size:16px">Photo Judge has been closed.<br><br>You can close this tab and the output windows now.</div>';
+};
+
+const es = new EventSource('/api/events?role=console');
+es.onmessage = e => { state = JSON.parse(e.data); render(); };
+render();
+</script>
+</body>
+</html>

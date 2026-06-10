@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Photo Judge — Upload / Reorder</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px;display:flex;gap:14px;align-items:center}
+ header a{color:#7fa9f0;text-decoration:none;font-weight:500;font-size:13px}
+ .bar{padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #333}
+ label{color:#9aa0a6;font-size:13px}
+ select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ button{cursor:pointer}
+ button:hover{background:#363a42}
+ .sep{color:#444}
+ #drop{margin:16px;padding:30px;border:2px dashed #4a4f57;border-radius:8px;text-align:center;color:#9aa0a6;cursor:pointer;transition:.15s}
+ #drop.over{border-color:#2d6cdf;background:#1f2735;color:#cdd}
+ #drop b{color:#e8e8e8}
+ .grid{display:flex;flex-wrap:wrap;gap:10px;padding:0 16px 24px}
+ .tile{width:168px;background:#23262c;border:1px solid #3a3e45;border-radius:6px;overflow:hidden;cursor:grab;user-select:none;position:relative}
+ .tile.dragover{outline:2px solid #2d6cdf;outline-offset:-2px}
+ .tile.dragging{opacity:.4}
+ .tile img{width:100%;height:112px;object-fit:cover;display:block;background:#000}
+ .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
+ .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+ .tile .del:hover{background:#a83232}
+ .empty{padding:6px 16px;color:#777}
+ #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
+ .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
+ .toast.show{opacity:1;transform:none}
+ .toast.del{background:#a83232}
+</style>
+</head>
+<body>
+<header>Photo Judge — Upload / Reorder <a href="/">← Console</a></header>
+<div class="bar">
+  <label>Session</label><select id="session"></select>
+  <span class="sep">|</span>
+  <label>New</label><input type="date" id="newdate"><button id="newbtn">Create</button>
+  <span class="sep">|</span>
+  <label>Category</label><select id="category"></select>
+  <label>Orientation</label>
+  <select id="orientation"><option>Landscape</option><option>Portrait</option></select>
+</div>
+
+<div id="drop">Drag photos here, or click to browse.<br>Adding to <b><span id="ctx">…</span></b></div>
+<input type="file" id="fileinput" multiple accept="image/*" style="display:none">
+<div class="grid" id="grid"></div>
+<div id="toasts"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = encodeURIComponent;
+const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
+let sessions = [], categories = [], files = [], pendingSession = null, dragFrom = null;
+
+function toast(msg, kind){
+ const t = document.createElement('div');
+ t.className = 'toast' + (kind ? ' '+kind : '');
+ t.textContent = msg;
+ $('toasts').appendChild(t);
+ requestAnimationFrame(() => t.classList.add('show'));
+ setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, 3200);
+}
+
+function ctx(){ return {session:$('session').value, category:$('category').value, orientation:$('orientation').value}; }
+
+function applyState(st){
+ sessions = st.sessions || []; categories = st.categories || [];
+ const ssel = $('session'), scur = ssel.value;
+ ssel.innerHTML = '';
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ if(pendingSession && sessions.some(s => s.id === pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
+ else if(scur) ssel.value = scur;
+
+ const csel = $('category'), ccur = csel.value;
+ csel.innerHTML = '';
+ categories.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; csel.appendChild(o); });
+ if(ccur) csel.value = ccur;
+
+ refreshGrid();
+}
+
+async function refreshGrid(){
+ const c = ctx();
+ $('ctx').textContent = c.session ? ('session #'+c.session+'  ›  '+c.category+'  ›  '+c.orientation) : '(create or select a session)';
+ if(!c.session || !c.category || !c.orientation){ files = []; renderGrid(); return; }
+ const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+enc(c.orientation));
+ const j = await r.json();
+ files = j.files || [];
+ renderGrid();
+}
+
+function renderGrid(){
+ const g = $('grid'); g.innerHTML = '';
+ if(files.length === 0){ g.innerHTML = '<div class="empty">No photos in this folder yet — drop some above.</div>'; return; }
+ const c = ctx();
+ files.forEach((fn, i) => {
+   const t = document.createElement('div'); t.className = 'tile'; t.draggable = true; t.dataset.i = i;
+   const img = document.createElement('img'); img.loading = 'lazy';
+   img.src = '/api/photo?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+enc(c.orientation)+'&file='+enc(fn);
+   const badge = document.createElement('div'); badge.className = 'idx'; badge.textContent = i+1;
+   const cap = document.createElement('div'); cap.className = 'fn'; cap.textContent = fn;
+   const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove this photo';
+   del.onclick = (e) => { e.stopPropagation(); deletePhoto(fn); };
+   t.append(img, badge, cap, del);
+   t.addEventListener('dragstart', () => { dragFrom = i; t.classList.add('dragging'); });
+   t.addEventListener('dragend',   () => t.classList.remove('dragging'));
+   t.addEventListener('dragover',  e => { e.preventDefault(); t.classList.add('dragover'); });
+   t.addEventListener('dragleave', () => t.classList.remove('dragover'));
+   t.addEventListener('drop',      e => { e.preventDefault(); t.classList.remove('dragover'); moveItem(dragFrom, i); });
+   g.appendChild(t);
+ });
+}
+
+function moveItem(from, to){
+ if(from === null || from === to) return;
+ const m = files.splice(from, 1)[0];
+ files.splice(to, 0, m);
+ dragFrom = null;
+ renderGrid();
+ saveOrder();
+}
+
+async function saveOrder(){
+ const c = ctx();
+ const r = await post('/api/order', {session:c.session, category:c.category, orientation:c.orientation, order:files});
+ if(r.ok) toast('Order saved'); else toast('Could not save order', 'del');
+}
+
+async function deletePhoto(fn){
+ if(!confirm('Remove "'+fn+'" from this category?\n\nIt moves to photos\\_deleted (recoverable).')) return;
+ const c = ctx();
+ const r = await post('/api/photo/delete', {session:c.session, category:c.category, orientation:c.orientation, file:fn});
+ if(!r.ok){ toast('Could not remove: '+(await r.text()), 'del'); return; }
+ const j = await r.json();
+ files = j.files || files;
+ renderGrid();
+ toast('Removed '+fn, 'del');
+}
+
+function uploadFiles(list){
+ const c = ctx();
+ if(!c.session){ alert('Create or select a session first.'); return; }
+ if(!list || !list.length) return;
+ const fd = new FormData();
+ fd.append('session', c.session); fd.append('category', c.category); fd.append('orientation', c.orientation);
+ for(const f of list) fd.append('files', f);
+ fetch('/api/upload', {method:'POST', body:fd}).then(async r => {
+   if(!r.ok){ toast('Upload failed: '+(await r.text()), 'del'); return; }
+   const j = await r.json();
+   files = j.files || files;
+   renderGrid();
+   let msg = (j.saved ? j.saved.length : 0)+' photo(s) uploaded';
+   if(j.skipped && j.skipped.length) msg += ' · '+j.skipped.length+' skipped (not an image)';
+   toast(msg);
+ });
+}
+
+$('newbtn').onclick = async () => {
+ const d = $('newdate').value;
+ if(!d){ alert('Pick a date for the session.'); return; }
+ const r = await post('/api/session/create', {date:d});
+ if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
+ const s = await r.json();
+ pendingSession = s.id;
+ toast('Session #'+s.id+' ('+s.date+') created');
+};
+
+['session','category','orientation'].forEach(id => $(id).addEventListener('change', refreshGrid));
+
+const drop = $('drop'), fi = $('fileinput');
+drop.onclick = () => fi.click();
+fi.onchange = () => { uploadFiles(fi.files); fi.value = ''; };
+drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.remove('over'); uploadFiles(e.dataTransfer.files); });
+
+const es = new EventSource('/api/events?role=console');
+es.onmessage = e => applyState(JSON.parse(e.data));
+</script>
+</body>
+</html>

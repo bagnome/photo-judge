@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Photo Judge — Output</title>
+<style>
+ html,body{margin:0;height:100%;background:#000;overflow:hidden}
+ #stage{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center}
+ #img{max-width:100%;max-height:100%;object-fit:contain;display:none}
+ #title{display:none;color:#fff;text-align:center;font-family:system-ui,Segoe UI,sans-serif}
+ #title #logo{max-height:24vh;max-width:60vw;object-fit:contain;margin:0 auto 4vh;display:none}
+ #title .cat{font-size:5vw;font-weight:600;line-height:1.1}
+ #title .ori{font-size:1.8vw;color:#bbb;margin-top:2vh;letter-spacing:.25em;text-transform:uppercase}
+ #hint{position:fixed;bottom:12px;left:0;right:0;text-align:center;color:#3a3a3a;font-family:system-ui;font-size:13px}
+ body.fs{cursor:none}
+ body.fs #hint{display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+ <img id="img" alt="">
+ <div id="title"><img id="logo" alt=""><div class="cat" id="cat"></div><div class="ori" id="ori"></div></div>
+</div>
+<div id="hint">Click anywhere — or press <b>F</b> — for fullscreen on this monitor &nbsp;·&nbsp; screen: <span id="name"></span></div>
+
+<script>
+const q = new URLSearchParams(location.search);
+let name = q.get('screen') || prompt('Screen name:') || 'Screen';
+document.getElementById('name').textContent = name;
+
+const img = document.getElementById('img');
+const title = document.getElementById('title');
+const logo = document.getElementById('logo');
+const cat = document.getElementById('cat');
+const ori = document.getElementById('ori');
+logo.onerror = () => { logo.style.display = 'none'; };
+
+function show(v){
+ if(v.mode === 'photo'){
+   title.style.display = 'none';
+   img.onload = () => { img.style.display = 'block'; };
+   img.src = v.photoUrl;
+   if(img.complete) img.style.display = 'block';   // cached / re-showing same photo
+ } else if(v.mode === 'title'){
+   img.style.display = 'none';
+   if(v.logoUrl){ logo.src = v.logoUrl; logo.style.display = 'block'; }
+   else { logo.style.display = 'none'; logo.removeAttribute('src'); }
+   cat.textContent = v.category;
+   ori.textContent = v.orientation;
+   title.style.display = 'block';
+ } else { // black | idle
+   img.style.display = 'none';
+   title.style.display = 'none';
+ }
+}
+
+async function register(){
+ await fetch('/api/screen/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
+}
+
+register().then(() => {
+ const es = new EventSource('/api/events?role=output&screen='+encodeURIComponent(name));
+ es.onmessage = e => show(JSON.parse(e.data));
+});
+
+// The window is already positioned on the target monitor, so a plain fullscreen lands there.
+function goFullscreen(){
+ if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+}
+document.addEventListener('keydown', e => {
+ if(e.key === 'f' || e.key === 'F'){
+   if(document.fullscreenElement) document.exitFullscreen(); else goFullscreen();
+ }
+});
+document.addEventListener('click', goFullscreen);               // click anywhere to go fullscreen
+window.addEventListener('load', () => setTimeout(goFullscreen, 300)); // best-effort; may need a click
+document.addEventListener('fullscreenchange', () => {
+ document.body.classList.toggle('fs', !!document.fullscreenElement);
+});
+</script>
+</body>
+</html>

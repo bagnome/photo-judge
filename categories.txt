@@ -1,0 +1,9 @@
+# categories.txt — one per line. Order here = order shown to the operator.
+# These names appear on the title cards the judges see, so spelling counts.
+Pictorial
+Wildlife
+Altered Reality
+Portraiture
+Macro
+Landscapes, Cityscapes, and Travel
+Black and White

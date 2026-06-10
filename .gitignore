@@ -1,0 +1,12 @@
+# Build artifact (~9 MB) — attach to a GitHub Release instead of committing
+*.exe
+
+# Runtime data and user content, created/managed by the app at run time
+/photos/
+/logo/
+/screens.json
+/applog.txt
+
+# OS / editor cruft
+Thumbs.db
+.DS_Store

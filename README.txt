@@ -1,0 +1,235 @@
+============================================================
+ PHOTO JUDGE  —  User Guide
+============================================================
+
+Photo Judge shows competition photos to judges on one or more
+monitors, while you (the operator) line up the next photo
+privately on the laptop. You drive everything from a control
+page in your web browser; the judges only ever see clean photos
+on black, with a title card announcing each category.
+
+Nothing to install. Everything lives next to the program file.
+
+
+------------------------------------------------------------
+ 1. STARTING THE APP
+------------------------------------------------------------
+
+1. Double-click  photo-judge.exe
+2. The FIRST time on a new computer, Windows may warn
+   "Windows protected your PC / unknown publisher".
+   Click  More info  ->  Run anyway.  (One time only.)
+3. A small command window opens AND your web browser opens to
+   the control page automatically.
+     * Leave the command window open while you use the app
+       (you can minimize it). Closing it stops the app.
+     * If the browser didn't open, or you closed the tab, just
+       go to:   http://127.0.0.1:8753
+
+On first run the app creates these next to itself:
+     photos\          - where all photos are stored
+     logo\            - optional logo for the title cards
+     categories.txt   - the list of judging categories
+
+
+------------------------------------------------------------
+ 2. THE BIG PICTURE
+------------------------------------------------------------
+
+SESSION    - One competition night, labeled by date. Everything
+             is organized under a session. You pick or create a
+             session before doing anything else.
+
+CATEGORY   - A judging category (e.g. Wildlife, Macro). The list
+             comes from categories.txt. Each category has a
+             Landscape group and a Portrait group of photos.
+
+SCREEN     - A display you present on (e.g. "Landscape monitor").
+             You create named screens, then open a window for
+             each and put it on the right monitor.
+
+So the flow is:  pick a Session  ->  add photos to its
+categories  ->  open your Screens  ->  present.
+
+
+------------------------------------------------------------
+ 3. TYPICAL RUN  —  STEP BY STEP
+------------------------------------------------------------
+
+A) CREATE / PICK A SESSION  (do this first!)
+   On the control page, use the date box + "Create session",
+   or pick an existing one from the Session dropdown.
+
+B) ADD PHOTOS  (can be done ahead of time)
+   Click "Upload / Reorder", choose the session, category, and
+   Landscape or Portrait, then drag your photos in. Drag the
+   thumbnails to set the order judges will see them in.
+
+C) CREATE YOUR SCREENS
+   Click "Create Screen" and name it (e.g. "Landscape monitor").
+   Repeat for each display. Screens are remembered for next time.
+
+D) OPEN EACH SCREEN'S WINDOW
+   On a screen's row, click "Open window". Move the new window
+   to the correct monitor, then click it (or press F) to go
+   fullscreen. It starts black.
+
+E) PRESENT
+   On a screen's row: choose a Category + Landscape/Portrait,
+   click "Load". The monitor shows the category TITLE CARD.
+   Click "Next" to reveal the first photo, "Next"/"Prev" to
+   move through them. Black out or switch categories anytime.
+
+
+------------------------------------------------------------
+ 4. ADDING & ORGANIZING PHOTOS  ("Upload / Reorder" page)
+------------------------------------------------------------
+
+* Pick Session, Category, and Orientation at the top. The page
+  shows the photos already in that group.
+* UPLOAD: drag image files onto the drop area, or click it to
+  browse. The folder is created automatically if needed.
+* REORDER: drag a thumbnail to a new spot. The number badge
+  shows the display order. Saved instantly.
+* REMOVE: click the small x on a thumbnail to remove a photo.
+* If two photos have the same filename, the new one is renamed
+  (e.g. "sunset (2).jpg") so nothing is overwritten.
+* Non-image files are ignored.
+
+
+------------------------------------------------------------
+ 5. SCREENS
+------------------------------------------------------------
+
+* CREATE SCREEN  - makes a named screen and remembers it. It
+  does NOT open a window by itself.
+* Open window  - launches (or relaunches) that screen's display
+  window. Use this if a window was closed or blocked.
+* Trash icon   - deletes the screen (its window goes black).
+
+Screens are saved between launches. When you reopen the app,
+your screens are listed again BUT with no category selected, on
+purpose, so a photo can never appear before you choose one.
+
+
+------------------------------------------------------------
+ 6. PRESENTING  (control page buttons)
+------------------------------------------------------------
+
+Per screen row:
+   Category / Orientation menus + Load
+                 - load that group; the monitor shows the title
+                   card (start of the run). Loading always starts
+                   at the beginning.
+   Prev / Next   - step backward / forward through the photos.
+                   (Title card -> photo 1 -> photo 2 -> ... -> black)
+   Black / Reveal- hide the screen (black) or bring it back.
+   Make live     - show THIS screen and black out all the others
+                   in one click (handy when alternating monitors).
+   Trash icon    - delete the screen.
+
+Top of page:
+   Black all     - instantly black every screen.
+   Close App     - stops the program when you're done (see #9).
+
+The monitor not in use simply stays black on its own - there is
+nothing extra to switch off.
+
+
+------------------------------------------------------------
+ 7. CATEGORIES  (editing the list)
+------------------------------------------------------------
+
+The categories come from  categories.txt  (open it in Notepad).
+* One category per line. The order here is the order you see in
+  the menus, and the text is exactly what shows on title cards,
+  so check spelling.
+* Lines starting with #  are notes and are ignored.
+* After editing, restart the app to pick up changes.
+
+NOTE: changing categories only affects NEW sessions. Sessions
+already created keep the categories they were made with.
+
+
+------------------------------------------------------------
+ 8. LOGO  (optional)
+------------------------------------------------------------
+
+To show a club logo above the category name on every title card,
+put one image file into the  logo\  folder, then start the app.
+A see-through (transparent) PNG looks best on the black card.
+No image in logo\  =  title cards show just the text.
+(Detected when the app starts, so restart after adding/changing.)
+
+
+------------------------------------------------------------
+ 9. STOPPING THE APP
+------------------------------------------------------------
+
+Click "Close App" on the control page (recommended), or close
+the small command window that opened at startup. Either one
+fully stops the program so it isn't left running in the
+background. Closing just the browser tab does NOT stop it.
+
+
+------------------------------------------------------------
+ 10. GOOD TO KNOW
+------------------------------------------------------------
+
+* Loading a category shows the TITLE CARD first - press Next to
+  reveal the first photo. (This is the deliberate "announce,
+  then reveal" moment.)
+* Deleted sessions and photos are not gone for good - they are
+  moved into  photos\_deleted\  and can be recovered there.
+* For best speed during an event, copy the whole folder onto the
+  laptop's hard drive rather than running it from a USB stick.
+
+
+------------------------------------------------------------
+ 11. TROUBLESHOOTING
+------------------------------------------------------------
+
+A window didn't open / was blocked
+   Allow pop-ups for this site in your browser, then click
+   "Open window" on the screen's row.
+
+I loaded a category but the judges' screen is black
+   Press "Next" - loading shows the title card first. If it is
+   still black after Next, that group has no photos yet.
+
+The display window isn't truly fullscreen
+   Click anywhere on that window, or press the F key.
+
+My logo isn't showing
+   Make sure one image is in the logo\ folder, then restart.
+
+The app won't start (security warning)
+   More info -> Run anyway. It is an unrecognized program only
+   because it isn't code-signed; it is safe and self-contained.
+
+Nothing happens / can't reach the page
+   Make sure the command window is still open, and visit
+   http://127.0.0.1:8753 in your browser.
+
+
+------------------------------------------------------------
+ 12. MOVING THE APP TO ANOTHER COMPUTER
+------------------------------------------------------------
+
+The app runs from any folder and rebuilds anything missing.
+
+To start fresh elsewhere: copy just  photo-judge.exe.
+
+To bring your existing content, copy the exe AND keep these in
+the same folder with it:
+     photos\          (all sessions and photos - the main data)
+     categories.txt   (your category list)
+     logo\            (your logo)
+     screens.json     (your saved screens)
+
+Requirements on the other computer:
+   * 64-bit Windows 10/11 (the laptops you use are fine)
+   * Microsoft Edge (already on Windows) - nothing to install
+   * Copy to a normal, writable folder (not a locked USB)
+
+============================================================
