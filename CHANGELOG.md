@@ -19,6 +19,10 @@ collects changes already merged into `development` but not yet released.
   one row per photo (in display order) with the photo name and blanks for the
   photographer name and a score. Generated with the standard library only (no
   third-party PDF dependency).
+- **Photographer names** — a text box under each photo on the Upload / Reorder
+  page associates a photographer with that photo (saved per folder in
+  `names.json`). When a name is set it's pre-filled into the Photographer column
+  of the score-sheet PDF; photos left blank keep an empty space to write in.
 
 ## [1.0.0] - 2026-06-10
 

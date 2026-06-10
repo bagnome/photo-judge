@@ -89,7 +89,8 @@ that workflow.
 - **Upload & reorder page** — drag-and-drop upload with lazy folder creation,
   filename-collision auto-renaming (`sunset.jpg` → `sunset (2).jpg`), non-images
   skipped; drag thumbnails to set display order (saved to `order.json`); remove a
-  photo with an × (recoverable soft-delete).
+  photo with an × (recoverable soft-delete); and a per-photo text box to record the
+  **photographer's name** (saved to `names.json`).
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
   appear before you choose one). Auto-placed on a chosen monitor via the Window
@@ -102,8 +103,9 @@ that workflow.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
   for the selected session: a section per category (in `categories.txt` order),
   Landscape before Portrait, one row per photo in display order with the photo name
-  and blank spaces for the photographer name and a score. Generated in-process with
-  the standard library only — no PDF dependency.
+  and blank spaces for the photographer name and a score. Any photographer names
+  recorded on the upload page are pre-filled. Generated in-process with the standard
+  library only — no PDF dependency.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -152,8 +154,8 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
      001\                ← a session (stable sequential ID)
        session.json      ← { id, date, created, categories[] }
        Pictorial\
-         Landscape\  ( + order.json )
-         Portrait\   ( + order.json )
+         Landscape\  ( + order.json, names.json )
+         Portrait\   ( + order.json, names.json )
        Wildlife\ …
    screens.json          ← saved output-window definitions (state)
    ```

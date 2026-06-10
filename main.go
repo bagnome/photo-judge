@@ -760,7 +760,33 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad names", 400)
 		return
 	}
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient)})
+	dir := s.photosDir(sid, cat, orient)
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir)})
+}
+
+// handlePhotoName sets (or clears, when name is empty) the photographer associated
+// with one photo, persisted to the folder's names.json.
+func (s *server) handlePhotoName(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Session, Category, Orientation, File, Name string }
+	if decode(r, &body) != nil {
+		http.Error(w, "bad body", 400)
+		return
+	}
+	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
+		http.Error(w, "bad names", 400)
+		return
+	}
+	dir := s.photosDir(body.Session, body.Category, body.Orientation)
+	base := filepath.Base(body.File)
+	if _, err := os.Stat(filepath.Join(dir, base)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := setName(dir, base, body.Name); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.WriteHeader(204)
 }
 
 // handleUpload accepts multipart image uploads into a session/category/orientation
@@ -874,8 +900,58 @@ func (s *server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	removeFromOrder(dir, base)
+	removeFromNames(dir, base)
 	log.Printf("photo soft-deleted: %s -> %s", src, dest)
 	writeJSON(w, map[string]any{"files": s.photoFiles(body.Session, body.Category, body.Orientation)})
+}
+
+// names.json maps a photo's filename to an operator-entered photographer name,
+// kept per orientation folder alongside order.json. Used to pre-fill the upload
+// grid and the Photographer column of the score-sheet PDF.
+
+func loadNames(dir string) map[string]string {
+	m := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, "names.json"))
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m
+}
+
+func writeNames(dir string, m map[string]string) error {
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return os.WriteFile(filepath.Join(dir, "names.json"), b, 0o644)
+}
+
+// setName records (or, when name is blank, clears) the photographer for one file.
+func setName(dir, file, name string) error {
+	m := loadNames(dir)
+	name = strings.TrimSpace(name)
+	if len(name) > 120 {
+		name = name[:120]
+	}
+	if name == "" {
+		if _, ok := m[file]; !ok {
+			return nil
+		}
+		delete(m, file)
+	} else {
+		m[file] = name
+	}
+	return writeNames(dir, m)
+}
+
+func removeFromNames(dir, file string) {
+	m := loadNames(dir)
+	if _, ok := m[file]; !ok {
+		return
+	}
+	delete(m, file)
+	_ = writeNames(dir, m)
 }
 
 func removeFromOrder(dir, name string) {
@@ -1095,6 +1171,7 @@ func main() {
 	mux.HandleFunc("/api/upload", s.handleUpload)
 	mux.HandleFunc("/api/order", s.handleOrderSet)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
+	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 
