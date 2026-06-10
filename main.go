@@ -1083,6 +1083,7 @@ func main() {
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
+	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
 	mux.HandleFunc("/api/screen/register", s.handleScreenRegister)
 	mux.HandleFunc("/api/screen/create", s.handleScreenCreate)
 	mux.HandleFunc("/api/screen/delete", s.handleScreenDelete)

@@ -99,6 +99,11 @@ that workflow.
   the rest), plus a global **Black all**.
 - **Optional title-card logo** — drop one image in `logo\` and it appears above the
   category name on every title card.
+- **Printable score sheet (PDF)** — one click downloads a single-column scoring form
+  for the selected session: a section per category (in `categories.txt` order),
+  Landscape before Portrait, one row per photo in display order with the photo name
+  and blank spaces for the photographer name and a score. Generated in-process with
+  the standard library only — no PDF dependency.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
