@@ -11,6 +11,8 @@ collects changes already merged into `development` but not yet released.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-10
+
 ### Added
 - This changelog.
 - **Downloadable score sheet (PDF)** — a "⤓ Score sheet" button on the console
@@ -26,6 +28,10 @@ collects changes already merged into `development` but not yet released.
 - **"Newer version launched" banner** — if a newer build of the exe is started
   while an older one is running, the running console shows a banner recommending a
   restart to update (only when the launched copy is strictly newer).
+- **Getting-started guidance on the Upload / Reorder page** — when no session
+  exists, the upload area is replaced with step-by-step instructions for creating
+  one; when sessions exist but none is selected, a short prompt explains how to
+  pick or create one.
 
 ### Changed
 - **Re-launching the app is friendly** — double-clicking the exe while it's already
@@ -65,5 +71,6 @@ Initial release.
 - `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
   operator console and logged at startup.
 
-[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/bagnome/photo-judge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
