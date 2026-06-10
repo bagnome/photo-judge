@@ -22,6 +22,7 @@ displays through your preinstalled browser.
   - [Typical run, start to finish](#typical-run-start-to-finish)
 - [Moving it to another computer](#moving-it-to-another-computer)
 - [Project layout](#project-layout)
+- [Versioning](#versioning)
 - [Roadmap](#roadmap)
 - [Built with Claude Code](#built-with-claude-code)
 - [License](#license)
@@ -202,6 +203,41 @@ new sessions — copy to the local drive for an event).
 
 Runtime data (`photos\`, `logo\`, `screens.json`, the built `*.exe`) is
 git-ignored — see [`.gitignore`](.gitignore).
+
+---
+
+## Versioning
+
+Versions use the `MAJOR.MINOR.PATCH` format (e.g. `1.0.0`), with project-specific
+meaning tied to the branching workflow — each slot maps to a git event:
+
+| Slot | Bumps when… | Example |
+|------|-------------|---------|
+| **MAJOR** | a major overhaul / rewrite (rare) | `1.x.x` → `2.0.0` |
+| **MINOR** | `development` is merged into `main` (a release) | `1.0.x` → `1.1.0` |
+| **PATCH** | a feature branch is merged into `development` | `1.1.0` → `1.1.1` |
+
+Lower numbers **reset** when a higher one bumps: a MINOR bump sends PATCH back to
+`0`, and a MAJOR bump resets both.
+
+The current version is stored in the [`VERSION`](VERSION) file — the single source
+of truth. It's embedded into the executable at build time (via `//go:embed`), shown
+on the operator console, and logged at startup.
+
+**Bumping it (manual):**
+
+- **Feature → `development`:** in the feature's PR, bump the PATCH digit in `VERSION`
+  (e.g. `1.1.0` → `1.1.1`).
+- **`development` → `main` (release):** in the release PR, bump MINOR and reset PATCH
+  (e.g. `1.1.3` → `1.2.0`). After it merges, tag `main`:
+
+  ```sh
+  git checkout main && git pull
+  git tag -a v1.2.0 -m "Release 1.2.0"
+  git push origin v1.2.0
+  ```
+
+  Then optionally draft a GitHub Release from that tag and attach `photo-judge.exe`.
 
 ---
 

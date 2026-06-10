@@ -33,6 +33,14 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// appVersion is baked in from the VERSION file at build time (single source of
+// truth, MAJOR.MINOR.PATCH). See the "Versioning" section in README.md.
+//
+//go:embed VERSION
+var versionRaw string
+
+var appVersion = strings.TrimSpace(versionRaw)
+
 var defaultCategories = []string{
 	"Pictorial",
 	"Wildlife",
@@ -251,10 +259,11 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
+		Version    string     `json:"version"`
 		Sessions   []*Session `json:"sessions"`
 		Categories []string   `json:"categories"`
 		Screens    []*Screen  `json:"screens"`
-	}{s.sessions, s.categories, screens}
+	}{appVersion, s.sessions, s.categories, screens}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -1102,7 +1111,7 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(ctx)
 	}()
-	log.Printf("Photo Judge — data dir: %s", baseDir)
+	log.Printf("Photo Judge v%s — data dir: %s", appVersion, baseDir)
 	log.Printf("Console ready at %s", u)
 	go openBrowser(u)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

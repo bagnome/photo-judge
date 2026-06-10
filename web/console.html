@@ -39,7 +39,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Operator Console</header>
+<header>Photo Judge — Operator Console<span id="version" style="float:right;font-weight:400;opacity:.6;font-size:.8em"></span></header>
 <div class="bar">
   <label>Session</label>
   <select id="session"></select>
@@ -93,6 +93,7 @@ function statusText(sc){
 }
 
 function render(){
+ if(state.version) $('version').textContent = 'v' + state.version;
  // Session dropdown
  const sel = $('session'); const cur = sel.value;
  sel.innerHTML = '';
