@@ -11,7 +11,7 @@ collects changes already merged into `development` but not yet released.
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-06-10
+## [1.1.0] - 2026-06-10 — "Antelope Canyon"
 
 ### Added
 - This changelog.
