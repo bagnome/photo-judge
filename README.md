@@ -12,6 +12,22 @@ displays through your preinstalled browser.
 
 ---
 
+## Contents
+
+- [Why it exists](#why-it-exists)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Building the executable](#building-the-executable)
+- [Running it](#running-it)
+  - [Typical run, start to finish](#typical-run-start-to-finish)
+- [Moving it to another computer](#moving-it-to-another-computer)
+- [Project layout](#project-layout)
+- [Roadmap](#roadmap)
+- [Built with Claude Code](#built-with-claude-code)
+- [License](#license)
+
+---
+
 ## Why it exists
 
 A typical club setup is a laptop with two external monitors fixed in orientation —
