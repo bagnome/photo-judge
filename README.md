@@ -157,7 +157,7 @@ The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
 > — this only affects **new** sessions.
 
 A full end-user walkthrough (for the operator who runs the show, not the developer)
-ships in [`README.txt`](README.txt).
+ships in [`User Guide.txt`](User%20Guide.txt).
 
 ---
 
@@ -182,7 +182,7 @@ new sessions — copy to the local drive for an event).
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `categories.txt` | Default category slate (one per line) |
-| `README.txt` | End-user (operator) guide |
+| `User Guide.txt` | End-user (operator) guide |
 
 Runtime data (`photos\`, `logo\`, `screens.json`, the built `*.exe`) is
 git-ignored — see [`.gitignore`](.gitignore).
@@ -191,5 +191,5 @@ git-ignored — see [`.gitignore`](.gitignore).
 
 ## License
 
-No license file is included yet. Until one is added, this is "all rights reserved"
-by default — add a `LICENSE` if you intend others to reuse it.
+Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
+Contributions are welcome.
