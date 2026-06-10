@@ -17,6 +17,14 @@
  #drop.over{border-color:#2d6cdf;background:#1f2735;color:#cdd}
  #drop b{color:#e8e8e8}
  #drop .hint{font-size:12px;color:#777;margin-top:6px}
+ #guide{display:none;margin:16px;padding:22px 26px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:660px;line-height:1.55}
+ #guide.show{display:block}
+ #guide h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
+ #guide ol{margin:8px 0 0;padding-left:22px}
+ #guide li{margin:6px 0}
+ #guide .k{color:#e8e8e8;font-weight:600}
+ #guide code{background:#1b1d21;padding:1px 5px;border-radius:3px;font-size:12px}
+ #guide .muted{color:#8a9099;font-size:13px;margin-top:12px}
  .sec{padding:0 16px}
  .sectitle{font-size:14px;color:#cdd;font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:8px}
  .sectitle .cnt{color:#777;font-weight:400;font-size:12px}
@@ -51,18 +59,22 @@
   <label>Category</label><select id="category"></select>
 </div>
 
-<div id="drop">Drag photos here, or click to browse.<br>Adding to <b><span id="ctx">…</span></b>
-  <div class="hint">JPG and PNG only. Each photo is filed as <b>Landscape</b> or <b>Portrait</b> automatically, by its shape (a JPG's rotation metadata is honored).</div>
-</div>
-<input type="file" id="fileinput" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none">
+<div id="guide"></div>
 
-<div class="sec">
-  <div class="sectitle">Landscape <span class="cnt" id="cnt-Landscape"></span></div>
-  <div class="grid" id="grid-Landscape"></div>
-</div>
-<div class="sec">
-  <div class="sectitle">Portrait <span class="cnt" id="cnt-Portrait"></span></div>
-  <div class="grid" id="grid-Portrait"></div>
+<div id="uploadui">
+  <div id="drop">Drag photos here, or click to browse.<br>Adding to <b><span id="ctx">…</span></b>
+    <div class="hint">JPG and PNG only. Each photo is filed as <b>Landscape</b> or <b>Portrait</b> automatically, by its shape (a JPG's rotation metadata is honored).</div>
+  </div>
+  <input type="file" id="fileinput" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none">
+
+  <div class="sec">
+    <div class="sectitle">Landscape <span class="cnt" id="cnt-Landscape"></span></div>
+    <div class="grid" id="grid-Landscape"></div>
+  </div>
+  <div class="sec">
+    <div class="sectitle">Portrait <span class="cnt" id="cnt-Portrait"></span></div>
+    <div class="grid" id="grid-Portrait"></div>
+  </div>
 </div>
 <div id="toasts"></div>
 
@@ -102,13 +114,44 @@ function applyState(st){
  refreshGrid();
 }
 
+// updateView shows either the upload UI or a guidance panel, depending on whether
+// a session exists / is selected. Returns true when the upload UI is in play.
+function updateView(){
+ const guide = $('guide'), ui = $('uploadui');
+ if(sessions.length > 0 && $('session').value){
+   guide.classList.remove('show');
+   ui.style.display = '';
+   return true;
+ }
+ ui.style.display = 'none';
+ if(sessions.length === 0){
+   guide.innerHTML =
+     '<h2>Create a session to get started</h2>'
+   + 'A <span class="k">session</span> is one competition night — it holds all the photos for that evening, grouped by category.'
+   + '<ol>'
+   + '<li>In the bar above, pick the date of the competition night in the <span class="k">New</span> box.</li>'
+   + '<li>Click <span class="k">Create</span>.</li>'
+   + '<li>Your new session is selected automatically — then drag photos in to upload them.</li>'
+   + '</ol>'
+   + '<div class="muted">Categories come from <code>categories.txt</code> and are snapshotted into each new session.</div>';
+ } else {
+   guide.innerHTML =
+     '<h2>Select a session</h2>'
+   + 'Choose a session from the <span class="k">Session</span> menu above to add or organize its photos, '
+   + 'or start a new one by picking a date in the <span class="k">New</span> box and clicking <span class="k">Create</span>.';
+ }
+ guide.classList.add('show');
+ return false;
+}
+
 async function refreshGrid(){
  // Don't yank the grid out from under someone typing a photographer name: the
  // console SSE stream re-renders on any state change, which would lose focus.
  if(document.activeElement && document.activeElement.classList.contains('pname')) return;
+ if(!updateView()) return; // no session yet — guidance is shown instead of the grid
  const c = ctx();
- $('ctx').textContent = c.session ? ('session #'+c.session+'  ›  '+c.category) : '(create or select a session)';
- if(!c.session || !c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{}}); renderAll(); return; }
+ $('ctx').textContent = 'session #'+c.session+'  ›  '+c.category;
+ if(!c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{}}); renderAll(); return; }
  await Promise.all(ORIENTS.map(async o => {
    const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
    const j = await r.json();
