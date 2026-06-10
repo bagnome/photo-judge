@@ -200,6 +200,8 @@ new sessions — copy to the local drive for an event).
 | `web/admin.html` | Upload / reorder page |
 | `categories.txt` | Default category slate (one per line) |
 | `User Guide.txt` | End-user (operator) guide |
+| `CHANGELOG.md` | Release history |
+| `VERSION` | Current version (single source of truth, embedded into the exe) |
 
 Runtime data (`photos\`, `logo\`, `screens.json`, the built `*.exe`) is
 git-ignored — see [`.gitignore`](.gitignore).
@@ -215,19 +217,31 @@ meaning tied to the branching workflow — each slot maps to a git event:
 |------|-------------|---------|
 | **MAJOR** | a major overhaul / rewrite (rare) | `1.x.x` → `2.0.0` |
 | **MINOR** | `development` is merged into `main` (a release) | `1.0.x` → `1.1.0` |
-| **PATCH** | a feature branch is merged into `development` | `1.1.0` → `1.1.1` |
+| **PATCH** | an **app change** (`feature/` or `fix/` branch) is merged into `development` | `1.1.0` → `1.1.1` |
 
 Lower numbers **reset** when a higher one bumps: a MINOR bump sends PATCH back to
 `0`, and a MAJOR bump resets both.
 
+**The version tracks the app, not the repo.** Only changes to the application itself
+move the number. Repo-only work does **not** bump `VERSION`, and is kept on separate
+branch types:
+
+| Branch | For | Bumps version? |
+|--------|-----|----------------|
+| `feature/*` | new app functionality | ✅ PATCH |
+| `fix/*` | app bug fixes | ✅ PATCH |
+| `docs/*` | documentation (README, CHANGELOG, guides) | ❌ no |
+| `chore/*` | repo upkeep (`.gitignore`, CI, build config, tooling) | ❌ no |
+
 The current version is stored in the [`VERSION`](VERSION) file — the single source
 of truth. It's embedded into the executable at build time (via `//go:embed`), shown
-on the operator console, and logged at startup.
+on the operator console, and logged at startup. Release history is kept in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 **Bumping it (manual):**
 
-- **Feature → `development`:** in the feature's PR, bump the PATCH digit in `VERSION`
-  (e.g. `1.1.0` → `1.1.1`).
+- **App change → `development`:** in a `feature/` or `fix/` PR, bump the PATCH digit
+  in `VERSION` (e.g. `1.1.0` → `1.1.1`). `docs/` and `chore/` PRs leave it unchanged.
 - **`development` → `main` (release):** in the release PR, bump MINOR and reset PATCH
   (e.g. `1.1.3` → `1.2.0`). After it merges, tag `main`:
 

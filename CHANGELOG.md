@@ -1,0 +1,44 @@
+# Changelog
+
+All notable changes to Photo Judge are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows the versioning scheme in the
+[README](README.md#versioning): `MAJOR.MINOR.PATCH`, where MINOR bumps on each
+`development → main` release and PATCH bumps on each `feature → development` merge.
+Tagged releases are the MINOR versions on `main`; the **[Unreleased]** section below
+collects changes already merged into `development` but not yet released.
+
+## [Unreleased]
+
+### Added
+- This changelog.
+
+## [1.0.0] - 2026-06-10
+
+Initial release.
+
+### Added
+- Private operator console and judge-facing, black-by-default output windows, with
+  live updates over Server-Sent Events.
+- Sessions keyed by a stable sequential ID with an editable date label; create,
+  relabel, and recoverable (soft) delete.
+- Categories loaded from an external `categories.txt`; new sessions snapshot the list
+  so past sessions stay frozen.
+- Separate Landscape and Portrait photo groups per category, presented one
+  orientation at a time.
+- Upload & reorder page: drag-and-drop upload with lazy folder creation,
+  filename-collision auto-rename, drag-to-reorder, and recoverable photo removal.
+- Persistent named "screens" restored on relaunch (with a blank category) and
+  auto-placed on a chosen monitor via the Window Management API.
+- Per-screen operator controls (category/orientation, Prev/Next, Black/Reveal, Make
+  live) plus a global Black all.
+- Optional title-card logo from a `logo\` folder.
+- Close App button for a clean server shutdown.
+- Single self-contained executable (Go, standard library only) with the web UI
+  embedded; fully portable, with all paths resolved next to the exe.
+- `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
+  operator console and logged at startup.
+
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
