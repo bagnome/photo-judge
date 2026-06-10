@@ -26,6 +26,10 @@ collects changes already merged into `development` but not yet released.
 - **"Newer version launched" banner** — if a newer build of the exe is started
   while an older one is running, the running console shows a banner recommending a
   restart to update (only when the launched copy is strictly newer).
+- **Getting-started guidance on the Upload / Reorder page** — when no session
+  exists, the upload area is replaced with step-by-step instructions for creating
+  one; when sessions exist but none is selected, a short prompt explains how to
+  pick or create one.
 
 ### Changed
 - **Re-launching the app is friendly** — double-clicking the exe while it's already

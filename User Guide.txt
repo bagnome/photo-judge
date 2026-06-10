@@ -88,6 +88,9 @@ E) PRESENT
 * Pick Session and Category at the top. The page shows the
   photos already in that category, split into a Landscape
   section and a Portrait section.
+* If you haven't made a session yet, the page shows short
+  instructions instead of the upload area — create a session
+  (see section 3) and it switches to the uploader automatically.
 * UPLOAD: drag image files onto the drop area, or click it to
   browse. Only JPG and PNG files are accepted. You do NOT pick
   Landscape or Portrait — each photo is filed automatically by
