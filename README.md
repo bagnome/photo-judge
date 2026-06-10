@@ -86,10 +86,15 @@ that workflow.
   Creating a session snapshots the current category list, so past sessions are frozen.
 - **Per-orientation photo groups** — each category has a **Landscape** and a
   **Portrait** group, presented separately (all of one orientation, then the other).
-- **Upload & reorder page** — drag-and-drop upload with lazy folder creation,
-  filename-collision auto-renaming (`sunset.jpg` → `sunset (2).jpg`), non-images
-  skipped; drag thumbnails to set display order (saved to `order.json`); remove a
-  photo with an × (recoverable soft-delete); and a per-photo text box to record the
+  Orientation is assigned **automatically** from each photo's shape, so you upload to
+  a category and the app files every photo for you.
+- **Upload & reorder page** — drag-and-drop upload (**JPG/PNG**) with lazy folder
+  creation; each photo is **auto-sorted into Landscape or Portrait** by its shape
+  (taller than wide = Portrait; squares go to Landscape; a JPG's EXIF rotation is
+  honored), shown in two on-page sections; filename-collision auto-renaming
+  (`sunset.jpg` → `sunset (2).jpg`), other files skipped; drag thumbnails within a
+  section to set display order (saved to `order.json`); remove a photo with an ×
+  (recoverable soft-delete); and a per-photo text box to record the
   **photographer's name** (saved to `names.json`).
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
@@ -166,8 +171,9 @@ The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
-2. **Upload photos** — *Upload / Reorder* page → choose session, category, and
-   Landscape/Portrait → drag images in → drag thumbnails to set the order.
+2. **Upload photos** — *Upload / Reorder* page → choose session and category →
+   drag images in (each is auto-filed as Landscape or Portrait by its shape) → drag
+   thumbnails within a section to set the order.
 3. **Create your screens** — *Create Screen*, name each (e.g. "Landscape monitor").
 4. **Open each screen's window** — *Open window*, move it to the correct monitor,
    click it (or press **F**) for fullscreen. It starts black.

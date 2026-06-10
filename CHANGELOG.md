@@ -24,6 +24,14 @@ collects changes already merged into `development` but not yet released.
   `names.json`). When a name is set it's pre-filled into the Photographer column
   of the score-sheet PDF; photos left blank keep an empty space to write in.
 
+### Changed
+- **Automatic orientation on upload** — the operator no longer picks Landscape or
+  Portrait when uploading. Each photo is filed automatically by its shape (taller
+  than wide = Portrait; squares go to Landscape), and the Upload / Reorder page now
+  shows both orientations as separate on-page sections. A JPG's EXIF orientation
+  (rotation) is honored, so a photo rotated in-camera still lands in the right
+  section. Uploads are now limited to **JPG and PNG**.
+
 ## [1.0.0] - 2026-06-10
 
 Initial release.

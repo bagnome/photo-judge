@@ -13,10 +13,14 @@
  button{cursor:pointer}
  button:hover{background:#363a42}
  .sep{color:#444}
- #drop{margin:16px;padding:30px;border:2px dashed #4a4f57;border-radius:8px;text-align:center;color:#9aa0a6;cursor:pointer;transition:.15s}
+ #drop{margin:16px;padding:24px 30px;border:2px dashed #4a4f57;border-radius:8px;text-align:center;color:#9aa0a6;cursor:pointer;transition:.15s}
  #drop.over{border-color:#2d6cdf;background:#1f2735;color:#cdd}
  #drop b{color:#e8e8e8}
- .grid{display:flex;flex-wrap:wrap;gap:10px;padding:0 16px 24px}
+ #drop .hint{font-size:12px;color:#777;margin-top:6px}
+ .sec{padding:0 16px}
+ .sectitle{font-size:14px;color:#cdd;font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+ .sectitle .cnt{color:#777;font-weight:400;font-size:12px}
+ .grid{display:flex;flex-wrap:wrap;gap:10px;padding:0 0 6px}
  .tile{width:168px;background:#23262c;border:1px solid #3a3e45;border-radius:6px;overflow:hidden;cursor:grab;user-select:none;position:relative}
  .tile.dragover{outline:2px solid #2d6cdf;outline-offset:-2px}
  .tile.dragging{opacity:.4}
@@ -29,7 +33,7 @@
  .tile .pname{width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:4px;cursor:text}
  .tile .pname:focus{border-color:#2d6cdf;outline:none}
  .tile .pname.set{border-color:#2e7d46}
- .empty{padding:6px 16px;color:#777}
+ .empty{padding:4px 0 8px;color:#777;font-size:13px}
  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
  .toast.show{opacity:1;transform:none}
@@ -45,20 +49,31 @@
   <label>New</label><input type="date" id="newdate"><button id="newbtn">Create</button>
   <span class="sep">|</span>
   <label>Category</label><select id="category"></select>
-  <label>Orientation</label>
-  <select id="orientation"><option>Landscape</option><option>Portrait</option></select>
 </div>
 
-<div id="drop">Drag photos here, or click to browse.<br>Adding to <b><span id="ctx">…</span></b></div>
-<input type="file" id="fileinput" multiple accept="image/*" style="display:none">
-<div class="grid" id="grid"></div>
+<div id="drop">Drag photos here, or click to browse.<br>Adding to <b><span id="ctx">…</span></b>
+  <div class="hint">JPG and PNG only. Each photo is filed as <b>Landscape</b> or <b>Portrait</b> automatically, by its shape (a JPG's rotation metadata is honored).</div>
+</div>
+<input type="file" id="fileinput" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none">
+
+<div class="sec">
+  <div class="sectitle">Landscape <span class="cnt" id="cnt-Landscape"></span></div>
+  <div class="grid" id="grid-Landscape"></div>
+</div>
+<div class="sec">
+  <div class="sectitle">Portrait <span class="cnt" id="cnt-Portrait"></span></div>
+  <div class="grid" id="grid-Portrait"></div>
+</div>
 <div id="toasts"></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
-let sessions = [], categories = [], files = [], names = {}, pendingSession = null, dragFrom = null;
+const ORIENTS = ['Landscape','Portrait'];
+let sessions = [], categories = [], pendingSession = null;
+let sect = { Landscape:{files:[],names:{}}, Portrait:{files:[],names:{}} };
+let drag = null; // {orient, i} — reordering is confined to one section
 
 function toast(msg, kind){
  const t = document.createElement('div');
@@ -69,7 +84,7 @@ function toast(msg, kind){
  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, 3200);
 }
 
-function ctx(){ return {session:$('session').value, category:$('category').value, orientation:$('orientation').value}; }
+function ctx(){ return {session:$('session').value, category:$('category').value}; }
 
 function applyState(st){
  sessions = st.sessions || []; categories = st.categories || [];
@@ -92,97 +107,106 @@ async function refreshGrid(){
  // console SSE stream re-renders on any state change, which would lose focus.
  if(document.activeElement && document.activeElement.classList.contains('pname')) return;
  const c = ctx();
- $('ctx').textContent = c.session ? ('session #'+c.session+'  ›  '+c.category+'  ›  '+c.orientation) : '(create or select a session)';
- if(!c.session || !c.category || !c.orientation){ files = []; names = {}; renderGrid(); return; }
- const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+enc(c.orientation));
- const j = await r.json();
- files = j.files || [];
- names = j.names || {};
- renderGrid();
+ $('ctx').textContent = c.session ? ('session #'+c.session+'  ›  '+c.category) : '(create or select a session)';
+ if(!c.session || !c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{}}); renderAll(); return; }
+ await Promise.all(ORIENTS.map(async o => {
+   const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
+   const j = await r.json();
+   sect[o] = {files: j.files || [], names: j.names || {}};
+ }));
+ renderAll();
 }
 
-function renderGrid(){
- const g = $('grid'); g.innerHTML = '';
- if(files.length === 0){ g.innerHTML = '<div class="empty">No photos in this folder yet — drop some above.</div>'; return; }
+function renderAll(){ ORIENTS.forEach(renderSection); }
+
+function renderSection(orient){
+ const data = sect[orient];
+ const g = $('grid-'+orient); g.innerHTML = '';
+ $('cnt-'+orient).textContent = '('+data.files.length+')';
+ if(data.files.length === 0){ g.innerHTML = '<div class="empty">No '+orient.toLowerCase()+' photos yet.</div>'; return; }
  const c = ctx();
- files.forEach((fn, i) => {
+ data.files.forEach((fn, i) => {
    const t = document.createElement('div'); t.className = 'tile'; t.draggable = true; t.dataset.i = i;
    const img = document.createElement('img'); img.loading = 'lazy';
-   img.src = '/api/photo?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+enc(c.orientation)+'&file='+enc(fn);
+   img.src = '/api/photo?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+orient+'&file='+enc(fn);
    const badge = document.createElement('div'); badge.className = 'idx'; badge.textContent = i+1;
    const cap = document.createElement('div'); cap.className = 'fn'; cap.textContent = fn;
    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove this photo';
-   del.onclick = (e) => { e.stopPropagation(); deletePhoto(fn); };
+   del.onclick = (e) => { e.stopPropagation(); deletePhoto(orient, fn); };
    const nm = document.createElement('div'); nm.className = 'nm';
    const nin = document.createElement('input'); nin.className = 'pname'; nin.type = 'text';
-   nin.placeholder = 'Photographer'; nin.value = names[fn] || '';
+   nin.placeholder = 'Photographer'; nin.value = data.names[fn] || '';
    if(nin.value) nin.classList.add('set');
    nin.draggable = false;
    nin.addEventListener('keydown', e => { if(e.key === 'Enter') nin.blur(); });
-   nin.addEventListener('change', () => savePhotographer(fn, nin));
+   nin.addEventListener('change', () => savePhotographer(orient, fn, nin));
    nm.appendChild(nin);
    t.append(img, badge, cap, del, nm);
    t.addEventListener('dragstart', (e) => {
      if(e.target && e.target.classList.contains('pname')){ e.preventDefault(); return; } // typing, not reordering
-     dragFrom = i; t.classList.add('dragging');
+     drag = {orient, i}; t.classList.add('dragging');
    });
    t.addEventListener('dragend',   () => t.classList.remove('dragging'));
-   t.addEventListener('dragover',  e => { e.preventDefault(); t.classList.add('dragover'); });
+   t.addEventListener('dragover',  e => { if(drag && drag.orient === orient){ e.preventDefault(); t.classList.add('dragover'); } });
    t.addEventListener('dragleave', () => t.classList.remove('dragover'));
-   t.addEventListener('drop',      e => { e.preventDefault(); t.classList.remove('dragover'); moveItem(dragFrom, i); });
+   t.addEventListener('drop',      e => { e.preventDefault(); t.classList.remove('dragover'); if(drag && drag.orient === orient) moveItem(orient, drag.i, i); });
    g.appendChild(t);
  });
 }
 
-function moveItem(from, to){
+function moveItem(orient, from, to){
  if(from === null || from === to) return;
- const m = files.splice(from, 1)[0];
- files.splice(to, 0, m);
- dragFrom = null;
- renderGrid();
- saveOrder();
+ const arr = sect[orient].files;
+ const m = arr.splice(from, 1)[0];
+ arr.splice(to, 0, m);
+ drag = null;
+ renderSection(orient);
+ saveOrder(orient);
 }
 
-async function saveOrder(){
+async function saveOrder(orient){
  const c = ctx();
- const r = await post('/api/order', {session:c.session, category:c.category, orientation:c.orientation, order:files});
+ const r = await post('/api/order', {session:c.session, category:c.category, orientation:orient, order:sect[orient].files});
  if(r.ok) toast('Order saved'); else toast('Could not save order', 'del');
 }
 
-async function savePhotographer(fn, input){
+async function savePhotographer(orient, fn, input){
  const c = ctx();
  const name = input.value.trim();
- const r = await post('/api/photo/name', {session:c.session, category:c.category, orientation:c.orientation, file:fn, name});
+ const r = await post('/api/photo/name', {session:c.session, category:c.category, orientation:orient, file:fn, name});
  if(!r.ok){ toast('Could not save name: '+(await r.text()), 'del'); return; }
- names[fn] = name;
+ sect[orient].names[fn] = name;
  input.classList.toggle('set', !!name);
  toast(name ? ('Photographer set for '+fn) : ('Photographer cleared for '+fn));
 }
 
-async function deletePhoto(fn){
- if(!confirm('Remove "'+fn+'" from this category?\n\nIt moves to photos\\_deleted (recoverable).')) return;
+async function deletePhoto(orient, fn){
+ if(!confirm('Remove "'+fn+'" from '+orient+'?\n\nIt moves to photos\\_deleted (recoverable).')) return;
  const c = ctx();
- const r = await post('/api/photo/delete', {session:c.session, category:c.category, orientation:c.orientation, file:fn});
+ const r = await post('/api/photo/delete', {session:c.session, category:c.category, orientation:orient, file:fn});
  if(!r.ok){ toast('Could not remove: '+(await r.text()), 'del'); return; }
  const j = await r.json();
- files = j.files || files;
- renderGrid();
+ sect[orient].files = j.files || sect[orient].files;
+ renderSection(orient);
  toast('Removed '+fn, 'del');
 }
 
 function uploadFiles(list){
  const c = ctx();
  if(!c.session){ alert('Create or select a session first.'); return; }
+ if(!c.category){ alert('Pick a category.'); return; }
  if(!list || !list.length) return;
  const fd = new FormData();
- fd.append('session', c.session); fd.append('category', c.category); fd.append('orientation', c.orientation);
+ fd.append('session', c.session); fd.append('category', c.category);
  for(const f of list) fd.append('files', f);
  fetch('/api/upload', {method:'POST', body:fd}).then(async r => {
    if(!r.ok){ toast('Upload failed: '+(await r.text()), 'del'); return; }
    const j = await r.json();
-   files = j.files || files;
-   renderGrid();
-   let msg = (j.saved ? j.saved.length : 0)+' photo(s) uploaded';
+   await refreshGrid();
+   const saved = j.saved || [];
+   const L = saved.filter(x => x.orientation === 'Landscape').length;
+   const P = saved.length - L;
+   let msg = saved.length+' photo(s) uploaded — '+L+' landscape, '+P+' portrait';
    if(j.skipped && j.skipped.length) msg += ' · '+j.skipped.length+' skipped (not an image)';
    toast(msg);
  });
@@ -207,7 +231,7 @@ $('newbtn').onclick = async () => {
  toast('Session #'+s.id+' ('+s.date+') created');
 };
 
-['session','category','orientation'].forEach(id => $(id).addEventListener('change', refreshGrid));
+['session','category'].forEach(id => $(id).addEventListener('change', refreshGrid));
 
 const drop = $('drop'), fi = $('fileinput');
 drop.onclick = () => fi.click();
