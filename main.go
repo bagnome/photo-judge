@@ -12,12 +12,15 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg" // registered so image.DecodeConfig can read JPEG/PNG dimensions
+	_ "image/png"
 	"io"
 	"io/fs"
 	"log"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,8 +54,15 @@ var defaultCategories = []string{
 	"Black and White",
 }
 
+// imageExts is what the app will list/serve from the photos tree (kept broad so
+// anything already on disk still shows). uploadExts is the stricter set accepted
+// for new uploads — JPG/PNG only, which keeps dimension/EXIF reading simple.
 var imageExts = map[string]bool{
 	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true,
+}
+
+var uploadExts = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true,
 }
 
 // ---- data types -----------------------------------------------------------
@@ -789,8 +799,10 @@ func (s *server) handlePhotoName(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
-// handleUpload accepts multipart image uploads into a session/category/orientation
-// folder, creating it lazily. Non-images are skipped; name clashes get a " (n)" suffix.
+// handleUpload accepts multipart image uploads into a session/category. Each photo
+// is auto-sorted into the Landscape or Portrait folder by its pixel dimensions
+// (taller than wide = Portrait), so the operator no longer picks an orientation.
+// Folders are created lazily; non-images are skipped; clashes get a " (n)" suffix.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "bad upload", 400)
@@ -798,8 +810,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := r.FormValue("session")
 	cat := r.FormValue("category")
-	orient := r.FormValue("orientation")
-	if !safeName(sid) || !safeName(cat) || !safeName(orient) {
+	if !safeName(sid) || !safeName(cat) {
 		http.Error(w, "bad names", 400)
 		return
 	}
@@ -810,28 +821,152 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such session", 404)
 		return
 	}
-	dir := s.photosDir(sid, cat, orient)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+	type savedItem struct {
+		File        string `json:"file"`
+		Orientation string `json:"orientation"`
 	}
-	var saved, skipped []string
+	var saved []savedItem
+	var skipped []string
+	added := map[string][]string{} // orientation -> filenames, for per-folder order.json
 	for _, fh := range r.MultipartForm.File["files"] {
 		base := filepath.Base(fh.Filename)
-		if base == "" || base == "." || strings.Contains(base, "..") || !imageExts[strings.ToLower(filepath.Ext(base))] {
+		if base == "" || base == "." || strings.Contains(base, "..") || !uploadExts[strings.ToLower(filepath.Ext(base))] {
 			skipped = append(skipped, fh.Filename)
 			continue
+		}
+		f, err := fh.Open()
+		if err != nil {
+			skipped = append(skipped, fh.Filename)
+			continue
+		}
+		orient := orientationOf(f, base) // reads dimensions, then seeks f back to start
+		dir := s.photosDir(sid, cat, orient)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			f.Close()
+			http.Error(w, err.Error(), 500)
+			return
 		}
 		name := uniqueName(dir, base)
-		if err := saveUpload(fh, filepath.Join(dir, name)); err != nil {
+		err = saveReader(f, filepath.Join(dir, name))
+		f.Close()
+		if err != nil {
 			skipped = append(skipped, fh.Filename)
 			continue
 		}
-		saved = append(saved, name)
+		saved = append(saved, savedItem{File: name, Orientation: orient})
+		added[orient] = append(added[orient], name)
 	}
-	appendToOrder(dir, saved)
-	log.Printf("upload: %d saved, %d skipped -> %s", len(saved), len(skipped), dir)
-	writeJSON(w, map[string]any{"saved": saved, "skipped": skipped, "files": s.photoFiles(sid, cat, orient)})
+	for orient, names := range added {
+		appendToOrder(s.photosDir(sid, cat, orient), names)
+	}
+	log.Printf("upload: %d saved (L:%d P:%d), %d skipped -> %s/%s",
+		len(saved), len(added["Landscape"]), len(added["Portrait"]), len(skipped), sid, cat)
+	writeJSON(w, map[string]any{"saved": saved, "skipped": skipped})
+}
+
+// orientationOf reports "Portrait" if the image is taller than it is wide, else
+// "Landscape" (the default for squares or undetectable dimensions). It leaves the
+// reader rewound to the start so the caller can copy the full file.
+func orientationOf(f io.ReadSeeker, name string) string {
+	w, h := imageDims(f, name)
+	f.Seek(0, io.SeekStart)
+	if w > 0 && h > w {
+		return "Portrait"
+	}
+	return "Landscape"
+}
+
+// imageDims returns an image's effective display width and height (0,0 if it can't
+// be read). Dimensions come from image.DecodeConfig (JPEG/PNG). For JPEGs, a 90°/270°
+// rotation recorded in EXIF orientation swaps width and height, so a photo shot in
+// portrait but stored with landscape pixels is still treated as portrait.
+func imageDims(f io.ReadSeeker, name string) (int, int) {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, 0
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	w, h := cfg.Width, cfg.Height
+	if ext := strings.ToLower(filepath.Ext(name)); ext == ".jpg" || ext == ".jpeg" {
+		if _, err := f.Seek(0, io.SeekStart); err == nil {
+			head := make([]byte, 64*1024) // EXIF lives in the APP1 segment near the start
+			n, _ := io.ReadFull(f, head)
+			if o := exifOrientation(head[:n]); o >= 5 && o <= 8 {
+				w, h = h, w // 90°/270° rotation swaps the displayed dimensions
+			}
+		}
+	}
+	return w, h
+}
+
+// exifOrientation scans a JPEG's markers for the APP1/Exif segment and returns its
+// Orientation tag (1–8), or 0 if absent.
+func exifOrientation(b []byte) int {
+	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 { // SOI
+		return 0
+	}
+	for i := 2; i+4 <= len(b); {
+		if b[i] != 0xFF {
+			return 0
+		}
+		marker := b[i+1]
+		if marker == 0xDA || marker == 0xD9 { // SOS / EOI — image data, no more metadata
+			return 0
+		}
+		if marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7) { // standalone markers, no length
+			i += 2
+			continue
+		}
+		segLen := int(b[i+2])<<8 | int(b[i+3]) // includes its own 2 length bytes
+		segStart, segEnd := i+4, i+2+segLen
+		if segLen < 2 || segEnd > len(b) {
+			return 0
+		}
+		if marker == 0xE1 { // APP1
+			if o := exifFromAPP1(b[segStart:segEnd]); o != 0 {
+				return o
+			}
+		}
+		i = segEnd
+	}
+	return 0
+}
+
+// exifFromAPP1 reads the Orientation tag (0x0112) out of an APP1 "Exif" segment's
+// TIFF/IFD0 directory.
+func exifFromAPP1(seg []byte) int {
+	if len(seg) < 14 || string(seg[0:6]) != "Exif\x00\x00" {
+		return 0
+	}
+	tiff := seg[6:]
+	var bo binary.ByteOrder
+	switch string(tiff[0:2]) {
+	case "II":
+		bo = binary.LittleEndian
+	case "MM":
+		bo = binary.BigEndian
+	default:
+		return 0
+	}
+	if bo.Uint16(tiff[2:4]) != 0x2A {
+		return 0
+	}
+	ifd := int(bo.Uint32(tiff[4:8]))
+	if ifd < 8 || ifd+2 > len(tiff) {
+		return 0
+	}
+	count := int(bo.Uint16(tiff[ifd : ifd+2]))
+	for k, p := 0, ifd+2; k < count; k, p = k+1, p+12 {
+		if p+12 > len(tiff) {
+			return 0
+		}
+		if bo.Uint16(tiff[p:p+2]) == 0x0112 { // Orientation, stored as a SHORT
+			return int(bo.Uint16(tiff[p+8 : p+10]))
+		}
+	}
+	return 0
 }
 
 // handleOrderSet overwrites a folder's order.json with the given filename order,
@@ -989,12 +1124,8 @@ func uniqueName(dir, name string) string {
 	}
 }
 
-func saveUpload(fh *multipart.FileHeader, dest string) error {
-	src, err := fh.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
+// saveReader writes the (already-rewound) upload stream to dest.
+func saveReader(src io.Reader, dest string) error {
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
