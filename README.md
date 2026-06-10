@@ -189,6 +189,31 @@ git-ignored — see [`.gitignore`](.gitignore).
 
 ---
 
+## Roadmap
+
+Planned directions for the project (not yet implemented):
+
+- **Judge scoring from phones** — let judges connect to the web app from their own
+  phones over the local network and submit scores for each photo, so scoring is
+  captured digitally instead of on paper. The console would collect and tally results
+  live.
+- **Scoring physical prints** — extend the same scoring system to physical print
+  competitions (not just on-screen digital entries), so a single tool can handle both
+  formats of a club night.
+
+These are exploratory goals; details and timing may change. Ideas and contributions
+toward them are welcome.
+
+---
+
+## Built with Claude Code
+
+This web app is being developed with the help of
+[Claude Code](https://claude.com/claude-code), Anthropic's agentic coding tool,
+used as a pair-programming assistant throughout the build.
+
+---
+
 ## License
 
 Released under the [MIT License](LICENSE) — free to use, modify, and distribute.
