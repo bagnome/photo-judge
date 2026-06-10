@@ -13,6 +13,31 @@ collects changes already merged into `development` but not yet released.
 
 ### Added
 - This changelog.
+- **Downloadable score sheet (PDF)** — a "⤓ Score sheet" button on the console
+  generates a printable, single-column scoring form for the selected session:
+  one section per category (in `categories.txt` order), Landscape before Portrait,
+  one row per photo (in display order) with the photo name and blanks for the
+  photographer name and a score. Generated with the standard library only (no
+  third-party PDF dependency).
+- **Photographer names** — a text box under each photo on the Upload / Reorder
+  page associates a photographer with that photo (saved per folder in
+  `names.json`). When a name is set it's pre-filled into the Photographer column
+  of the score-sheet PDF; photos left blank keep an empty space to write in.
+- **"Newer version launched" banner** — if a newer build of the exe is started
+  while an older one is running, the running console shows a banner recommending a
+  restart to update (only when the launched copy is strictly newer).
+
+### Changed
+- **Re-launching the app is friendly** — double-clicking the exe while it's already
+  running no longer fails with a raw "address in use" error. The second launch
+  detects the running instance, opens the console pointing at it, and exits cleanly
+  (so you never get two servers fighting over the same `photos\` folder).
+- **Automatic orientation on upload** — the operator no longer picks Landscape or
+  Portrait when uploading. Each photo is filed automatically by its shape (taller
+  than wide = Portrait; squares go to Landscape), and the Upload / Reorder page now
+  shows both orientations as separate on-page sections. A JPG's EXIF orientation
+  (rotation) is honored, so a photo rotated in-camera still lands in the right
+  section. Uploads are now limited to **JPG and PNG**.
 
 ## [1.0.0] - 2026-06-10
 

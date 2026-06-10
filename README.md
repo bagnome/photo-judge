@@ -86,10 +86,16 @@ that workflow.
   Creating a session snapshots the current category list, so past sessions are frozen.
 - **Per-orientation photo groups** — each category has a **Landscape** and a
   **Portrait** group, presented separately (all of one orientation, then the other).
-- **Upload & reorder page** — drag-and-drop upload with lazy folder creation,
-  filename-collision auto-renaming (`sunset.jpg` → `sunset (2).jpg`), non-images
-  skipped; drag thumbnails to set display order (saved to `order.json`); remove a
-  photo with an × (recoverable soft-delete).
+  Orientation is assigned **automatically** from each photo's shape, so you upload to
+  a category and the app files every photo for you.
+- **Upload & reorder page** — drag-and-drop upload (**JPG/PNG**) with lazy folder
+  creation; each photo is **auto-sorted into Landscape or Portrait** by its shape
+  (taller than wide = Portrait; squares go to Landscape; a JPG's EXIF rotation is
+  honored), shown in two on-page sections; filename-collision auto-renaming
+  (`sunset.jpg` → `sunset (2).jpg`), other files skipped; drag thumbnails within a
+  section to set display order (saved to `order.json`); remove a photo with an ×
+  (recoverable soft-delete); and a per-photo text box to record the
+  **photographer's name** (saved to `names.json`).
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
   appear before you choose one). Auto-placed on a chosen monitor via the Window
@@ -99,6 +105,12 @@ that workflow.
   the rest), plus a global **Black all**.
 - **Optional title-card logo** — drop one image in `logo\` and it appears above the
   category name on every title card.
+- **Printable score sheet (PDF)** — one click downloads a single-column scoring form
+  for the selected session: a section per category (in `categories.txt` order),
+  Landscape before Portrait, one row per photo in display order with the photo name
+  and blank spaces for the photographer name and a score. Any photographer names
+  recorded on the upload page are pre-filled. Generated in-process with the standard
+  library only — no PDF dependency.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -147,8 +159,8 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
      001\                ← a session (stable sequential ID)
        session.json      ← { id, date, created, categories[] }
        Pictorial\
-         Landscape\  ( + order.json )
-         Portrait\   ( + order.json )
+         Landscape\  ( + order.json, names.json )
+         Portrait\   ( + order.json, names.json )
        Wildlife\ …
    screens.json          ← saved output-window definitions (state)
    ```
@@ -156,11 +168,17 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
 The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
 (default `8753`).
 
+Double-clicking the exe again while it's already running won't start a second copy
+— it detects the running instance and just reopens the console pointing at it. If
+the copy you launch is **newer** than the one running, the console shows a banner
+suggesting you close and reopen Photo Judge to update.
+
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
-2. **Upload photos** — *Upload / Reorder* page → choose session, category, and
-   Landscape/Portrait → drag images in → drag thumbnails to set the order.
+2. **Upload photos** — *Upload / Reorder* page → choose session and category →
+   drag images in (each is auto-filed as Landscape or Portrait by its shape) → drag
+   thumbnails within a section to set the order.
 3. **Create your screens** — *Create Screen*, name each (e.g. "Landscape monitor").
 4. **Open each screen's window** — *Open window*, move it to the correct monitor,
    click it (or press **F**) for fullscreen. It starts black.

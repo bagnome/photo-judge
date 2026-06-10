@@ -36,14 +36,18 @@
  .muted{color:#777}
  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  .sep{color:#444}
+ #updatebanner{display:none;background:#7a5b16;color:#fff7e0;padding:10px 16px;font-size:14px;border-bottom:1px solid #b08a2e}
+ #updatebanner.show{display:block}
 </style>
 </head>
 <body>
 <header>Photo Judge — Operator Console<span id="version" style="float:right;font-weight:400;opacity:.6;font-size:.8em"></span></header>
+<div id="updatebanner"></div>
 <div class="bar">
   <label>Session</label>
   <select id="session"></select>
   <button id="editsession">Edit date</button>
+  <button id="pdfbtn">⤓ Score sheet</button>
   <button id="delsession" class="danger">Delete</button>
   <span class="sep">|</span>
   <label>New</label>
@@ -94,6 +98,13 @@ function statusText(sc){
 
 function render(){
  if(state.version) $('version').textContent = 'v' + state.version;
+ const ub = $('updatebanner');
+ if(state.newerVersion){
+   ub.textContent = '⬆ A newer version of Photo Judge (v'+state.newerVersion+') was launched. Click “✕ Close App”, then reopen Photo Judge to update.';
+   ub.classList.add('show');
+ } else {
+   ub.classList.remove('show');
+ }
  // Session dropdown
  const sel = $('session'); const cur = sel.value;
  sel.innerHTML = '';
@@ -171,6 +182,15 @@ $('editsession').onclick = async () => {
  if(!r.ok){ alert('Edit failed: '+(await r.text())); return; }
  pendingSelect = id;
  toast('Session #'+id+' date changed to '+d, 'edit');
+};
+
+$('pdfbtn').onclick = () => {
+ const id = currentSession();
+ if(!id){ alert('No session selected.'); return; }
+ const a = document.createElement('a');
+ a.href = '/api/session/pdf?session=' + encodeURIComponent(id);
+ a.download = '';
+ document.body.appendChild(a); a.click(); a.remove();
 };
 
 $('delsession').onclick = async () => {

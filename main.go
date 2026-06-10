@@ -12,12 +12,16 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/jpeg" // registered so image.DecodeConfig can read JPEG/PNG dimensions
+	_ "image/png"
 	"io"
 	"io/fs"
 	"log"
-	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -51,8 +55,15 @@ var defaultCategories = []string{
 	"Black and White",
 }
 
+// imageExts is what the app will list/serve from the photos tree (kept broad so
+// anything already on disk still shows). uploadExts is the stricter set accepted
+// for new uploads — JPG/PNG only, which keeps dimension/EXIF reading simple.
 var imageExts = map[string]bool{
 	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true,
+}
+
+var uploadExts = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true,
 }
 
 // ---- data types -----------------------------------------------------------
@@ -149,6 +160,10 @@ type server struct {
 	sessions   []*Session
 	screens    map[string]*Screen
 	h          *hub
+
+	// newerVersion is set (guarded by mu) when a newer build of the exe is launched
+	// while this one is running; the console shows an "update available" banner.
+	newerVersion string
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -259,11 +274,12 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version    string     `json:"version"`
-		Sessions   []*Session `json:"sessions"`
-		Categories []string   `json:"categories"`
-		Screens    []*Screen  `json:"screens"`
-	}{appVersion, s.sessions, s.categories, screens}
+		Version      string     `json:"version"`
+		NewerVersion string     `json:"newerVersion,omitempty"`
+		Sessions     []*Session `json:"sessions"`
+		Categories   []string   `json:"categories"`
+		Screens      []*Screen  `json:"screens"`
+	}{appVersion, s.newerVersion, s.sessions, s.categories, screens}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -403,6 +419,30 @@ func (s *server) createSession(date string) (*Session, error) {
 func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(s.consoleSnapshot())
+}
+
+// handleReportVersion is called by a newly-launched, newer exe that found this
+// instance already running. If the reported version really is newer than ours, we
+// remember it (the highest seen) and the console shows an "update available" banner.
+func (s *server) handleReportVersion(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Version string `json:"version"`
+	}
+	if decode(r, &body) != nil || !newerVer(body.Version, appVersion) {
+		w.WriteHeader(204) // ignore anything not strictly newer than us
+		return
+	}
+	s.mu.Lock()
+	changed := s.newerVersion == "" || newerVer(body.Version, s.newerVersion)
+	if changed {
+		s.newerVersion = body.Version
+	}
+	s.mu.Unlock()
+	if changed {
+		log.Printf("a newer version (v%s) was launched — advising restart in the console", body.Version)
+		s.pushConsole()
+	}
+	w.WriteHeader(204)
 }
 
 func (s *server) handleSessionCreate(w http.ResponseWriter, r *http.Request) {
@@ -760,11 +800,39 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad names", 400)
 		return
 	}
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient)})
+	dir := s.photosDir(sid, cat, orient)
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir)})
 }
 
-// handleUpload accepts multipart image uploads into a session/category/orientation
-// folder, creating it lazily. Non-images are skipped; name clashes get a " (n)" suffix.
+// handlePhotoName sets (or clears, when name is empty) the photographer associated
+// with one photo, persisted to the folder's names.json.
+func (s *server) handlePhotoName(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Session, Category, Orientation, File, Name string }
+	if decode(r, &body) != nil {
+		http.Error(w, "bad body", 400)
+		return
+	}
+	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
+		http.Error(w, "bad names", 400)
+		return
+	}
+	dir := s.photosDir(body.Session, body.Category, body.Orientation)
+	base := filepath.Base(body.File)
+	if _, err := os.Stat(filepath.Join(dir, base)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := setName(dir, base, body.Name); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.WriteHeader(204)
+}
+
+// handleUpload accepts multipart image uploads into a session/category. Each photo
+// is auto-sorted into the Landscape or Portrait folder by its pixel dimensions
+// (taller than wide = Portrait), so the operator no longer picks an orientation.
+// Folders are created lazily; non-images are skipped; clashes get a " (n)" suffix.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "bad upload", 400)
@@ -772,8 +840,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := r.FormValue("session")
 	cat := r.FormValue("category")
-	orient := r.FormValue("orientation")
-	if !safeName(sid) || !safeName(cat) || !safeName(orient) {
+	if !safeName(sid) || !safeName(cat) {
 		http.Error(w, "bad names", 400)
 		return
 	}
@@ -784,28 +851,152 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such session", 404)
 		return
 	}
-	dir := s.photosDir(sid, cat, orient)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+	type savedItem struct {
+		File        string `json:"file"`
+		Orientation string `json:"orientation"`
 	}
-	var saved, skipped []string
+	var saved []savedItem
+	var skipped []string
+	added := map[string][]string{} // orientation -> filenames, for per-folder order.json
 	for _, fh := range r.MultipartForm.File["files"] {
 		base := filepath.Base(fh.Filename)
-		if base == "" || base == "." || strings.Contains(base, "..") || !imageExts[strings.ToLower(filepath.Ext(base))] {
+		if base == "" || base == "." || strings.Contains(base, "..") || !uploadExts[strings.ToLower(filepath.Ext(base))] {
 			skipped = append(skipped, fh.Filename)
 			continue
+		}
+		f, err := fh.Open()
+		if err != nil {
+			skipped = append(skipped, fh.Filename)
+			continue
+		}
+		orient := orientationOf(f, base) // reads dimensions, then seeks f back to start
+		dir := s.photosDir(sid, cat, orient)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			f.Close()
+			http.Error(w, err.Error(), 500)
+			return
 		}
 		name := uniqueName(dir, base)
-		if err := saveUpload(fh, filepath.Join(dir, name)); err != nil {
+		err = saveReader(f, filepath.Join(dir, name))
+		f.Close()
+		if err != nil {
 			skipped = append(skipped, fh.Filename)
 			continue
 		}
-		saved = append(saved, name)
+		saved = append(saved, savedItem{File: name, Orientation: orient})
+		added[orient] = append(added[orient], name)
 	}
-	appendToOrder(dir, saved)
-	log.Printf("upload: %d saved, %d skipped -> %s", len(saved), len(skipped), dir)
-	writeJSON(w, map[string]any{"saved": saved, "skipped": skipped, "files": s.photoFiles(sid, cat, orient)})
+	for orient, names := range added {
+		appendToOrder(s.photosDir(sid, cat, orient), names)
+	}
+	log.Printf("upload: %d saved (L:%d P:%d), %d skipped -> %s/%s",
+		len(saved), len(added["Landscape"]), len(added["Portrait"]), len(skipped), sid, cat)
+	writeJSON(w, map[string]any{"saved": saved, "skipped": skipped})
+}
+
+// orientationOf reports "Portrait" if the image is taller than it is wide, else
+// "Landscape" (the default for squares or undetectable dimensions). It leaves the
+// reader rewound to the start so the caller can copy the full file.
+func orientationOf(f io.ReadSeeker, name string) string {
+	w, h := imageDims(f, name)
+	f.Seek(0, io.SeekStart)
+	if w > 0 && h > w {
+		return "Portrait"
+	}
+	return "Landscape"
+}
+
+// imageDims returns an image's effective display width and height (0,0 if it can't
+// be read). Dimensions come from image.DecodeConfig (JPEG/PNG). For JPEGs, a 90°/270°
+// rotation recorded in EXIF orientation swaps width and height, so a photo shot in
+// portrait but stored with landscape pixels is still treated as portrait.
+func imageDims(f io.ReadSeeker, name string) (int, int) {
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, 0
+	}
+	cfg, _, err := image.DecodeConfig(f)
+	if err != nil {
+		return 0, 0
+	}
+	w, h := cfg.Width, cfg.Height
+	if ext := strings.ToLower(filepath.Ext(name)); ext == ".jpg" || ext == ".jpeg" {
+		if _, err := f.Seek(0, io.SeekStart); err == nil {
+			head := make([]byte, 64*1024) // EXIF lives in the APP1 segment near the start
+			n, _ := io.ReadFull(f, head)
+			if o := exifOrientation(head[:n]); o >= 5 && o <= 8 {
+				w, h = h, w // 90°/270° rotation swaps the displayed dimensions
+			}
+		}
+	}
+	return w, h
+}
+
+// exifOrientation scans a JPEG's markers for the APP1/Exif segment and returns its
+// Orientation tag (1–8), or 0 if absent.
+func exifOrientation(b []byte) int {
+	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 { // SOI
+		return 0
+	}
+	for i := 2; i+4 <= len(b); {
+		if b[i] != 0xFF {
+			return 0
+		}
+		marker := b[i+1]
+		if marker == 0xDA || marker == 0xD9 { // SOS / EOI — image data, no more metadata
+			return 0
+		}
+		if marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7) { // standalone markers, no length
+			i += 2
+			continue
+		}
+		segLen := int(b[i+2])<<8 | int(b[i+3]) // includes its own 2 length bytes
+		segStart, segEnd := i+4, i+2+segLen
+		if segLen < 2 || segEnd > len(b) {
+			return 0
+		}
+		if marker == 0xE1 { // APP1
+			if o := exifFromAPP1(b[segStart:segEnd]); o != 0 {
+				return o
+			}
+		}
+		i = segEnd
+	}
+	return 0
+}
+
+// exifFromAPP1 reads the Orientation tag (0x0112) out of an APP1 "Exif" segment's
+// TIFF/IFD0 directory.
+func exifFromAPP1(seg []byte) int {
+	if len(seg) < 14 || string(seg[0:6]) != "Exif\x00\x00" {
+		return 0
+	}
+	tiff := seg[6:]
+	var bo binary.ByteOrder
+	switch string(tiff[0:2]) {
+	case "II":
+		bo = binary.LittleEndian
+	case "MM":
+		bo = binary.BigEndian
+	default:
+		return 0
+	}
+	if bo.Uint16(tiff[2:4]) != 0x2A {
+		return 0
+	}
+	ifd := int(bo.Uint32(tiff[4:8]))
+	if ifd < 8 || ifd+2 > len(tiff) {
+		return 0
+	}
+	count := int(bo.Uint16(tiff[ifd : ifd+2]))
+	for k, p := 0, ifd+2; k < count; k, p = k+1, p+12 {
+		if p+12 > len(tiff) {
+			return 0
+		}
+		if bo.Uint16(tiff[p:p+2]) == 0x0112 { // Orientation, stored as a SHORT
+			return int(bo.Uint16(tiff[p+8 : p+10]))
+		}
+	}
+	return 0
 }
 
 // handleOrderSet overwrites a folder's order.json with the given filename order,
@@ -874,8 +1065,58 @@ func (s *server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	removeFromOrder(dir, base)
+	removeFromNames(dir, base)
 	log.Printf("photo soft-deleted: %s -> %s", src, dest)
 	writeJSON(w, map[string]any{"files": s.photoFiles(body.Session, body.Category, body.Orientation)})
+}
+
+// names.json maps a photo's filename to an operator-entered photographer name,
+// kept per orientation folder alongside order.json. Used to pre-fill the upload
+// grid and the Photographer column of the score-sheet PDF.
+
+func loadNames(dir string) map[string]string {
+	m := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, "names.json"))
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m
+}
+
+func writeNames(dir string, m map[string]string) error {
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return os.WriteFile(filepath.Join(dir, "names.json"), b, 0o644)
+}
+
+// setName records (or, when name is blank, clears) the photographer for one file.
+func setName(dir, file, name string) error {
+	m := loadNames(dir)
+	name = strings.TrimSpace(name)
+	if len(name) > 120 {
+		name = name[:120]
+	}
+	if name == "" {
+		if _, ok := m[file]; !ok {
+			return nil
+		}
+		delete(m, file)
+	} else {
+		m[file] = name
+	}
+	return writeNames(dir, m)
+}
+
+func removeFromNames(dir, file string) {
+	m := loadNames(dir)
+	if _, ok := m[file]; !ok {
+		return
+	}
+	delete(m, file)
+	_ = writeNames(dir, m)
 }
 
 func removeFromOrder(dir, name string) {
@@ -913,12 +1154,8 @@ func uniqueName(dir, name string) string {
 	}
 }
 
-func saveUpload(fh *multipart.FileHeader, dest string) error {
-	src, err := fh.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
+// saveReader writes the (already-rewound) upload stream to dest.
+func saveReader(src io.Reader, dest string) error {
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
@@ -1032,6 +1269,69 @@ func validDate(d string) bool {
 	return err == nil
 }
 
+// newerVer reports whether version a is strictly newer than b, comparing the
+// MAJOR.MINOR.PATCH numbers. Unparseable versions are treated as "not newer".
+func newerVer(a, b string) bool {
+	pa, oka := parseVer(a)
+	pb, okb := parseVer(b)
+	if !oka || !okb {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if pa[i] != pb[i] {
+			return pa[i] > pb[i]
+		}
+	}
+	return false
+}
+
+func parseVer(s string) ([3]int, bool) {
+	var v [3]int
+	parts := strings.Split(strings.TrimSpace(s), ".")
+	if len(parts) != 3 {
+		return v, false
+	}
+	for i := 0; i < 3; i++ {
+		n, err := strconv.Atoi(parts[i])
+		if err != nil || n < 0 {
+			return v, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+// probeRunning asks an already-bound address whether it's a Photo Judge instance,
+// returning its reported version. Used when our own port bind fails.
+func probeRunning(addr string) (bool, string) {
+	client := http.Client{Timeout: 1500 * time.Millisecond}
+	resp, err := client.Get("http://" + addr + "/api/state")
+	if err != nil {
+		return false, ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, ""
+	}
+	var st struct {
+		Version string `json:"version"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&st) != nil {
+		return false, ""
+	}
+	return true, st.Version
+}
+
+// reportVersion tells the already-running instance that a newer build (ours) was
+// launched, so its console can advise a restart. Best-effort; errors are ignored.
+func reportVersion(addr string) {
+	body := strings.NewReader(`{"version":"` + appVersion + `"}`)
+	client := http.Client{Timeout: 1500 * time.Millisecond}
+	if resp, err := client.Post("http://"+addr+"/api/report-version", "application/json", body); err == nil {
+		resp.Body.Close()
+	}
+}
+
 func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 	data, err := fs.ReadFile(sub, name)
 	if err != nil {
@@ -1080,9 +1380,11 @@ func main() {
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
+	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
 	mux.HandleFunc("/api/screen/register", s.handleScreenRegister)
 	mux.HandleFunc("/api/screen/create", s.handleScreenCreate)
 	mux.HandleFunc("/api/screen/delete", s.handleScreenDelete)
@@ -1094,6 +1396,7 @@ func main() {
 	mux.HandleFunc("/api/upload", s.handleUpload)
 	mux.HandleFunc("/api/order", s.handleOrderSet)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
+	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 
@@ -1103,7 +1406,26 @@ func main() {
 	}
 	addr := "127.0.0.1:" + port
 	u := "http://" + addr + "/"
-	srv := &http.Server{Addr: addr, Handler: mux}
+
+	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
+	// already running — hand the user off to that instance instead of dying with a
+	// raw "address in use" error. A second double-click thus just opens the console.
+	ln, lerr := net.Listen("tcp", addr)
+	if lerr != nil {
+		if running, runningVer := probeRunning(addr); running {
+			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", u)
+			if newerVer(appVersion, runningVer) {
+				reportVersion(addr) // make the running console show an update banner
+				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
+				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
+			}
+			openBrowser(u)
+			os.Exit(0)
+		}
+		log.Fatalf("could not start Photo Judge on %s: %v", addr, lerr)
+	}
+
+	srv := &http.Server{Handler: mux}
 	go func() {
 		<-s.shutdownCh
 		log.Println("Close App pressed — shutting down.")
@@ -1114,7 +1436,7 @@ func main() {
 	log.Printf("Photo Judge v%s — data dir: %s", appVersion, baseDir)
 	log.Printf("Console ready at %s", u)
 	go openBrowser(u)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 	log.Println("Stopped.")

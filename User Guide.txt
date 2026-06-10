@@ -85,16 +85,27 @@ E) PRESENT
  4. ADDING & ORGANIZING PHOTOS  ("Upload / Reorder" page)
 ------------------------------------------------------------
 
-* Pick Session, Category, and Orientation at the top. The page
-  shows the photos already in that group.
+* Pick Session and Category at the top. The page shows the
+  photos already in that category, split into a Landscape
+  section and a Portrait section.
 * UPLOAD: drag image files onto the drop area, or click it to
-  browse. The folder is created automatically if needed.
-* REORDER: drag a thumbnail to a new spot. The number badge
-  shows the display order. Saved instantly.
+  browse. Only JPG and PNG files are accepted. You do NOT pick
+  Landscape or Portrait — each photo is filed automatically by
+  its shape (taller than wide = Portrait, otherwise Landscape).
+  A JPG that was rotated in-camera is filed by how it actually
+  looks (its rotation metadata is honored). Folders are created
+  as needed.
+* PHOTOGRAPHER: type a name in the box under a photo to record
+  who took it. It's saved automatically and is pre-filled into
+  the score-sheet PDF.
+* REORDER: drag a thumbnail to a new spot within its section.
+  The number badge shows the display order. Saved instantly.
+  (Photos can't be dragged between Landscape and Portrait —
+  orientation follows the photo's shape.)
 * REMOVE: click the small x on a thumbnail to remove a photo.
 * If two photos have the same filename, the new one is renamed
   (e.g. "sunset (2).jpg") so nothing is overwritten.
-* Non-image files are ignored.
+* Anything that isn't a JPG or PNG is ignored.
 
 
 ------------------------------------------------------------
