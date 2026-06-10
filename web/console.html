@@ -44,6 +44,7 @@
   <label>Session</label>
   <select id="session"></select>
   <button id="editsession">Edit date</button>
+  <button id="pdfbtn">⤓ Score sheet</button>
   <button id="delsession" class="danger">Delete</button>
   <span class="sep">|</span>
   <label>New</label>
@@ -171,6 +172,15 @@ $('editsession').onclick = async () => {
  if(!r.ok){ alert('Edit failed: '+(await r.text())); return; }
  pendingSelect = id;
  toast('Session #'+id+' date changed to '+d, 'edit');
+};
+
+$('pdfbtn').onclick = () => {
+ const id = currentSession();
+ if(!id){ alert('No session selected.'); return; }
+ const a = document.createElement('a');
+ a.href = '/api/session/pdf?session=' + encodeURIComponent(id);
+ a.download = '';
+ document.body.appendChild(a); a.click(); a.remove();
 };
 
 $('delsession').onclick = async () => {

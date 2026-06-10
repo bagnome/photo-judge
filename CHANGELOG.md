@@ -13,6 +13,12 @@ collects changes already merged into `development` but not yet released.
 
 ### Added
 - This changelog.
+- **Downloadable score sheet (PDF)** — a "⤓ Score sheet" button on the console
+  generates a printable, single-column scoring form for the selected session:
+  one section per category (in `categories.txt` order), Landscape before Portrait,
+  one row per photo (in display order) with the photo name and blanks for the
+  photographer name and a score. Generated with the standard library only (no
+  third-party PDF dependency).
 
 ## [1.0.0] - 2026-06-10
 
