@@ -11,6 +11,8 @@ collects changes already merged into `development` but not yet released.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-10
+
 ### Added
 - This changelog.
 - **Downloadable score sheet (PDF)** — a "⤓ Score sheet" button on the console
@@ -69,5 +71,6 @@ Initial release.
 - `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
   operator console and logged at startup.
 
-[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/bagnome/photo-judge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
