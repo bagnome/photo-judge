@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -160,6 +161,10 @@ type server struct {
 	screens    map[string]*Screen
 	h          *hub
 
+	// newerVersion is set (guarded by mu) when a newer build of the exe is launched
+	// while this one is running; the console shows an "update available" banner.
+	newerVersion string
+
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -269,11 +274,12 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version    string     `json:"version"`
-		Sessions   []*Session `json:"sessions"`
-		Categories []string   `json:"categories"`
-		Screens    []*Screen  `json:"screens"`
-	}{appVersion, s.sessions, s.categories, screens}
+		Version      string     `json:"version"`
+		NewerVersion string     `json:"newerVersion,omitempty"`
+		Sessions     []*Session `json:"sessions"`
+		Categories   []string   `json:"categories"`
+		Screens      []*Screen  `json:"screens"`
+	}{appVersion, s.newerVersion, s.sessions, s.categories, screens}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -413,6 +419,30 @@ func (s *server) createSession(date string) (*Session, error) {
 func (s *server) handleState(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(s.consoleSnapshot())
+}
+
+// handleReportVersion is called by a newly-launched, newer exe that found this
+// instance already running. If the reported version really is newer than ours, we
+// remember it (the highest seen) and the console shows an "update available" banner.
+func (s *server) handleReportVersion(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Version string `json:"version"`
+	}
+	if decode(r, &body) != nil || !newerVer(body.Version, appVersion) {
+		w.WriteHeader(204) // ignore anything not strictly newer than us
+		return
+	}
+	s.mu.Lock()
+	changed := s.newerVersion == "" || newerVer(body.Version, s.newerVersion)
+	if changed {
+		s.newerVersion = body.Version
+	}
+	s.mu.Unlock()
+	if changed {
+		log.Printf("a newer version (v%s) was launched — advising restart in the console", body.Version)
+		s.pushConsole()
+	}
+	w.WriteHeader(204)
 }
 
 func (s *server) handleSessionCreate(w http.ResponseWriter, r *http.Request) {
@@ -1239,6 +1269,69 @@ func validDate(d string) bool {
 	return err == nil
 }
 
+// newerVer reports whether version a is strictly newer than b, comparing the
+// MAJOR.MINOR.PATCH numbers. Unparseable versions are treated as "not newer".
+func newerVer(a, b string) bool {
+	pa, oka := parseVer(a)
+	pb, okb := parseVer(b)
+	if !oka || !okb {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if pa[i] != pb[i] {
+			return pa[i] > pb[i]
+		}
+	}
+	return false
+}
+
+func parseVer(s string) ([3]int, bool) {
+	var v [3]int
+	parts := strings.Split(strings.TrimSpace(s), ".")
+	if len(parts) != 3 {
+		return v, false
+	}
+	for i := 0; i < 3; i++ {
+		n, err := strconv.Atoi(parts[i])
+		if err != nil || n < 0 {
+			return v, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+// probeRunning asks an already-bound address whether it's a Photo Judge instance,
+// returning its reported version. Used when our own port bind fails.
+func probeRunning(addr string) (bool, string) {
+	client := http.Client{Timeout: 1500 * time.Millisecond}
+	resp, err := client.Get("http://" + addr + "/api/state")
+	if err != nil {
+		return false, ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, ""
+	}
+	var st struct {
+		Version string `json:"version"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&st) != nil {
+		return false, ""
+	}
+	return true, st.Version
+}
+
+// reportVersion tells the already-running instance that a newer build (ours) was
+// launched, so its console can advise a restart. Best-effort; errors are ignored.
+func reportVersion(addr string) {
+	body := strings.NewReader(`{"version":"` + appVersion + `"}`)
+	client := http.Client{Timeout: 1500 * time.Millisecond}
+	if resp, err := client.Post("http://"+addr+"/api/report-version", "application/json", body); err == nil {
+		resp.Body.Close()
+	}
+}
+
 func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 	data, err := fs.ReadFile(sub, name)
 	if err != nil {
@@ -1287,6 +1380,7 @@ func main() {
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
@@ -1312,7 +1406,26 @@ func main() {
 	}
 	addr := "127.0.0.1:" + port
 	u := "http://" + addr + "/"
-	srv := &http.Server{Addr: addr, Handler: mux}
+
+	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
+	// already running — hand the user off to that instance instead of dying with a
+	// raw "address in use" error. A second double-click thus just opens the console.
+	ln, lerr := net.Listen("tcp", addr)
+	if lerr != nil {
+		if running, runningVer := probeRunning(addr); running {
+			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", u)
+			if newerVer(appVersion, runningVer) {
+				reportVersion(addr) // make the running console show an update banner
+				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
+				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
+			}
+			openBrowser(u)
+			os.Exit(0)
+		}
+		log.Fatalf("could not start Photo Judge on %s: %v", addr, lerr)
+	}
+
+	srv := &http.Server{Handler: mux}
 	go func() {
 		<-s.shutdownCh
 		log.Println("Close App pressed — shutting down.")
@@ -1323,7 +1436,7 @@ func main() {
 	log.Printf("Photo Judge v%s — data dir: %s", appVersion, baseDir)
 	log.Printf("Console ready at %s", u)
 	go openBrowser(u)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 	log.Println("Stopped.")

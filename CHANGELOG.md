@@ -23,8 +23,15 @@ collects changes already merged into `development` but not yet released.
   page associates a photographer with that photo (saved per folder in
   `names.json`). When a name is set it's pre-filled into the Photographer column
   of the score-sheet PDF; photos left blank keep an empty space to write in.
+- **"Newer version launched" banner** — if a newer build of the exe is started
+  while an older one is running, the running console shows a banner recommending a
+  restart to update (only when the launched copy is strictly newer).
 
 ### Changed
+- **Re-launching the app is friendly** — double-clicking the exe while it's already
+  running no longer fails with a raw "address in use" error. The second launch
+  detects the running instance, opens the console pointing at it, and exits cleanly
+  (so you never get two servers fighting over the same `photos\` folder).
 - **Automatic orientation on upload** — the operator no longer picks Landscape or
   Portrait when uploading. Each photo is filed automatically by its shape (taller
   than wide = Portrait; squares go to Landscape), and the Upload / Reorder page now

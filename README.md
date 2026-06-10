@@ -168,6 +168,11 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
 The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
 (default `8753`).
 
+Double-clicking the exe again while it's already running won't start a second copy
+— it detects the running instance and just reopens the console pointing at it. If
+the copy you launch is **newer** than the one running, the console shows a banner
+suggesting you close and reopen Photo Judge to update.
+
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
