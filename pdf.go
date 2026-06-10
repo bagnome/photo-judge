@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ---- low-level PDF writer -------------------------------------------------
@@ -284,7 +285,11 @@ func (s *server) handleSessionPDF(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pdf := s.buildScoreSheetPDF(sess)
+	name := fmt.Sprintf("score-sheet-session-%s.pdf", sess.ID)
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="score-sheet-session-%s.pdf"`, sess.ID))
-	w.Write(pdf)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, name))
+	// ServeContent sets Content-Length and handles Range/HEAD requests, so the
+	// response is a sized download rather than a chunked stream — browsers fail
+	// (open-ended "network error") on chunked localhost downloads.
+	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(pdf))
 }
