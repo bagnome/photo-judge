@@ -271,6 +271,13 @@ on the operator console, and logged at startup. Release history is kept in
 
   Then optionally draft a GitHub Release from that tag and attach `photo-judge.exe`.
 
+**Release codenames.** Each release (a `vX.Y.0` tag) is also given a codename: a
+**famously photographed landmark**, chosen alphabetically (A, B, C…) — fitting for a
+photography-club tool. The letter advances once per release, independent of the
+numbers. `1.1.0` is **"Antelope Canyon"** (the "A" release); the next release takes a
+"B" landmark. The codename goes in the GitHub Release title and the `CHANGELOG.md`
+heading for that version.
+
 ---
 
 ## Roadmap
