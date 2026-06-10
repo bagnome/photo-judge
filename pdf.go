@@ -180,13 +180,24 @@ func (p *pdfWriter) render() []byte {
 
 // ---- score-sheet layout ---------------------------------------------------
 
-// stripExts returns the filenames without their extensions (the displayed name).
-func stripExts(files []string) []string {
-	out := make([]string, len(files))
+// photoRow is one line of the score sheet: the displayed photo name (filename
+// without extension) and an optional operator-entered photographer name.
+type photoRow struct {
+	name         string
+	photographer string
+}
+
+// photoRows gathers the rows for one category/orientation in display order,
+// pairing each photo with its photographer name from the folder's names.json.
+func (s *server) photoRows(sid, cat, orient string) []photoRow {
+	dir := s.photosDir(sid, cat, orient)
+	files := s.photoFiles(sid, cat, orient)
+	names := loadNames(dir)
+	rows := make([]photoRow, len(files))
 	for i, f := range files {
-		out[i] = strings.TrimSuffix(f, filepath.Ext(f))
+		rows[i] = photoRow{name: strings.TrimSuffix(f, filepath.Ext(f)), photographer: names[f]}
 	}
-	return out
+	return rows
 }
 
 // buildScoreSheetPDF renders a single-column scoring form for one session:
@@ -211,8 +222,10 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 	p.text(left, p.y-11, "F1", 11, sess.Date+"   (Session #"+sess.ID+")")
 	p.y -= 24
 
+	phColW := scX - phX - 8 // room for a pre-filled photographer name before Score
+
 	// orientation draws one Landscape/Portrait sub-table, paginating as needed.
-	orientation := func(orient string, names []string) {
+	orientation := func(orient string, rows []photoRow) {
 		header := func(suffix string) {
 			p.text(nameX, p.y-11, "F2", 11, orient+suffix)
 			p.y -= 16
@@ -227,12 +240,15 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 			p.newPage()
 		}
 		header("")
-		for _, name := range names {
+		for _, row := range rows {
 			if p.y-rowH < pdfMargin {
 				p.newPage()
 				header(" (continued)")
 			}
-			p.text(nameX, p.y-16, "F1", 10, truncateToWidth(name, 10, nameColW))
+			p.text(nameX, p.y-16, "F1", 10, truncateToWidth(row.name, 10, nameColW))
+			if row.photographer != "" {
+				p.text(phX, p.y-16, "F1", 10, truncateToWidth(row.photographer, 10, phColW))
+			}
 			p.hline(left, right, p.y-rowH+3, 0.78, 0.5)
 			p.y -= rowH
 		}
@@ -241,8 +257,8 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 
 	any := false
 	for _, cat := range sess.Categories {
-		land := stripExts(s.photoFiles(sess.ID, cat, "Landscape"))
-		port := stripExts(s.photoFiles(sess.ID, cat, "Portrait"))
+		land := s.photoRows(sess.ID, cat, "Landscape")
+		port := s.photoRows(sess.ID, cat, "Portrait")
 		if len(land) == 0 && len(port) == 0 {
 			continue
 		}

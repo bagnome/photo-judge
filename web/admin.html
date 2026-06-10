@@ -25,6 +25,10 @@
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
  .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
  .tile .del:hover{background:#a83232}
+ .tile .nm{padding:0 7px 7px}
+ .tile .pname{width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:4px;cursor:text}
+ .tile .pname:focus{border-color:#2d6cdf;outline:none}
+ .tile .pname.set{border-color:#2e7d46}
  .empty{padding:6px 16px;color:#777}
  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
@@ -36,6 +40,7 @@
 <header>Photo Judge — Upload / Reorder <a href="/">← Console</a></header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
+  <button id="pdfbtn">⤓ Score sheet</button>
   <span class="sep">|</span>
   <label>New</label><input type="date" id="newdate"><button id="newbtn">Create</button>
   <span class="sep">|</span>
@@ -53,7 +58,7 @@
 const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
-let sessions = [], categories = [], files = [], pendingSession = null, dragFrom = null;
+let sessions = [], categories = [], files = [], names = {}, pendingSession = null, dragFrom = null;
 
 function toast(msg, kind){
  const t = document.createElement('div');
@@ -83,12 +88,16 @@ function applyState(st){
 }
 
 async function refreshGrid(){
+ // Don't yank the grid out from under someone typing a photographer name: the
+ // console SSE stream re-renders on any state change, which would lose focus.
+ if(document.activeElement && document.activeElement.classList.contains('pname')) return;
  const c = ctx();
  $('ctx').textContent = c.session ? ('session #'+c.session+'  ›  '+c.category+'  ›  '+c.orientation) : '(create or select a session)';
- if(!c.session || !c.category || !c.orientation){ files = []; renderGrid(); return; }
+ if(!c.session || !c.category || !c.orientation){ files = []; names = {}; renderGrid(); return; }
  const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+enc(c.orientation));
  const j = await r.json();
  files = j.files || [];
+ names = j.names || {};
  renderGrid();
 }
 
@@ -104,8 +113,19 @@ function renderGrid(){
    const cap = document.createElement('div'); cap.className = 'fn'; cap.textContent = fn;
    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove this photo';
    del.onclick = (e) => { e.stopPropagation(); deletePhoto(fn); };
-   t.append(img, badge, cap, del);
-   t.addEventListener('dragstart', () => { dragFrom = i; t.classList.add('dragging'); });
+   const nm = document.createElement('div'); nm.className = 'nm';
+   const nin = document.createElement('input'); nin.className = 'pname'; nin.type = 'text';
+   nin.placeholder = 'Photographer'; nin.value = names[fn] || '';
+   if(nin.value) nin.classList.add('set');
+   nin.draggable = false;
+   nin.addEventListener('keydown', e => { if(e.key === 'Enter') nin.blur(); });
+   nin.addEventListener('change', () => savePhotographer(fn, nin));
+   nm.appendChild(nin);
+   t.append(img, badge, cap, del, nm);
+   t.addEventListener('dragstart', (e) => {
+     if(e.target && e.target.classList.contains('pname')){ e.preventDefault(); return; } // typing, not reordering
+     dragFrom = i; t.classList.add('dragging');
+   });
    t.addEventListener('dragend',   () => t.classList.remove('dragging'));
    t.addEventListener('dragover',  e => { e.preventDefault(); t.classList.add('dragover'); });
    t.addEventListener('dragleave', () => t.classList.remove('dragover'));
@@ -127,6 +147,16 @@ async function saveOrder(){
  const c = ctx();
  const r = await post('/api/order', {session:c.session, category:c.category, orientation:c.orientation, order:files});
  if(r.ok) toast('Order saved'); else toast('Could not save order', 'del');
+}
+
+async function savePhotographer(fn, input){
+ const c = ctx();
+ const name = input.value.trim();
+ const r = await post('/api/photo/name', {session:c.session, category:c.category, orientation:c.orientation, file:fn, name});
+ if(!r.ok){ toast('Could not save name: '+(await r.text()), 'del'); return; }
+ names[fn] = name;
+ input.classList.toggle('set', !!name);
+ toast(name ? ('Photographer set for '+fn) : ('Photographer cleared for '+fn));
 }
 
 async function deletePhoto(fn){
@@ -157,6 +187,15 @@ function uploadFiles(list){
    toast(msg);
  });
 }
+
+$('pdfbtn').onclick = () => {
+ const id = $('session').value;
+ if(!id){ alert('No session selected.'); return; }
+ const a = document.createElement('a');
+ a.href = '/api/session/pdf?session=' + enc(id);
+ a.download = '';
+ document.body.appendChild(a); a.click(); a.remove();
+};
 
 $('newbtn').onclick = async () => {
  const d = $('newdate').value;
