@@ -13,6 +13,8 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.2.3.0] - 2026-06-11 — "Bryce Canyon"
+
 ### Added
 - **Getting Started page** — a new illustrated, step-by-step walkthrough (create a
   session → manage categories → upload photos → create screens → load → present),
@@ -97,6 +99,7 @@ Initial release.
 - `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
   operator console and logged at startup.
 
-[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.2.3.0...HEAD
+[1.2.3.0]: https://github.com/bagnome/photo-judge/compare/v1.1.0...v1.2.3.0
 [1.1.0]: https://github.com/bagnome/photo-judge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
