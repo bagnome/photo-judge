@@ -1,5 +1,6 @@
 # Build artifact (~9 MB) — attach to a GitHub Release instead of committing
 *.exe
+*.exe~
 
 # Runtime data and user content, created/managed by the app at run time
 /photos/
@@ -18,6 +19,11 @@
 *.tiff
 *.heic
 *.heif
+
+# Getting Started screenshots ARE part of the app (embedded into the exe), so keep
+# them tracked even though images are otherwise ignored above.
+!getting-started-images/
+!getting-started-images/**
 
 # OS / editor cruft
 Thumbs.db

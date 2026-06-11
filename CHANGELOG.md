@@ -14,6 +14,11 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Getting Started page** — a new illustrated, step-by-step walkthrough (create a
+  session → manage categories → upload photos → create screens → load → present),
+  opened from a **Getting Started** button on the console. Its screenshots live in
+  `getting-started-images/` and are embedded into the exe, so the guide works on a
+  copied, offline build.
 - **Category manager (per session)** — a new **Manage categories** page (linked from the
   console and the Upload page) replaces hand-editing `categories.txt`. Two panes —
   **Inactive** (alphabetical) and **Active** (ordered) — let you move categories between

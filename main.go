@@ -37,6 +37,12 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// gettingStartedFS holds the Getting Started screenshots, baked into the binary so
+// the page works on a copied, offline exe like everything else.
+//
+//go:embed getting-started-images
+var gettingStartedFS embed.FS
+
 // appVersion is baked in from the VERSION file at build time (single source of
 // truth, MAJOR.RELEASE.FEATURES.PATCH). See the "Versioning" section in README.md.
 //
@@ -1638,6 +1644,8 @@ func main() {
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
+	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
+	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
