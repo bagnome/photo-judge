@@ -35,6 +35,7 @@
  .tile img{width:100%;height:112px;object-fit:cover;display:block;background:#000}
  .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
+ .tile .score{position:absolute;top:84px;left:4px;background:#2e7d46;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px}
  .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
  .tile .del:hover{background:#a83232}
  .tile .nm{padding:0 7px 7px}
@@ -49,7 +50,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Upload / Reorder <a href="/">← Console</a> <a href="/categories">▦ Manage categories</a></header>
+<header>Photo Judge — Upload / Reorder <a href="/">← Console</a> <a href="/categories">▦ Manage categories</a> <a href="/score">🏆 Scoring</a></header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <button id="pdfbtn">⤓ Score sheet</button>
@@ -84,7 +85,7 @@ const enc = encodeURIComponent;
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const ORIENTS = ['Landscape','Portrait'];
 let sessions = [], pendingSession = null;
-let sect = { Landscape:{files:[],names:{}}, Portrait:{files:[],names:{}} };
+let sect = { Landscape:{files:[],names:{},scores:{}}, Portrait:{files:[],names:{},scores:{}} };
 let drag = null; // {orient, i} — reordering is confined to one section
 
 function toast(msg, kind){
@@ -159,11 +160,11 @@ async function refreshGrid(){
  if(!updateView()) return; // no session yet — guidance is shown instead of the grid
  const c = ctx();
  $('ctx').textContent = 'session #'+c.session+'  ›  '+c.category;
- if(!c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{}}); renderAll(); return; }
+ if(!c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{},scores:{}}); renderAll(); return; }
  await Promise.all(ORIENTS.map(async o => {
    const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
    const j = await r.json();
-   sect[o] = {files: j.files || [], names: j.names || {}};
+   sect[o] = {files: j.files || [], names: j.names || {}, scores: j.scores || {}};
  }));
  renderAll();
 }
@@ -193,6 +194,8 @@ function renderSection(orient){
    nin.addEventListener('change', () => savePhotographer(orient, fn, nin));
    nm.appendChild(nin);
    t.append(img, badge, cap, del, nm);
+   const sc = data.scores[fn];
+   if(sc){ const sb = document.createElement('div'); sb.className = 'score'; sb.textContent = '★ '+sc; sb.title = 'Judge score'; t.appendChild(sb); }
    t.addEventListener('dragstart', (e) => {
      if(e.target && e.target.classList.contains('pname')){ e.preventDefault(); return; } // typing, not reordering
      drag = {orient, i}; t.classList.add('dragging');
