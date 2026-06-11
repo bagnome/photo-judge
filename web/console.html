@@ -57,6 +57,7 @@
   <button id="createscreen" class="primary">➕ Create Screen</button>
   <button id="panicblack">⬛ Black all</button>
   <span class="sep">|</span>
+  <button id="openhelp">📖 Getting Started</button>
   <button id="openadmin">▤ Upload / Reorder</button>
   <button id="opencats">▦ Manage categories</button>
   <span class="spacer"></span>
@@ -266,6 +267,7 @@ function deleteScreen(name){
 }
 
 $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout) cmd(sc.name,'blackout'); }); };
+$('openhelp').onclick = () => window.open('/getting-started', '_blank');
 $('openadmin').onclick = () => window.open('/admin', '_blank');
 $('opencats').onclick = () => window.open('/categories', '_blank');
 // Re-render when the selected session changes so each screen's category menu

@@ -115,6 +115,10 @@ that workflow.
   and blank spaces for the photographer name and a score. Any photographer names
   recorded on the upload page are pre-filled. Generated in-process with the standard
   library only — no PDF dependency.
+- **Getting Started guide** — an in-app, illustrated walkthrough (a **Getting Started**
+  button on the console) that takes a new operator from creating a session through to
+  presenting, with a screenshot for each step. Its images are embedded in the exe, so it
+  works offline on a copied build.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -224,6 +228,8 @@ new sessions — copy to the local drive for an event).
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |
+| `web/getting-started.html` | Illustrated Getting Started walkthrough |
+| `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
 | `User Guide.txt` | End-user (operator) guide |
 | `CHANGELOG.md` | Release history |
