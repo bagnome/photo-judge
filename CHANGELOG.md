@@ -13,6 +13,17 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **Category manager (per session)** — a new **Manage categories** page (linked from the
+  console and the Upload page) replaces hand-editing `categories.txt`. Two panes —
+  **Inactive** (alphabetical) and **Active** (ordered) — let you move categories between
+  them, reorder the active ones (select + ↑/↓), add new categories, and delete ones with
+  no photos (used categories can only be deactivated, which preserves their photos).
+  Categories are now **per session**: each session owns its slate, a new session inherits
+  the latest session's active order + inactive set, and the active order drives that
+  session's console/Upload dropdowns and its score-sheet PDF. `categories.txt` now only
+  seeds the very first session.
+
 ### Changed
 - **Version-number format** — versions are now four numbers,
   `MAJOR.RELEASE.FEATURES.PATCH` (e.g. `1.2.0.0`): the 3rd digit counts changes queued

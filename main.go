@@ -72,7 +72,11 @@ type Session struct {
 	ID         string   `json:"id"`         // "001" — stable folder name, never changes
 	Date       string   `json:"date"`       // human label, freely editable
 	Created    string   `json:"created"`    // RFC3339
-	Categories []string `json:"categories"` // slate snapshotted at creation
+	Categories []string `json:"categories"` // ACTIVE categories, in display order
+	// InactiveCategories are this session's deactivated categories (shown
+	// alphabetically in the manager). Omitted from older session.json files, which
+	// load as an empty set.
+	InactiveCategories []string `json:"inactiveCategories,omitempty"`
 }
 
 // Screen is the live state of one output window. Position: 0 = title card,
@@ -293,7 +297,8 @@ func (s *server) loadCategories() {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		var b strings.Builder
-		b.WriteString("# categories.txt — one per line. Order here = order shown to the operator.\n")
+		b.WriteString("# categories.txt — seeds the FIRST session's categories (one per line).\n")
+		b.WriteString("# After that, manage categories per session in the app (\"Manage categories\").\n")
 		b.WriteString("# These names appear on the title cards the judges see, so spelling counts.\n")
 		for _, c := range defaultCategories {
 			b.WriteString(c + "\n")
@@ -394,13 +399,23 @@ func (s *server) createSession(date string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := s.nextID()
-	ss := &Session{ID: id, Date: date, Created: time.Now().Format(time.RFC3339), Categories: append([]string{}, s.categories...)}
+	// A new session inherits the most recent session's category slate — the active
+	// order and the inactive set — so the operator's setup carries forward. The very
+	// first session falls back to the categories.txt / built-in default seed.
+	var active, inactive []string
+	if latest := s.latestSession(); latest != nil {
+		active = append([]string{}, latest.Categories...)
+		inactive = append([]string{}, latest.InactiveCategories...)
+	} else {
+		active = append([]string{}, s.categories...)
+	}
+	ss := &Session{ID: id, Date: date, Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive}
 	base := filepath.Join(s.baseDir, "photos", id)
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		return nil, err
+	}
 	for _, c := range ss.Categories {
-		if err := os.MkdirAll(filepath.Join(base, c, "Landscape"), 0o755); err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(filepath.Join(base, c, "Portrait"), 0o755); err != nil {
+		if err := s.ensureCategoryDirs(id, c); err != nil {
 			return nil, err
 		}
 	}
@@ -514,6 +529,242 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 	log.Printf("session %s date edited to %s", body.ID, body.Date)
 	s.pushConsole()
 	writeJSON(w, ss)
+}
+
+// ---- per-session category management --------------------------------------
+
+// latestSession returns the most recently created session (highest numeric ID),
+// or nil if none exist. Caller holds s.mu.
+func (s *server) latestSession() *Session {
+	var latest *Session
+	max := -1
+	for _, ss := range s.sessions {
+		if n, err := strconv.Atoi(ss.ID); err == nil && n > max {
+			max, latest = n, ss
+		}
+	}
+	return latest
+}
+
+// ensureCategoryDirs creates the Landscape/Portrait folders for a category.
+func (s *server) ensureCategoryDirs(sid, cat string) error {
+	if err := os.MkdirAll(s.photosDir(sid, cat, "Landscape"), 0o755); err != nil {
+		return err
+	}
+	return os.MkdirAll(s.photosDir(sid, cat, "Portrait"), 0o755)
+}
+
+// categoryUsed reports whether a category holds any photos in a session.
+func (s *server) categoryUsed(sid, cat string) bool {
+	return len(s.photoFiles(sid, cat, "Landscape")) > 0 || len(s.photoFiles(sid, cat, "Portrait")) > 0
+}
+
+// saveSession writes a session's session.json back to disk. Caller holds s.mu.
+func (s *server) saveSession(ss *Session) error {
+	b, _ := json.MarshalIndent(ss, "", "  ")
+	return os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
+}
+
+// categoryDetail is the manager's view of one session: the active (ordered) and
+// inactive (set) lists plus which categories currently hold photos (so the UI can
+// disable delete). Caller holds s.mu.
+func (s *server) categoryDetail(ss *Session) map[string]any {
+	used := []string{}
+	for _, c := range append(append([]string{}, ss.Categories...), ss.InactiveCategories...) {
+		if s.categoryUsed(ss.ID, c) {
+			used = append(used, c)
+		}
+	}
+	return map[string]any{
+		"active":   append([]string{}, ss.Categories...),
+		"inactive": append([]string{}, ss.InactiveCategories...),
+		"used":     used,
+	}
+}
+
+// validCategory guards a category name that will be used as a folder name.
+func validCategory(name string) bool {
+	if !safeName(name) || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return false
+	}
+	return len(name) <= 100
+}
+
+func containsFold(list []string, name string) bool {
+	for _, v := range list {
+		if strings.EqualFold(v, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeFold returns list without the first case-insensitive match of name, plus
+// whether one was removed.
+func removeFold(list []string, name string) ([]string, bool) {
+	for i, v := range list {
+		if strings.EqualFold(v, name) {
+			out := append([]string{}, list[:i]...)
+			return append(out, list[i+1:]...), true
+		}
+	}
+	return list, false
+}
+
+func (s *server) handleSessionCategories(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("session")
+	if !safeName(id) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.sessionByID(id)
+	if ss == nil {
+		http.Error(w, "no such session", 404)
+		return
+	}
+	writeJSON(w, s.categoryDetail(ss))
+}
+
+// categoryMutation runs the shared decode/lookup/save/push flow for the
+// {session, name} category endpoints. fn mutates the session under the lock and
+// returns (0, "") on success, or an (httpCode, message) to report instead.
+func (s *server) categoryMutation(w http.ResponseWriter, r *http.Request, fn func(ss *Session, name string) (int, string)) {
+	var body struct{ Session, Name string }
+	if decode(r, &body) != nil || !safeName(body.Session) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if !safeName(name) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	ss := s.sessionByID(body.Session)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "no such session", 404)
+		return
+	}
+	if code, msg := fn(ss, name); code != 0 {
+		s.mu.Unlock()
+		http.Error(w, msg, code)
+		return
+	}
+	err := s.saveSession(ss)
+	detail := s.categoryDetail(ss)
+	s.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	s.pushConsole()
+	writeJSON(w, detail)
+}
+
+func (s *server) handleCategoryAdd(w http.ResponseWriter, r *http.Request) {
+	s.categoryMutation(w, r, func(ss *Session, name string) (int, string) {
+		if !validCategory(name) {
+			return 400, "invalid category name"
+		}
+		if containsFold(ss.Categories, name) || containsFold(ss.InactiveCategories, name) {
+			return 409, "that category already exists in this session"
+		}
+		if err := s.ensureCategoryDirs(ss.ID, name); err != nil {
+			return 500, err.Error()
+		}
+		ss.Categories = append(ss.Categories, name)
+		return 0, ""
+	})
+}
+
+func (s *server) handleCategoryActivate(w http.ResponseWriter, r *http.Request) {
+	s.categoryMutation(w, r, func(ss *Session, name string) (int, string) {
+		rest, ok := removeFold(ss.InactiveCategories, name)
+		if !ok {
+			return 404, "category is not inactive"
+		}
+		if err := s.ensureCategoryDirs(ss.ID, name); err != nil {
+			return 500, err.Error()
+		}
+		ss.InactiveCategories = rest
+		ss.Categories = append(ss.Categories, name)
+		return 0, ""
+	})
+}
+
+func (s *server) handleCategoryDeactivate(w http.ResponseWriter, r *http.Request) {
+	s.categoryMutation(w, r, func(ss *Session, name string) (int, string) {
+		rest, ok := removeFold(ss.Categories, name)
+		if !ok {
+			return 404, "category is not active"
+		}
+		ss.Categories = rest
+		ss.InactiveCategories = append(ss.InactiveCategories, name)
+		return 0, ""
+	})
+}
+
+func (s *server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
+	s.categoryMutation(w, r, func(ss *Session, name string) (int, string) {
+		if s.categoryUsed(ss.ID, name) {
+			return 409, "category has photos — deactivate it instead of deleting"
+		}
+		ra, oka := removeFold(ss.Categories, name)
+		ri, oki := removeFold(ss.InactiveCategories, name)
+		if !oka && !oki {
+			return 404, "no such category"
+		}
+		ss.Categories, ss.InactiveCategories = ra, ri
+		_ = os.RemoveAll(filepath.Join(s.baseDir, "photos", ss.ID, name))
+		return 0, ""
+	})
+}
+
+// handleCategoryReorder sets a session's active category order. The posted order
+// must be a permutation of the session's current active set.
+func (s *server) handleCategoryReorder(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Session string
+		Order   []string
+	}
+	if decode(r, &body) != nil || !safeName(body.Session) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	ss := s.sessionByID(body.Session)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "no such session", 404)
+		return
+	}
+	seen := map[string]bool{}
+	for _, c := range body.Order {
+		if !containsFold(ss.Categories, c) {
+			s.mu.Unlock()
+			http.Error(w, "order must be a permutation of the active categories", 400)
+			return
+		}
+		seen[strings.ToLower(c)] = true
+	}
+	if len(seen) != len(ss.Categories) {
+		s.mu.Unlock()
+		http.Error(w, "order must be a permutation of the active categories", 400)
+		return
+	}
+	ss.Categories = append([]string{}, body.Order...)
+	err := s.saveSession(ss)
+	detail := s.categoryDetail(ss)
+	s.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	s.pushConsole()
+	writeJSON(w, detail)
 }
 
 // handleSessionDelete soft-deletes a session by moving its folder into
@@ -1386,12 +1637,19 @@ func main() {
 	})
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
+	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
+	mux.HandleFunc("/api/session/categories", s.handleSessionCategories)
+	mux.HandleFunc("/api/session/category/add", s.handleCategoryAdd)
+	mux.HandleFunc("/api/session/category/activate", s.handleCategoryActivate)
+	mux.HandleFunc("/api/session/category/deactivate", s.handleCategoryDeactivate)
+	mux.HandleFunc("/api/session/category/reorder", s.handleCategoryReorder)
+	mux.HandleFunc("/api/session/category/delete", s.handleCategoryDelete)
 	mux.HandleFunc("/api/screen/register", s.handleScreenRegister)
 	mux.HandleFunc("/api/screen/create", s.handleScreenCreate)
 	mux.HandleFunc("/api/screen/delete", s.handleScreenDelete)
