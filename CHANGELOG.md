@@ -13,6 +13,24 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.2.3.0] - 2026-06-11 — "Bryce Canyon"
+
+### Added
+- **Getting Started page** — a new illustrated, step-by-step walkthrough (create a
+  session → manage categories → upload photos → create screens → load → present),
+  opened from a **Getting Started** button on the console. Its screenshots live in
+  `getting-started-images/` and are embedded into the exe, so the guide works on a
+  copied, offline build.
+- **Category manager (per session)** — a new **Manage categories** page (linked from the
+  console and the Upload page) replaces hand-editing `categories.txt`. Two panes —
+  **Inactive** (alphabetical) and **Active** (ordered) — let you move categories between
+  them, reorder the active ones (select + ↑/↓), add new categories, and delete ones with
+  no photos (used categories can only be deactivated, which preserves their photos).
+  Categories are now **per session**: each session owns its slate, a new session inherits
+  the latest session's active order + inactive set, and the active order drives that
+  session's console/Upload dropdowns and its score-sheet PDF. `categories.txt` now only
+  seeds the very first session.
+
 ### Changed
 - **Version-number format** — versions are now four numbers,
   `MAJOR.RELEASE.FEATURES.PATCH` (e.g. `1.2.0.0`): the 3rd digit counts changes queued
@@ -81,6 +99,7 @@ Initial release.
 - `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
   operator console and logged at startup.
 
-[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.2.3.0...HEAD
+[1.2.3.0]: https://github.com/bagnome/photo-judge/compare/v1.1.0...v1.2.3.0
 [1.1.0]: https://github.com/bagnome/photo-judge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
