@@ -81,9 +81,13 @@ that workflow.
 - **Sessions** — organize each competition night. Keyed by a stable sequential ID
   (the folder name, e.g. `001`) with the **date as an editable label**. Create,
   relabel, or soft-delete (recoverable) sessions.
-- **Categories** from a plain-text `categories.txt` (one per line). The name is the
-  single source of truth: it's the folder name *and* the text on the title card.
-  Creating a session snapshots the current category list, so past sessions are frozen.
+- **Categories, per session** — manage each session's categories in the **Manage
+  categories** page: two panes (**Inactive** / **Active**) where you move categories
+  between them, reorder the active ones, add new ones, and delete unused ones (a category
+  with photos can only be deactivated, which keeps its photos). The Active order drives
+  that session's dropdowns and score sheet. A category name is the folder name *and* the
+  title-card text. Each session owns its slate; a **new session inherits the latest
+  session's setup**, and `categories.txt` seeds only the very first session.
 - **Per-orientation photo groups** — each category has a **Landscape** and a
   **Portrait** group, presented separately (all of one orientation, then the other).
   Orientation is assigned **automatically** from each photo's shape, so you upload to
@@ -176,20 +180,23 @@ suggesting you close and reopen Photo Judge to update.
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
-2. **Upload photos** — *Upload / Reorder* page → choose session and category →
+2. **Set up categories** *(optional)* — *Manage categories* → activate/deactivate,
+   reorder, or add this session's categories. A new session already inherits the last
+   one's setup, so you can usually skip this.
+3. **Upload photos** — *Upload / Reorder* page → choose session and category →
    drag images in (each is auto-filed as Landscape or Portrait by its shape) → drag
    thumbnails within a section to set the order.
-3. **Create your screens** — *Create Screen*, name each (e.g. "Landscape monitor").
-4. **Open each screen's window** — *Open window*, move it to the correct monitor,
+4. **Create your screens** — *Create Screen*, name each (e.g. "Landscape monitor").
+5. **Open each screen's window** — *Open window*, move it to the correct monitor,
    click it (or press **F**) for fullscreen. It starts black.
-5. **Present** — on a screen's row pick a category + orientation → *Load* (shows the
+6. **Present** — on a screen's row pick a category + orientation → *Load* (shows the
    title card) → *Next* to reveal photo 1, *Next/Prev* to move through, *Black* or
    switch categories any time.
 
-> The default categories are: Pictorial, Wildlife, Altered Reality, Portraiture,
-> Macro, "Landscapes, Cityscapes, and Travel", Black and White. Edit
-> `categories.txt` (one per line; `#` lines are comments) and restart to change them
-> — this only affects **new** sessions.
+> The default categories (seeded into the first session) are: Pictorial, Wildlife,
+> Altered Reality, Portraiture, Macro, "Landscapes, Cityscapes, and Travel", Black and
+> White. After that, manage each session's categories in **Manage categories** (no
+> restart needed); `categories.txt` only seeds the very first session.
 
 A full end-user walkthrough (for the operator who runs the show, not the developer)
 ships in [`User Guide.txt`](User%20Guide.txt).
@@ -216,7 +223,8 @@ new sessions — copy to the local drive for an event).
 | `web/console.html` | Operator console (private control surface) |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
-| `categories.txt` | Default category slate (one per line) |
+| `web/categories.html` | Category manager (per-session) page |
+| `categories.txt` | First-session category seed (one per line) |
 | `User Guide.txt` | End-user (operator) guide |
 | `CHANGELOG.md` | Release history |
 | `VERSION` | Current version (single source of truth, embedded into the exe) |

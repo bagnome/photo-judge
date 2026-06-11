@@ -49,7 +49,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Upload / Reorder <a href="/">← Console</a></header>
+<header>Photo Judge — Upload / Reorder <a href="/">← Console</a> <a href="/categories">▦ Manage categories</a></header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <button id="pdfbtn">⤓ Score sheet</button>
@@ -83,7 +83,7 @@ const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const ORIENTS = ['Landscape','Portrait'];
-let sessions = [], categories = [], pendingSession = null;
+let sessions = [], pendingSession = null;
 let sect = { Landscape:{files:[],names:{}}, Portrait:{files:[],names:{}} };
 let drag = null; // {orient, i} — reordering is confined to one section
 
@@ -98,19 +98,27 @@ function toast(msg, kind){
 
 function ctx(){ return {session:$('session').value, category:$('category').value}; }
 
+function selectedSession(){ return sessions.find(s => s.id === $('session').value) || null; }
+
+// The category menu is per-session: it lists the selected session's active slate.
+function populateCategories(){
+ const csel = $('category'), ccur = csel.value;
+ const so = selectedSession();
+ const cats = so ? (so.categories || []) : [];
+ csel.innerHTML = '';
+ cats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; csel.appendChild(o); });
+ if(ccur && cats.indexOf(ccur) >= 0) csel.value = ccur;
+}
+
 function applyState(st){
- sessions = st.sessions || []; categories = st.categories || [];
+ sessions = st.sessions || [];
  const ssel = $('session'), scur = ssel.value;
  ssel.innerHTML = '';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
  if(pendingSession && sessions.some(s => s.id === pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
  else if(scur) ssel.value = scur;
 
- const csel = $('category'), ccur = csel.value;
- csel.innerHTML = '';
- categories.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; csel.appendChild(o); });
- if(ccur) csel.value = ccur;
-
+ populateCategories();
  refreshGrid();
 }
 
@@ -133,7 +141,7 @@ function updateView(){
    + '<li>Click <span class="k">Create</span>.</li>'
    + '<li>Your new session is selected automatically — then drag photos in to upload them.</li>'
    + '</ol>'
-   + '<div class="muted">Categories come from <code>categories.txt</code> and are snapshotted into each new session.</div>';
+   + '<div class="muted">Each session has its own categories — set them up with <a href="/categories" style="color:#7fa9f0">Manage categories</a>. A new session inherits the latest session\'s setup.</div>';
  } else {
    guide.innerHTML =
      '<h2>Select a session</h2>'
@@ -274,7 +282,8 @@ $('newbtn').onclick = async () => {
  toast('Session #'+s.id+' ('+s.date+') created');
 };
 
-['session','category'].forEach(id => $(id).addEventListener('change', refreshGrid));
+$('session').addEventListener('change', () => { populateCategories(); refreshGrid(); });
+$('category').addEventListener('change', refreshGrid);
 
 const drop = $('drop'), fi = $('fileinput');
 drop.onclick = () => fi.click();

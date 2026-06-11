@@ -58,6 +58,7 @@
   <button id="panicblack">⬛ Black all</button>
   <span class="sep">|</span>
   <button id="openadmin">▤ Upload / Reorder</button>
+  <button id="opencats">▦ Manage categories</button>
   <span class="spacer"></span>
   <button id="closeapp" class="danger">✕ Close App</button>
 </div>
@@ -114,6 +115,10 @@ function render(){
  if(pendingSelect && state.sessions.some(s=>s.id===pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
  else if(cur) sel.value = cur;
 
+ // Categories offered for loading = the selected session's active slate (per-session).
+ const selSession = state.sessions.find(s => s.id === sel.value);
+ const sessionCats = selSession ? (selSession.categories || []) : [];
+
  // Screen rows
  const rows = $('rows'); rows.innerHTML = '';
  if(state.screens.length === 0){
@@ -128,7 +133,7 @@ function render(){
    const tdC = document.createElement('td');
    const cs = document.createElement('select');
    const blank = document.createElement('option'); blank.value=''; blank.textContent='—'; cs.appendChild(blank);
-   state.categories.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; cs.appendChild(o); });
+   sessionCats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; cs.appendChild(o); });
    cs.value = sc.category || ''; tdC.appendChild(cs); tr.appendChild(tdC);
 
    const tdO = document.createElement('td');
@@ -262,6 +267,10 @@ function deleteScreen(name){
 
 $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout) cmd(sc.name,'blackout'); }); };
 $('openadmin').onclick = () => window.open('/admin', '_blank');
+$('opencats').onclick = () => window.open('/categories', '_blank');
+// Re-render when the selected session changes so each screen's category menu
+// reflects that session's own active slate.
+$('session').addEventListener('change', render);
 
 $('closeapp').onclick = async () => {
  if(!confirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.')) return;

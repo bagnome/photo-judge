@@ -29,7 +29,7 @@ Nothing to install. Everything lives next to the program file.
 On first run the app creates these next to itself:
      photos\          - where all photos are stored
      logo\            - optional logo for the title cards
-     categories.txt   - the list of judging categories
+     categories.txt   - seed for the first session's categories
 
 
 ------------------------------------------------------------
@@ -40,9 +40,10 @@ SESSION    - One competition night, labeled by date. Everything
              is organized under a session. You pick or create a
              session before doing anything else.
 
-CATEGORY   - A judging category (e.g. Wildlife, Macro). The list
-             comes from categories.txt. Each category has a
-             Landscape group and a Portrait group of photos.
+CATEGORY   - A judging category (e.g. Wildlife, Macro). Each
+             session has its own list, set in "Manage categories"
+             (see section 7). Each category has a Landscape group
+             and a Portrait group of photos.
 
 SCREEN     - A display you present on (e.g. "Landscape monitor").
              You create named screens, then open a window for
@@ -60,21 +61,26 @@ A) CREATE / PICK A SESSION  (do this first!)
    On the control page, use the date box + "Create session",
    or pick an existing one from the Session dropdown.
 
-B) ADD PHOTOS  (can be done ahead of time)
+B) SET UP CATEGORIES  (optional - see section 7)
+   Click "Manage categories" to activate/reorder/add this
+   session's categories. A new session already inherits the last
+   session's setup, so you can usually skip this.
+
+C) ADD PHOTOS  (can be done ahead of time)
    Click "Upload / Reorder", choose the session, category, and
    Landscape or Portrait, then drag your photos in. Drag the
    thumbnails to set the order judges will see them in.
 
-C) CREATE YOUR SCREENS
+D) CREATE YOUR SCREENS
    Click "Create Screen" and name it (e.g. "Landscape monitor").
    Repeat for each display. Screens are remembered for next time.
 
-D) OPEN EACH SCREEN'S WINDOW
+E) OPEN EACH SCREEN'S WINDOW
    On a screen's row, click "Open window". Move the new window
    to the correct monitor, then click it (or press F) to go
    fullscreen. It starts black.
 
-E) PRESENT
+F) PRESENT
    On a screen's row: choose a Category + Landscape/Portrait,
    click "Load". The monitor shows the category TITLE CARD.
    Click "Next" to reveal the first photo, "Next"/"Prev" to
@@ -154,15 +160,28 @@ nothing extra to switch off.
  7. CATEGORIES  (editing the list)
 ------------------------------------------------------------
 
-The categories come from  categories.txt  (open it in Notepad).
-* One category per line. The order here is the order you see in
-  the menus, and the text is exactly what shows on title cards,
-  so check spelling.
-* Lines starting with #  are notes and are ignored.
-* After editing, restart the app to pick up changes.
+Categories are managed PER SESSION, right in the app - click
+"Manage categories" (on the Console or the Upload page).
 
-NOTE: changing categories only affects NEW sessions. Sessions
-already created keep the categories they were made with.
+* Pick a session at the top, then you'll see two lists:
+    INACTIVE (left)  - categories not used this session
+    ACTIVE   (right) - categories the judges will see, in order
+* Move a category between the lists with "Activate ->" and
+  "<- Deactivate".
+* Reorder ACTIVE: click a category, then use the Up / Down
+  buttons. This order is what you see in the menus AND on the
+  score sheet, and the names are exactly what show on title
+  cards - so check spelling.
+* Add a new category with the box at the top (it lands in
+  ACTIVE).
+* Delete removes a category from this session - but only if it
+  has no photos. If it has photos, Deactivate it instead (that
+  keeps the photos).
+
+NOTE: categories are per session, so changes here only affect
+THIS session. A brand-new session starts with a copy of your
+most recent session's categories, so your setup carries forward.
+(The first ever session is seeded from  categories.txt .)
 
 
 ------------------------------------------------------------
@@ -236,10 +255,13 @@ To start fresh elsewhere: copy just  photo-judge.exe.
 
 To bring your existing content, copy the exe AND keep these in
 the same folder with it:
-     photos\          (all sessions and photos - the main data)
-     categories.txt   (your category list)
+     photos\          (all sessions, photos, AND each session's
+                       category setup - the main data)
      logo\            (your logo)
      screens.json     (your saved screens)
+
+(categories.txt only seeds a brand-new first session, so you
+don't need to copy it once you have sessions.)
 
 Requirements on the other computer:
    * 64-bit Windows 10/11 (the laptops you use are fine)
