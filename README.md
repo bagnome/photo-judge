@@ -228,28 +228,55 @@ git-ignored — see [`.gitignore`](.gitignore).
 
 ## Versioning
 
-Versions use the `MAJOR.MINOR.PATCH` format (e.g. `1.0.0`), with project-specific
-meaning tied to the branching workflow — each slot maps to a git event:
+Versions use a four-number format, **`MAJOR.RELEASE.FEATURES.PATCH`** (e.g.
+`1.2.3.1`), with project-specific meaning tied to the branching workflow. Two
+long-lived branches each carry a version: **`main` is the current release** and
+**`development` is the next release**, with `development` always exactly one RELEASE
+ahead of `main`.
 
-| Slot | Bumps when… | Example |
-|------|-------------|---------|
-| **MAJOR** | a major overhaul / rewrite (rare) | `1.x.x` → `2.0.0` |
-| **MINOR** | `development` is merged into `main` (a release) | `1.0.x` → `1.1.0` |
-| **PATCH** | an **app change** (`feature/` or `fix/` branch) is merged into `development` | `1.1.0` → `1.1.1` |
+| Slot | Meaning | Moves when… |
+|------|---------|-------------|
+| **MAJOR** | a major overhaul / rewrite (rare) | almost never (`1.x.x.x` → `2.0.0.0`) |
+| **RELEASE** | which release this is; `development` sits one ahead of `main` | `development` is merged into `main` (a release): its number bubbles up and replaces main's |
+| **FEATURES** | how many changes are queued in the upcoming release | a `feature/` (or dev-side `fix/`) branch merges into `development`; **resets to `0`** at each release |
+| **PATCH** | lifetime patch count for the shipped release | a `patch/` branch merges into `main`; **never resets** |
 
-Lower numbers **reset** when a higher one bumps: a MINOR bump sends PATCH back to
-`0`, and a MAJOR bump resets both.
+**The two lines, and how the numbers move:**
 
-**The version tracks the app, not the repo.** Only changes to the application itself
-move the number. Repo-only work does **not** bump `VERSION`, and is kept on separate
-branch types:
+- **Features go to the next release (`development`).** Each `feature/` (or dev-side
+  `fix/`) merge bumps the **3rd** digit — the count of changes queued for the next
+  release. It resets to `0` when a new release cycle begins.
+- **Patches go to the current release (`main`).** A *patch* is anything small enough
+  to ship onto the already-released version without waiting for the next one — a bug
+  fix, or a small addition. A `patch/` branch off `main` bumps `main`'s **4th** digit
+  (e.g. `1.1.0.0` → `1.1.0.1`), and `development`'s 4th digit is bumped to match. The
+  PATCH digit is a **lifetime counter** shared by both lines — it only ever climbs.
+- **A release** is a `development` → `main` PR. `development`'s number replaces
+  `main`'s (the RELEASE digit bumps on `main`, the FEATURES count comes along, and the
+  PATCH digit is already in sync). `development` then rolls to the next RELEASE with
+  FEATURES back to `0` and PATCH carried over.
 
-| Branch | For | Bumps version? |
-|--------|-----|----------------|
-| `feature/*` | new app functionality | ✅ PATCH |
-| `fix/*` | app bug fixes | ✅ PATCH |
-| `docs/*` | documentation (README, CHANGELOG, guides) | ❌ no |
-| `chore/*` | repo upkeep (`.gitignore`, CI, build config, tooling) | ❌ no |
+A worked timeline:
+
+```
+main 1.1.0.0   development 1.2.0.0
+  feature  → development 1.2.1.0
+  feature  → development 1.2.2.0
+  patch    → main 1.1.0.1   development 1.2.2.1   (4th digit synced)
+  feature  → development 1.2.3.1
+  patch    → main 1.1.0.2   development 1.2.3.2
+  RELEASE  → main 1.2.3.2   development 1.3.0.2   (FEATURES reset, PATCH carries)
+```
+
+**Branch types:**
+
+| Branch | Branches off | Merges into | Version effect |
+|--------|--------------|-------------|----------------|
+| `feature/*` | `development` | `development` | +1 **FEATURES** (3rd) |
+| `fix/*` | `development` | `development` | +1 **FEATURES** (3rd) — a dev-side fix is a change in the next release |
+| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main`; bump `development`'s 4th to match |
+| `docs/*` | `development` | `development` | none |
+| `chore/*` | `development` | `development` | none |
 
 The current version is stored in the [`VERSION`](VERSION) file — the single source
 of truth. It's embedded into the executable at build time (via `//go:embed`), shown
@@ -258,25 +285,38 @@ on the operator console, and logged at startup. Release history is kept in
 
 **Bumping it (manual):**
 
-- **App change → `development`:** in a `feature/` or `fix/` PR, bump the PATCH digit
-  in `VERSION` (e.g. `1.1.0` → `1.1.1`). `docs/` and `chore/` PRs leave it unchanged.
-- **`development` → `main` (release):** in the release PR, bump MINOR and reset PATCH
-  (e.g. `1.1.3` → `1.2.0`). After it merges, tag `main`:
+- **Feature → `development`:** in a `feature/` or `fix/` PR, bump the **FEATURES**
+  (3rd) digit in `VERSION` (e.g. `1.2.0.0` → `1.2.1.0`). `docs/` and `chore/` PRs leave
+  it unchanged.
+- **Patch → `main`:** in a `patch/` PR off `main`, bump the **PATCH** (4th) digit of
+  `main`'s `VERSION` (e.g. `1.1.0.0` → `1.1.0.1`), then bump `development`'s 4th digit
+  to match. After it merges, tag `main` with the patched version:
 
   ```sh
   git checkout main && git pull
-  git tag -a v1.2.0 -m "Release 1.2.0"
-  git push origin v1.2.0
+  git tag -a v1.1.0.1 -m "Patch 1.1.0.1"
+  git push origin v1.1.0.1
+  ```
+
+- **`development` → `main` (release):** the release PR carries `development`'s number
+  onto `main`. After it merges, tag `main` and roll `development` to the next RELEASE
+  (`VERSION` → `1.<RELEASE+1>.0.<PATCH>`):
+
+  ```sh
+  git checkout main && git pull
+  git tag -a v1.2.3.2 -m "Release 1.2.3.2"
+  git push origin v1.2.3.2
   ```
 
   Then optionally draft a GitHub Release from that tag and attach `photo-judge.exe`.
 
-**Release codenames.** Each release (a `vX.Y.0` tag) is also given a codename: a
-**famously photographed landmark**, chosen alphabetically (A, B, C…) — fitting for a
-photography-club tool. The letter advances once per release, independent of the
-numbers. `1.1.0` is **"Antelope Canyon"** (the "A" release); the next release takes a
-"B" landmark. The codename goes in the GitHub Release title and the `CHANGELOG.md`
-heading for that version.
+**Release codenames.** Each release (a RELEASE-digit bump — a new `vX.Y.*.*` line on
+`main`) is given a codename: a **famously photographed landmark**, chosen
+alphabetically (A, B, C…), fitting for a photography-club tool. The letter advances
+once per release, independent of the numbers; a patch keeps its release's codename.
+`1.1.0` was **"Antelope Canyon"** (the "A" release); the next release takes a "B"
+landmark. The codename goes in the GitHub Release title and the `CHANGELOG.md` heading
+for that version.
 
 ---
 

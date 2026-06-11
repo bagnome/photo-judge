@@ -38,7 +38,7 @@ import (
 var webFS embed.FS
 
 // appVersion is baked in from the VERSION file at build time (single source of
-// truth, MAJOR.MINOR.PATCH). See the "Versioning" section in README.md.
+// truth, MAJOR.RELEASE.FEATURES.PATCH). See the "Versioning" section in README.md.
 //
 //go:embed VERSION
 var versionRaw string
@@ -1270,14 +1270,17 @@ func validDate(d string) bool {
 }
 
 // newerVer reports whether version a is strictly newer than b, comparing the
-// MAJOR.MINOR.PATCH numbers. Unparseable versions are treated as "not newer".
+// MAJOR.RELEASE.FEATURES.PATCH numbers slot by slot. Versions with fewer than
+// four parts are zero-padded (so a legacy "1.1.0" compares as "1.1.0.0"),
+// keeping older three-part builds comparable. Unparseable versions are treated
+// as "not newer".
 func newerVer(a, b string) bool {
 	pa, oka := parseVer(a)
 	pb, okb := parseVer(b)
 	if !oka || !okb {
 		return false
 	}
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		if pa[i] != pb[i] {
 			return pa[i] > pb[i]
 		}
@@ -1285,14 +1288,18 @@ func newerVer(a, b string) bool {
 	return false
 }
 
-func parseVer(s string) ([3]int, bool) {
-	var v [3]int
+// parseVer parses a dot-separated numeric version into a fixed four-slot array
+// (MAJOR.RELEASE.FEATURES.PATCH), zero-padding any missing trailing parts. It
+// accepts one to four parts so legacy three-part versions (e.g. "1.1.0") still
+// parse. Returns false for too many parts, or a non-numeric/negative component.
+func parseVer(s string) ([4]int, bool) {
+	var v [4]int
 	parts := strings.Split(strings.TrimSpace(s), ".")
-	if len(parts) != 3 {
+	if len(parts) < 1 || len(parts) > 4 {
 		return v, false
 	}
-	for i := 0; i < 3; i++ {
-		n, err := strconv.Atoi(parts[i])
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
 		if err != nil || n < 0 {
 			return v, false
 		}
