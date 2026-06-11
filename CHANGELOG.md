@@ -13,6 +13,12 @@ not yet released.
 
 ## [Unreleased]
 
+### Changed
+- **Output screens fill the window** — the judge-facing photo now scales up to the
+  largest size that fits the window while keeping its aspect ratio (letterboxed with
+  black bars), instead of being capped at the image's native size. Small photos no
+  longer appear undersized in the middle of the screen.
+
 ## [1.2.3.0] - 2026-06-11 — "Bryce Canyon"
 
 ### Added
