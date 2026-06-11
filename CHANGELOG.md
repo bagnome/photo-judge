@@ -4,12 +4,22 @@ All notable changes to Photo Judge are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows the versioning scheme in the
-[README](README.md#versioning): `MAJOR.MINOR.PATCH`, where MINOR bumps on each
-`development → main` release and PATCH bumps on each `feature → development` merge.
-Tagged releases are the MINOR versions on `main`; the **[Unreleased]** section below
-collects changes already merged into `development` but not yet released.
+[README](README.md#versioning): `MAJOR.RELEASE.FEATURES.PATCH`, where the RELEASE
+digit bumps on each `development → main` release, the FEATURES digit counts changes
+queued in `development`, and the PATCH digit counts fixes/small additions shipped onto
+the current release on `main` (a lifetime count that never resets). The
+**[Unreleased]** section below collects changes already merged into `development` but
+not yet released.
 
 ## [Unreleased]
+
+### Changed
+- **Version-number format** — versions are now four numbers,
+  `MAJOR.RELEASE.FEATURES.PATCH` (e.g. `1.2.0.0`): the 3rd digit counts changes queued
+  in the upcoming release and the 4th is a lifetime patch counter for the shipped
+  release. See [Versioning](README.md#versioning). The version comparison behind the
+  "newer version launched" banner now understands the four-number form (and still
+  reads older three-number builds, treating `1.1.0` as `1.1.0.0`).
 
 ## [1.1.0] - 2026-06-10 — "Antelope Canyon"
 
