@@ -1856,6 +1856,8 @@ func main() {
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
 	mux.HandleFunc("/api/session/archive", s.handleSessionArchive)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
+	mux.HandleFunc("/api/session/physical", s.handlePhysicalList)
+	mux.HandleFunc("/api/session/physical/set", s.handlePhysicalSet)
 	mux.HandleFunc("/api/archives", s.handleArchivesList)
 	mux.HandleFunc("/api/archive/download", s.handleArchiveDownload)
 	mux.HandleFunc("/api/archive/pdf", s.handleArchivePDF)

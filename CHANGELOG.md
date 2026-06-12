@@ -14,6 +14,14 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Physical print scoring** — the **🏆 Scoring** page now has a **📋 Physical prints**
+  mode (alongside the existing on-screen mode) for judging printed entries that have no
+  image file in the app. Pick a session and category, then fill a spreadsheet-style table
+  of **title / photographer / score**: a fresh row appears as you start the last one, Tab
+  moves between fields and Enter jumps to the next row, and rows save automatically. The
+  prints are stored per session and are included when the session is archived (shown on
+  the Archived Sessions page, searchable by photographer/title, and in both the score-sheet
+  and archive PDFs). The Scoring page also accepts a `?mode=physical` deep link.
 - **Import photographer / title from photo metadata** — with `importMetadata=true` in
   `photo-judge.properties` (off by default), uploading a photo reads its embedded
   metadata: an EXIF/PNG **artist/author** value is filled in as the photographer, and a

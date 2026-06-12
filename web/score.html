@@ -53,6 +53,21 @@
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
  .toast.show{opacity:1;transform:none}
  .toast.del{background:#a83232}
+ .modes{display:inline-flex;gap:6px}
+ .mode{cursor:pointer}
+ .mode.active{background:#2d6cdf;border-color:#2d6cdf;color:#fff}
+ #physical{display:none;padding:16px;max-width:920px}
+ #physical.show{display:block}
+ .pnote{color:#9aa0a6;font-size:13px;line-height:1.5;margin:0 0 12px;max-width:760px}
+ .ptable{width:100%;border-collapse:collapse}
+ .ptable th{text-align:left;color:#9aa0a6;font-size:12px;font-weight:500;padding:6px 8px}
+ .ptable td{padding:4px 6px;vertical-align:middle}
+ .ptable input{width:100%;box-sizing:border-box;font-size:14px;padding:9px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ .ptable input:focus{border-color:#2d6cdf;outline:none}
+ .ptable .scorecell{width:110px}
+ .ptable .delcell{width:34px;text-align:center}
+ .ptable .del{background:none;border:none;color:#777;cursor:pointer;font-size:18px;line-height:1;padding:4px}
+ .ptable .del:hover{color:#e0726b}
  @media (max-width:760px){
    header{flex-wrap:wrap;gap:10px}
    .bar{gap:8px}
@@ -69,12 +84,32 @@
 <body>
 <header>Photo Judge — Scoring</header>
 <div class="bar">
-  <label>Follow screen</label><select id="screen"></select>
+  <span class="modes">
+    <button id="modescreen" class="mode active">📺 On-screen</button>
+    <button id="modephysical" class="mode">📋 Physical prints</button>
+  </span>
   <span class="sep">|</span>
-  <span class="slate" id="slate"></span>
+  <span id="screenctrls">
+    <label>Follow screen</label><select id="screen"></select>
+    <span class="sep">|</span>
+    <span class="slate" id="slate"></span>
+  </span>
+  <span id="physctrls" style="display:none">
+    <label>Session</label><select id="psession"></select>
+    <label>Category</label><select id="pcategory"></select>
+  </span>
 </div>
 
 <div id="empty"></div>
+
+<div id="physical">
+  <p class="pnote">Record physical prints judged this session — there's no image to show, so just type each print's title, photographer and score. A new row appears as you start the last one. <b>Tab</b> moves between fields; <b>Enter</b> goes to the next row.</p>
+  <div id="ppick" class="pnote" style="display:none">Pick a session and category above to start.</div>
+  <table class="ptable" id="ptable">
+    <thead><tr><th>Print title</th><th>Photographer</th><th class="scorecell">Score</th><th class="delcell"></th></tr></thead>
+    <tbody id="prows"></tbody>
+  </table>
+</div>
 
 <main id="main">
   <div id="stagewrap">
@@ -119,6 +154,13 @@ let files = [], names = {}, scores = {};
 let idx = 0;               // 1-based judge cursor into files (0 = nothing)
 let shownFn = null;        // filename currently rendered in the score box
 
+let mode = 'screen';       // 'screen' = follow a screen · 'physical' = print table
+let sessions = [];         // from the console stream (for physical mode)
+let physAll = [];          // all physical prints for the selected session
+let psid = '', pcat = '';  // selected session id / category for physical mode
+const wantMode = new URLSearchParams(location.search).get('mode'); // deep-link e.g. ?mode=physical
+let appliedWantMode = false;
+
 function toast(msg, kind){
  const t = document.createElement('div');
  t.className = 'toast' + (kind ? ' '+kind : '');
@@ -135,6 +177,10 @@ function curScreen(){ return screens.find(s => s.name === curName) || null; }
 // tracks the operator live.
 function applyState(st){
  screens = st.screens || [];
+ sessions = st.sessions || [];
+ updatePhysicalControls();  // keep the physical-mode dropdowns fresh (never re-renders the table)
+ // Honor a ?mode=physical deep-link once the dropdowns are populated.
+ if(!appliedWantMode){ appliedWantMode = true; if(wantMode === 'physical') setMode('physical'); }
  const sel = $('screen'), prev = sel.value;
  sel.innerHTML = '';
  screens.forEach(s => { const o=document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); });
@@ -149,6 +195,7 @@ function applyState(st){
 // syncToScreen loads the photo list for the followed screen's slate when it changes,
 // then re-renders. Cheap to call on every console push.
 async function syncToScreen(){
+ if(mode !== 'screen') return; // physical-prints mode manages its own view
  const sc = curScreen();
  const main = $('main'), empty = $('empty');
  if(!sc || !sc.category){
@@ -282,11 +329,121 @@ $('gotoop').onclick = () => { const t = parseInt($('gotoop').dataset.target,10);
 $('score').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); $('score').blur(); } });
 $('score').addEventListener('change', saveScore);
 document.addEventListener('keydown', e => {
+ if(mode !== 'screen') return;                  // physical mode has its own table keys
  if(e.target === $('score')) return;            // typing a score, not navigating
  if($('lock').checked) return;                  // locked to the operator — manual nav is off
  if(e.key === 'ArrowLeft') go(idx-1);
  else if(e.key === 'ArrowRight') go(idx+1);
 });
+
+// ---- physical prints --------------------------------------------------------
+// A spreadsheet-style table of printed entries that have no image file. Stored per
+// session; rows auto-extend as you type, Tab moves between fields, Enter to next row.
+function setMode(m){
+ mode = m;
+ $('modescreen').classList.toggle('active', m === 'screen');
+ $('modephysical').classList.toggle('active', m === 'physical');
+ $('screenctrls').style.display = m === 'screen' ? '' : 'none';
+ $('physctrls').style.display = m === 'physical' ? '' : 'none';
+ $('physical').classList.toggle('show', m === 'physical');
+ if(m === 'physical'){
+   $('main').classList.remove('show');
+   $('empty').classList.remove('show');
+   loadPhysical();
+ } else {
+   syncToScreen();
+ }
+}
+
+// updatePhysicalControls repopulates the session + category dropdowns, preserving the
+// current selection. It never touches the table, so console pushes don't disrupt typing.
+function updatePhysicalControls(){
+ const ssel = $('psession'), prevS = ssel.value || psid;
+ ssel.innerHTML = '';
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ if(prevS && sessions.some(s => s.id === prevS)) ssel.value = prevS;
+ else if(sessions.length) ssel.value = sessions[sessions.length-1].id; // default: latest
+ psid = ssel.value;
+
+ const csel = $('pcategory'), prevC = csel.value || pcat;
+ const sess = sessions.find(s => s.id === psid);
+ const cats = sess ? (sess.categories || []) : [];
+ csel.innerHTML = '';
+ cats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; csel.appendChild(o); });
+ if(prevC && cats.indexOf(prevC) >= 0) csel.value = prevC;
+ pcat = csel.value || '';
+}
+
+async function loadPhysical(){
+ psid = $('psession').value;
+ if(!psid){ physAll = []; renderPhysical(); return; }
+ try {
+   const r = await fetch('/api/session/physical?session='+enc(psid));
+   physAll = (await r.json()).prints || [];
+ } catch(e){ physAll = []; }
+ renderPhysical();
+}
+
+function renderPhysical(){
+ pcat = $('pcategory').value || '';
+ const tb = $('prows'), tbl = $('ptable'), pick = $('ppick');
+ if(!psid || !pcat){ tb.innerHTML = ''; tbl.style.display = 'none'; pick.style.display = ''; return; }
+ pick.style.display = 'none'; tbl.style.display = '';
+ tb.innerHTML = '';
+ physAll.filter(p => p.category === pcat).forEach(p => addPhysRow(p));
+ addPhysRow({}); // one empty row, ready for the next print
+}
+
+function rowHasContent(tr){ return [...tr.querySelectorAll('input')].some(i => i.value.trim() !== ''); }
+
+function addPhysRow(data){
+ const tb = $('prows');
+ const tr = document.createElement('tr');
+ const mk = (val, ph, cls) => {
+   const td = document.createElement('td'); if(cls) td.className = cls;
+   const i = document.createElement('input'); i.type = 'text'; i.value = val || ''; i.placeholder = ph; i.autocomplete = 'off';
+   td.appendChild(i); tr.appendChild(td); return i;
+ };
+ const ti = mk(data.title, 'Title', '');
+ const pi = mk(data.photographer, 'Photographer', '');
+ const si = mk(data.score, 'Score', 'scorecell'); si.inputMode = 'decimal';
+ const dtd = document.createElement('td'); dtd.className = 'delcell';
+ const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove this row'; del.tabIndex = -1;
+ del.onclick = () => { tr.remove(); if(!tb.lastElementChild || rowHasContent(tb.lastElementChild)) addPhysRow({}); savePhysical(); };
+ dtd.appendChild(del); tr.appendChild(dtd);
+ [ti, pi, si].forEach(inp => {
+   inp.addEventListener('input', () => { if(tr === tb.lastElementChild && rowHasContent(tr)) addPhysRow({}); });
+   inp.addEventListener('change', savePhysical);
+   inp.addEventListener('keydown', e => {
+     if(e.key === 'Enter'){
+       e.preventDefault();
+       if(tr === tb.lastElementChild && rowHasContent(tr)) addPhysRow({});
+       const next = tr.nextElementSibling;
+       if(next) next.querySelector('input').focus();
+     }
+   });
+ });
+ tb.appendChild(tr);
+ return tr;
+}
+
+async function savePhysical(){
+ if(!psid || !pcat) return;
+ const prints = [...$('prows').children].map(tr => {
+   const ins = tr.querySelectorAll('input');
+   return {title: ins[0].value.trim(), photographer: ins[1].value.trim(), score: ins[2].value.trim()};
+ }).filter(r => r.title || r.photographer || r.score);
+ const r = await post('/api/session/physical/set', {session: psid, category: pcat, prints});
+ if(!r.ok){ toast('Could not save physical prints: '+(await r.text()), 'del'); return; }
+ // Keep the local copy in sync so switching category and back shows the saved rows.
+ physAll = physAll.filter(p => p.category !== pcat)
+   .concat(prints.map(p => ({category: pcat, title: p.title, photographer: p.photographer, score: p.score})));
+}
+
+$('modescreen').onclick = () => setMode('screen');
+$('modephysical').onclick = () => setMode('physical');
+$('psession').addEventListener('change', () => { updatePhysicalControls(); loadPhysical(); });
+$('pcategory').addEventListener('change', renderPhysical);
 
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));

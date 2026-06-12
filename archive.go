@@ -35,10 +35,11 @@ type ArchivedSession struct {
 	SessionID    string          `json:"sessionId"`
 	Date         string          `json:"date"`         // the competition date (session label)
 	Categories   []string        `json:"categories"`   // active category order at archive time
-	ArchivedDate string          `json:"archivedDate"` // YYYY-MM-DD it was archived
-	ArchivedAt   string          `json:"archivedAt"`   // RFC3339 timestamp
-	PhotoCount   int             `json:"photoCount"`
-	Photos       []ArchivedPhoto `json:"photos"`
+	ArchivedDate   string          `json:"archivedDate"` // YYYY-MM-DD it was archived
+	ArchivedAt     string          `json:"archivedAt"`   // RFC3339 timestamp
+	PhotoCount     int             `json:"photoCount"`
+	Photos         []ArchivedPhoto `json:"photos"`
+	PhysicalPrints []PhysicalPrint `json:"physicalPrints,omitempty"` // judged physical prints
 }
 
 func (s *server) archivesDir() string { return filepath.Join(s.baseDir, "archives") }
@@ -92,6 +93,7 @@ func (s *server) buildArchive(ss *Session) ArchivedSession {
 		}
 	}
 	arch.PhotoCount = len(arch.Photos)
+	arch.PhysicalPrints = s.loadPhysical(ss.ID) // judged physical prints (no image files)
 	return arch
 }
 
@@ -203,14 +205,10 @@ func (s *server) handleArchivesList(w http.ResponseWriter, r *http.Request) {
 		if id != "" && !strings.Contains(a.SessionID, id) {
 			continue
 		}
-		if photog != "" && !anyPhoto(a, func(p ArchivedPhoto) bool {
-			return strings.Contains(strings.ToLower(p.Photographer), photog)
-		}) {
+		if photog != "" && !matchesPhotographer(a, photog) {
 			continue
 		}
-		if title != "" && !anyPhoto(a, func(p ArchivedPhoto) bool {
-			return strings.Contains(strings.ToLower(p.Title), title)
-		}) {
+		if title != "" && !matchesTitle(a, title) {
 			continue
 		}
 		out = append(out, a)
@@ -218,9 +216,30 @@ func (s *server) handleArchivesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"archives": out})
 }
 
-func anyPhoto(a ArchivedSession, match func(ArchivedPhoto) bool) bool {
+// matchesPhotographer / matchesTitle report whether any photo OR physical print in
+// the session matches the (already lower-cased) substring query.
+func matchesPhotographer(a ArchivedSession, q string) bool {
 	for _, p := range a.Photos {
-		if match(p) {
+		if strings.Contains(strings.ToLower(p.Photographer), q) {
+			return true
+		}
+	}
+	for _, p := range a.PhysicalPrints {
+		if strings.Contains(strings.ToLower(p.Photographer), q) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesTitle(a ArchivedSession, q string) bool {
+	for _, p := range a.Photos {
+		if strings.Contains(strings.ToLower(p.Title), q) {
+			return true
+		}
+	}
+	for _, p := range a.PhysicalPrints {
+		if strings.Contains(strings.ToLower(p.Title), q) {
 			return true
 		}
 	}
