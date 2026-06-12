@@ -14,6 +14,16 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Scoring page** — a new **🏆 Scoring** page (opened from the console) lets a
+  scorekeeper follow any screen and record a score per photo. Pick a screen to follow,
+  then flip through that category's photos independently of what the operator is
+  presenting (Prev / Next or ← / → arrows). A live indicator shows which photo the
+  operator is currently on, highlights when you're viewing that same photo, and a
+  **Jump to operator's photo** button snaps to it — or tick **Lock to the operator's
+  photo** to follow along automatically. The photo's name is shown alongside the
+  photographer. The score you type is saved per photo (one total score for now) and
+  shows up as a badge on the Upload / Reorder grid and pre-filled in the **Score**
+  column of the downloaded score-sheet PDF.
 - **LAN remote control + QR code** — the operator console now shows the computer's
   network address at the top, so the show can be driven from a second laptop, phone, or
   tablet on the same network. A **Show QR code** button opens a modal with a scannable

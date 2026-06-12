@@ -109,11 +109,18 @@ that workflow.
   the rest), plus a global **Black all**.
 - **Optional title-card logo** — drop one image in `logo\` and it appears above the
   category name on every title card.
+- **Scorekeeping** — a **🏆 Scoring** page (opened from the console) lets a
+  scorekeeper follow any screen and record a score per photo. They flip through the
+  category independently of what the operator is presenting (Prev/Next or ←/→), with a
+  live indicator of which photo the operator is on, a highlight when both are on the
+  same photo, and a **Jump to operator's photo** shortcut. Scores are saved per photo
+  and surface as a badge on the Upload / Reorder grid and pre-filled in the score-sheet
+  PDF.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
-  for the selected session: a section per category (in `categories.txt` order),
+  for the selected session: a section per category (in the session's category order),
   Landscape before Portrait, one row per photo in display order with the photo name
-  and blank spaces for the photographer name and a score. Any photographer names
-  recorded on the upload page are pre-filled. Generated in-process with the standard
+  and blank spaces for the photographer name and a score. Any photographer names and
+  judge scores already recorded are pre-filled. Generated in-process with the standard
   library only — no PDF dependency.
 - **Getting Started guide** — an in-app, illustrated walkthrough (a **Getting Started**
   button on the console) that takes a new operator from creating a session through to
@@ -245,6 +252,7 @@ new sessions — copy to the local drive for an event).
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |
+| `web/score.html` | Scoring page (follow a screen, record scores) |
 | `web/getting-started.html` | Illustrated Getting Started walkthrough |
 | `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |

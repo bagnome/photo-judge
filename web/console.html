@@ -81,6 +81,7 @@
   <button id="openhelp">📖 Getting Started</button>
   <button id="openadmin">▤ Upload / Reorder</button>
   <button id="opencats">▦ Manage categories</button>
+  <button id="openscore">🏆 Scoring</button>
   <span class="spacer"></span>
   <button id="closeapp" class="danger">✕ Close App</button>
 </div>
@@ -301,6 +302,7 @@ $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout)
 $('openhelp').onclick = () => window.open('/getting-started', '_blank');
 $('openadmin').onclick = () => window.open('/admin', '_blank');
 $('opencats').onclick = () => window.open('/categories', '_blank');
+$('openscore').onclick = () => window.open('/score', '_blank');
 
 // ---- LAN access: show this machine's address(es) so a second device can connect.
 let lanURLs = [];

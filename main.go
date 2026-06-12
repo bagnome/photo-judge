@@ -1066,7 +1066,7 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := s.photosDir(sid, cat, orient)
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir)})
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir)})
 }
 
 // handlePhotoName sets (or clears, when name is empty) the photographer associated
@@ -1091,6 +1091,33 @@ func (s *server) handlePhotoName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	w.WriteHeader(204)
+}
+
+// handlePhotoScore sets (or, when score is empty, clears) the score for one photo,
+// persisted to the folder's scores.json. It pushes the console so the Upload /
+// Reorder grid (which refreshes from the console stream) shows the new score.
+func (s *server) handlePhotoScore(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Session, Category, Orientation, File, Score string }
+	if decode(r, &body) != nil {
+		http.Error(w, "bad body", 400)
+		return
+	}
+	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
+		http.Error(w, "bad names", 400)
+		return
+	}
+	dir := s.photosDir(body.Session, body.Category, body.Orientation)
+	base := filepath.Base(body.File)
+	if _, err := os.Stat(filepath.Join(dir, base)); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := setScore(dir, base, body.Score); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	s.pushConsole()
 	w.WriteHeader(204)
 }
 
@@ -1331,6 +1358,7 @@ func (s *server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	removeFromOrder(dir, base)
 	removeFromNames(dir, base)
+	removeFromScores(dir, base)
 	log.Printf("photo soft-deleted: %s -> %s", src, dest)
 	writeJSON(w, map[string]any{"files": s.photoFiles(body.Session, body.Category, body.Orientation)})
 }
@@ -1382,6 +1410,56 @@ func removeFromNames(dir, file string) {
 	}
 	delete(m, file)
 	_ = writeNames(dir, m)
+}
+
+// scores.json maps a photo's filename to a judge's score, kept per orientation
+// folder alongside order.json/names.json. Scores are entered on the Scoring page
+// and surface on the Upload / Reorder grid and the Score column of the PDF. A score
+// is stored as a free-form string (a number like "8.5", but anything short is fine).
+
+func loadScores(dir string) map[string]string {
+	m := map[string]string{}
+	data, err := os.ReadFile(filepath.Join(dir, "scores.json"))
+	if err != nil {
+		return m
+	}
+	_ = json.Unmarshal(data, &m)
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m
+}
+
+func writeScores(dir string, m map[string]string) error {
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return os.WriteFile(filepath.Join(dir, "scores.json"), b, 0o644)
+}
+
+// setScore records (or, when score is blank, clears) the score for one file.
+func setScore(dir, file, score string) error {
+	m := loadScores(dir)
+	score = strings.TrimSpace(score)
+	if len(score) > 32 {
+		score = score[:32]
+	}
+	if score == "" {
+		if _, ok := m[file]; !ok {
+			return nil
+		}
+		delete(m, file)
+	} else {
+		m[file] = score
+	}
+	return writeScores(dir, m)
+}
+
+func removeFromScores(dir, file string) {
+	m := loadScores(dir)
+	if _, ok := m[file]; !ok {
+		return
+	}
+	delete(m, file)
+	_ = writeScores(dir, m)
 }
 
 func removeFromOrder(dir, name string) {
@@ -1729,6 +1807,7 @@ func main() {
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
+	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
@@ -1754,6 +1833,7 @@ func main() {
 	mux.HandleFunc("/api/order", s.handleOrderSet)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
 	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
+	mux.HandleFunc("/api/photo/score", s.handlePhotoScore)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/netinfo", s.handleNetInfo)
