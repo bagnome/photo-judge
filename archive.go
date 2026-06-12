@@ -34,6 +34,7 @@ type ArchivedPhoto struct {
 type ArchivedSession struct {
 	SessionID    string          `json:"sessionId"`
 	Date         string          `json:"date"`         // the competition date (session label)
+	Created      string          `json:"created,omitempty"` // when the session was created (RFC3339)
 	Categories   []string        `json:"categories"`   // active category order at archive time
 	ArchivedDate   string          `json:"archivedDate"` // YYYY-MM-DD it was archived
 	ArchivedAt     string          `json:"archivedAt"`   // RFC3339 timestamp
@@ -65,6 +66,7 @@ func (s *server) buildArchive(ss *Session) ArchivedSession {
 	arch := ArchivedSession{
 		SessionID:    ss.ID,
 		Date:         ss.Date,
+		Created:      ss.Created,
 		Categories:   append([]string{}, ss.Categories...),
 		ArchivedDate: todayStr(),
 		ArchivedAt:   time.Now().Format(time.RFC3339),

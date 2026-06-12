@@ -21,7 +21,11 @@ not yet released.
   moves between fields and Enter jumps to the next row, and rows save automatically. The
   prints are stored per session and are included when the session is archived (shown on
   the Archived Sessions page, searchable by photographer/title, and in both the score-sheet
-  and archive PDFs). The Scoring page also accepts a `?mode=physical` deep link.
+  and archive PDFs, where the uploaded photos are now grouped under a **Digital Prints**
+  heading to match). The Scoring page also accepts a `?mode=physical` deep link.
+- **Sort archived sessions** — the Archived Sessions page can sort the list of sessions by
+  **session date**, **created date**, or **session ID** (ascending or descending). The
+  session's creation date is now saved in the archive and shown on each card.
 - **Import photographer / title from photo metadata** — with `importMetadata=true` in
   `photo-judge.properties` (off by default), uploading a photo reads its embedded
   metadata: an EXIF/PNG **artist/author** value is filled in as the photographer, and a

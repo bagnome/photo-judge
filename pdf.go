@@ -269,6 +269,9 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 		if len(land) == 0 && len(port) == 0 {
 			continue
 		}
+		if !any {
+			p.sectionHeader("Digital Prints")
+		}
 		any = true
 		// Keep the category heading with at least the start of its first sub-table.
 		if p.y-90 < pdfMargin {
@@ -397,6 +400,9 @@ func buildArchivePDF(arch ArchivedSession) []byte {
 		if len(land) == 0 && len(port) == 0 {
 			continue
 		}
+		if !any {
+			p.sectionHeader("Digital Prints")
+		}
 		any = true
 		if p.y-90 < pdfMargin {
 			p.newPage()
@@ -419,6 +425,19 @@ func buildArchivePDF(arch ArchivedSession) []byte {
 	}
 	p.physicalSection(arch.PhysicalPrints, catOrder)
 	return p.render()
+}
+
+// sectionHeader draws a large section title (e.g. "Digital Prints" / "Physical
+// Prints") with an underline, starting a new page if there isn't room.
+func (p *pdfWriter) sectionHeader(title string) {
+	if p.y-50 < pdfMargin {
+		p.newPage()
+	}
+	p.y -= 10
+	p.text(pdfMargin, p.y-15, "F2", 15, title)
+	p.y -= 20
+	p.hline(pdfMargin, pdfPageW-pdfMargin, p.y+4, 0.4, 1.0)
+	p.y -= 4
 }
 
 // physicalSection appends a "Physical Prints" section to the PDF: a table per
@@ -456,14 +475,7 @@ func (p *pdfWriter) physicalSection(prints []PhysicalPrint, catOrder []string) {
 		}
 	}
 
-	if p.y-70 < pdfMargin {
-		p.newPage()
-	}
-	p.y -= 10
-	p.text(left, p.y-15, "F2", 15, "Physical Prints")
-	p.y -= 20
-	p.hline(left, right, p.y+4, 0.4, 1.0)
-	p.y -= 4
+	p.sectionHeader("Physical Prints")
 
 	for _, cat := range order {
 		rows := byCat[cat]

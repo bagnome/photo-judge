@@ -55,6 +55,14 @@
   <div class="f"><label>Photo title</label><input type="text" id="title" placeholder="title contains…"></div>
   <button id="search" class="primary">Search</button>
   <button id="clear">Clear</button>
+  <div class="f"><label>Sort by</label>
+    <select id="sortkey">
+      <option value="date">Session date</option>
+      <option value="created">Created date</option>
+      <option value="sid">Session ID</option>
+    </select>
+  </div>
+  <button id="sortdir" data-dir="desc" title="Toggle ascending / descending">↓</button>
 </div>
 <div id="results"></div>
 
@@ -62,6 +70,23 @@
 const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Sort the session cards by the chosen key (session date / created / id) and direction.
+function sortArchives(arr){
+ const key = $('sortkey').value;
+ const desc = $('sortdir').dataset.dir !== 'asc';
+ const val = a => {
+   if(key === 'sid') return parseInt(a.sessionId, 10) || 0;
+   if(key === 'created') return a.created || a.archivedDate || '';
+   return a.date || '';
+ };
+ arr.sort((a, b) => {
+   const va = val(a), vb = val(b);
+   const cmp = (typeof va === 'number') ? (va - vb) : String(va).localeCompare(String(vb));
+   return desc ? -cmp : cmp;
+ });
+ return arr;
+}
 
 function query(){
  const p = new URLSearchParams();
@@ -82,6 +107,7 @@ async function search(){
    const r = await fetch('/api/archives?' + p.toString());
    archives = (await r.json()).archives || [];
  } catch(e){ $('results').innerHTML = '<div class="empty">Could not load archives.</div>'; return; }
+ sortArchives(archives);
 
  if(!archives.length){
    $('results').innerHTML = '<div class="empty">' +
@@ -130,7 +156,7 @@ async function search(){
      '<div class="card">'
    + '<div class="chead">'
    +   '<div><span class="sid">Session #'+esc(a.sessionId)+'</span>'
-   +     '<span class="meta">Competition date: '+esc(a.date)+'  ·  Archived '+esc(a.archivedDate)+'  ·  '+count+'</span>'
+   +     '<span class="meta">Competition date: '+esc(a.date)+(a.created?('  ·  Created '+esc(a.created.slice(0,10))):'')+'  ·  Archived '+esc(a.archivedDate)+'  ·  '+count+'</span>'
    +     '<div class="cats">Categories: '+(a.categories&&a.categories.length?esc(a.categories.join(', ')):'—')+'</div>'
    +   '</div>'
    +   '<div class="cactions">'
@@ -187,6 +213,13 @@ function makeSortable(table){
 $('search').onclick = search;
 $('clear').onclick = () => { ['from','to','sid','photog','title'].forEach(id => $(id).value=''); search(); };
 ['sid','photog','title'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') search(); }));
+$('sortkey').addEventListener('change', search);
+$('sortdir').onclick = () => {
+ const d = $('sortdir').dataset.dir === 'asc' ? 'desc' : 'asc';
+ $('sortdir').dataset.dir = d;
+ $('sortdir').textContent = d === 'asc' ? '↑' : '↓';
+ search();
+};
 
 // Pre-fill the search fields from the URL so a search can be bookmarked or linked.
 const params = new URLSearchParams(location.search);
