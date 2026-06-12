@@ -254,6 +254,7 @@ new sessions — copy to the local drive for an event).
 | `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
+| `web/nav.js` | Shared right-side navigation menu injected into every control page |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |

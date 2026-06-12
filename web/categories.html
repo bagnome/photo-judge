@@ -55,7 +55,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Categories <a href="/">← Console</a> <a href="/admin">▤ Upload / Reorder</a></header>
+<header>Photo Judge — Categories</header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <span class="note">Categories are per session. The <b>Active</b> order sets the console dropdowns and the score-sheet PDF. A new session inherits the latest session's setup.</span>
@@ -229,5 +229,6 @@ $('session').addEventListener('change', loadDetail);
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/nav.js"></script>
 </body>
 </html>

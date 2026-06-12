@@ -1764,7 +1764,14 @@ func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 		http.Error(w, "not found", 404)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	ct := "text/html; charset=utf-8"
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		ct = "application/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		ct = "text/css; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", ct)
 	w.Write(data)
 }
 
@@ -1808,6 +1815,7 @@ func main() {
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
 	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
+	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)

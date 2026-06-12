@@ -116,6 +116,16 @@ SCREEN     - A display you present on (e.g. "Landscape monitor").
 So the flow is:  pick a Session  ->  add photos to its
 categories  ->  open your Screens  ->  present.
 
+GETTING AROUND - Every page has a menu down the RIGHT edge that
+             takes you between pages (Console, Upload / Reorder,
+             Manage categories, Scoring, Getting Started). It starts
+             as a slim strip of icons; click the menu button at its
+             top to expand it and see the page names (and the address
+             / QR code for connecting another device). On a phone the
+             menu is hidden behind a small menu button in the top-right
+             corner. When this guide says to "open" or "click" one of
+             those pages, that's where you find it.
+
 
 ------------------------------------------------------------
  3. TYPICAL RUN  —  STEP BY STEP
@@ -224,8 +234,8 @@ nothing extra to switch off.
  7. CATEGORIES  (editing the list)
 ------------------------------------------------------------
 
-Categories are managed PER SESSION, right in the app - click
-"Manage categories" (on the Console or the Upload page).
+Categories are managed PER SESSION, right in the app - open
+"Manage categories" from the menu on the right.
 
 * Pick a session at the top, then you'll see two lists:
     INACTIVE (left)  - categories not used this session
@@ -253,9 +263,10 @@ most recent session's categories, so your setup carries forward.
 ------------------------------------------------------------
 
 A scorekeeper can record a score for each photo while the
-operator runs the show. Click "Scoring" on the Console (it
-opens in its own tab, so one person can keep score while
-another presents).
+operator runs the show. Open "Scoring" from the menu on the
+right. To keep score on a SEPARATE device while someone else
+presents, open the app's address on that device instead (see
+the menu's address / QR code, or section 1).
 
 * FOLLOW A SCREEN: pick a screen at the top. The page shows
   the photos from whatever that screen currently has loaded

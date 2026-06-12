@@ -14,6 +14,14 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Navigation side menu** — page-to-page links now live in a single collapsible menu
+  pinned to the right edge of every control page, instead of being scattered across each
+  page's top bar. Collapsed it's a slim rail of clickable page icons; expanded it shows
+  the page names and, at the top, the app's network address plus the **Show QR code**
+  button for sharing access. On phones the rail is hidden and a floating hamburger opens
+  the menu as a full drawer. The console toolbar now carries only session/screen actions,
+  and the per-page "← Console" links and the console's old LAN bar are gone (folded into
+  the menu). Served from a shared `nav.js` so every page stays consistent.
 - **Mobile-friendly control pages** — the operator console and the Upload/Reorder,
   Manage categories, Scoring, and Getting Started pages are now responsive, so the show
   can be run from a phone or tablet (handy with the LAN remote-control address). Each page
