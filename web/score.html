@@ -67,7 +67,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Scoring <a href="/">← Console</a></header>
+<header>Photo Judge — Scoring</header>
 <div class="bar">
   <label>Follow screen</label><select id="screen"></select>
   <span class="sep">|</span>
@@ -291,5 +291,6 @@ document.addEventListener('keydown', e => {
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/nav.js"></script>
 </body>
 </html>

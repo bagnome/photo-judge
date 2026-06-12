@@ -65,7 +65,7 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Upload / Reorder <a href="/">← Console</a> <a href="/categories">▦ Manage categories</a> <a href="/score">🏆 Scoring</a></header>
+<header>Photo Judge — Upload / Reorder</header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <button id="pdfbtn">⤓ Score sheet</button>
@@ -348,5 +348,6 @@ drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.rem
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/nav.js"></script>
 </body>
 </html>
