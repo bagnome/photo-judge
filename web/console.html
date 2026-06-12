@@ -38,11 +38,32 @@
  .sep{color:#444}
  #updatebanner{display:none;background:#7a5b16;color:#fff7e0;padding:10px 16px;font-size:14px;border-bottom:1px solid #b08a2e}
  #updatebanner.show{display:block}
+ #lanbar{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:#191c20;border-bottom:1px solid #333;font-size:13px}
+ #lanbar.show{display:flex}
+ #lanbar .lanlabel{color:#9aa0a6}
+ #lanbar a{color:#7fb2ff;text-decoration:none;font-weight:600;font-variant-numeric:tabular-nums}
+ #lanbar a:hover{text-decoration:underline}
+ #lanbar button{font-size:13px;padding:4px 9px}
+ #qrmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000}
+ #qrmodal.show{display:flex}
+ .qrbox{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:20px;max-width:340px;text-align:center}
+ .qrbox h3{margin:0 0 4px;font-size:15px;font-weight:600}
+ .qrbox p{margin:4px 0 12px;color:#9aa0a6;font-size:13px}
+ .qrbox img{width:280px;height:280px;background:#fff;border-radius:6px;image-rendering:pixelated}
+ .qrbox .qrurl{margin:12px 0 4px;font-weight:600;color:#e8e8e8;font-variant-numeric:tabular-nums;word-break:break-all}
+ .qrbox select{margin-top:10px;max-width:100%}
+ .qrbox .qrclose{margin-top:14px}
 </style>
 </head>
 <body>
 <header>Photo Judge — Operator Console<span id="version" style="float:right;font-weight:400;opacity:.6;font-size:.8em"></span></header>
 <div id="updatebanner"></div>
+<div id="lanbar">
+  <span class="lanlabel">📡 Control from another device on this network:</span>
+  <a id="lanurl" target="_blank" rel="noopener"></a>
+  <button id="qrbtn">📱 Show QR code</button>
+  <span id="lanmore" class="muted"></span>
+</div>
 <div class="bar">
   <label>Session</label>
   <select id="session"></select>
@@ -68,6 +89,16 @@
  <tbody id="rows"></tbody>
 </table>
 <div id="monpick"><div class="monbox" id="monbox"></div></div>
+<div id="qrmodal">
+  <div class="qrbox">
+    <h3>Connect from another device</h3>
+    <p>Scan with a phone or tablet on the same Wi-Fi / network.</p>
+    <img id="qrimg" alt="QR code">
+    <div class="qrurl" id="qrurltext"></div>
+    <select id="qrselect" style="display:none"></select>
+    <button class="qrclose" id="qrclose">Close</button>
+  </div>
+</div>
 <div id="toasts"></div>
 
 <script>
@@ -270,6 +301,48 @@ $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout)
 $('openhelp').onclick = () => window.open('/getting-started', '_blank');
 $('openadmin').onclick = () => window.open('/admin', '_blank');
 $('opencats').onclick = () => window.open('/categories', '_blank');
+
+// ---- LAN access: show this machine's address(es) so a second device can connect.
+let lanURLs = [];
+function showQR(url){
+ $('qrimg').src = '/api/qr?data=' + encodeURIComponent(url);
+ $('qrurltext').textContent = url;
+}
+function openQRModal(){
+ if(!lanURLs.length) return;
+ const sel = $('qrselect');
+ if(lanURLs.length > 1){
+   sel.innerHTML = '';
+   lanURLs.forEach(u => { const o=document.createElement('option'); o.value=u; o.textContent=u; sel.appendChild(o); });
+   sel.style.display = '';
+ } else {
+   sel.style.display = 'none';
+ }
+ showQR(lanURLs[0]);
+ $('qrmodal').classList.add('show');
+}
+function closeQRModal(){ $('qrmodal').classList.remove('show'); }
+$('qrbtn').onclick = openQRModal;
+$('qrclose').onclick = closeQRModal;
+$('qrselect').addEventListener('change', e => showQR(e.target.value));
+$('qrmodal').addEventListener('click', e => { if(e.target.id === 'qrmodal') closeQRModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeQRModal(); });
+
+(async () => {
+ try {
+   const r = await fetch('/api/netinfo');
+   if(!r.ok) return;
+   const info = await r.json();
+   lanURLs = info.urls || [];
+   if(!lanURLs.length) return;
+   const a = $('lanurl');
+   a.textContent = lanURLs[0];
+   a.href = lanURLs[0];
+   $('lanmore').textContent = lanURLs.length > 1 ? ('(+' + (lanURLs.length-1) + ' more — see QR)') : '';
+   $('lanbar').classList.add('show');
+ } catch(e){}
+})();
+
 // Re-render when the selected session changes so each screen's category menu
 // reflects that session's own active slate.
 $('session').addEventListener('change', render);

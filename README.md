@@ -119,6 +119,11 @@ that workflow.
   button on the console) that takes a new operator from creating a session through to
   presenting, with a screenshot for each step. Its images are embedded in the exe, so it
   works offline on a copied build.
+- **LAN remote control** — the console shows the computer's LAN address so the show can
+  be driven from a second laptop, phone, or tablet on the same network, and a **Show QR
+  code** button renders a scannable code (a small standard-library-only QR encoder, no
+  third-party dependency) to open the control page on a phone instantly. The judges'
+  output windows stay on the host machine.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -229,6 +234,7 @@ new sessions — copy to the local drive for an event).
 |------|------------|
 | `main.go` | The entire backend — HTTP server, sessions, screens, SSE, uploads (standard library only) |
 | `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
+| `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |

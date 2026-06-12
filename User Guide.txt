@@ -44,6 +44,47 @@ CHANGING THE PORT  (optional)
        you (the command window prints the address it chose).
    Save the file and restart the app for changes to take effect.
 
+CONTROLLING IT FROM ANOTHER DEVICE ON THE NETWORK  (optional)
+   You can run the show from a second laptop, a phone, or a tablet
+   that is on the SAME network (same Wi-Fi or the same wired router)
+   as the computer running Photo Judge. The judges' monitors stay
+   plugged into the main computer; you just get a second control page.
+
+   WHERE TO FIND THE ADDRESS
+     At the top of the operator console there is a bar:
+        "Control from another device on this network: http://192.168.x.x"
+     * On the other device, open a web browser and type that address.
+     * Or click "Show QR code" and scan it with a phone/tablet camera
+       to open the control page instantly. (If the computer has more
+       than one network address, the QR window lets you pick which.)
+     If the bar does NOT appear, the computer has no usable network
+     connection (it's offline, or only has a loopback address).
+
+   ONE-TIME WINDOWS SETUP (so other devices are allowed to connect)
+     Windows blocks incoming connections until you allow the app:
+     1. The first time you start Photo Judge, Windows may pop up
+        "Allow photo-judge to communicate on these networks".
+        Tick  Private networks  and click  Allow access.
+     2. If you didn't see that prompt, or it still won't connect:
+        - Make sure the network is set to PRIVATE, not Public:
+          Settings -> Network & Internet -> (your Wi-Fi/Ethernet)
+          -> set "Network profile type" to  Private.
+        - Allow the app through the firewall:
+          Windows Security -> Firewall & network protection ->
+          "Allow an app through firewall" -> Change settings ->
+          "Allow another app..." -> Browse to  photo-judge.exe  ->
+          Add, and make sure its  Private  box is ticked.
+
+   GOOD TO KNOW
+     * Both devices must be on the same network. Guest Wi-Fi and many
+       hotel / conference networks block device-to-device traffic
+       ("client isolation"), so use your own router or hotspot.
+     * The address (192.168.x.x) can change if the computer reconnects
+       to the network; if a saved link stops working, re-check the bar
+       on the console for the current address.
+     * This is for control only - it does not add judges' monitors.
+       Open output windows still belong to the main computer.
+
 
 ------------------------------------------------------------
  2. THE BIG PICTURE
@@ -262,6 +303,14 @@ Nothing happens / can't reach the page
    Another program is using the port. Open photo-judge.properties,
    change "port" to a free number (e.g. 8753) or set autoPort=true,
    save, and restart.
+
+Another device on the network can't open the page
+   * Check both devices are on the SAME network (not guest Wi-Fi).
+   * Type the address exactly as shown on the console bar, including
+     the port if one is shown (e.g. http://192.168.1.5:8753 ).
+   * Allow Photo Judge through Windows Firewall and set the network
+     to Private - see "CONTROLLING IT FROM ANOTHER DEVICE" in
+     section 1.
 
 
 ------------------------------------------------------------
