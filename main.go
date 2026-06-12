@@ -175,6 +175,14 @@ type server struct {
 	// while this one is running; the console shows an "update available" banner.
 	newerVersion string
 
+	// port is the TCP port the server actually bound to (set once at startup). Used
+	// to build the LAN URLs shown on the console for remote control.
+	port string
+
+	// lanAccess mirrors the config flag: when false the server is bound to loopback
+	// only, so the console hides the LAN bar.
+	lanAccess bool
+
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -1582,6 +1590,82 @@ func (s *server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	s.shutdownOnce.Do(func() { close(s.shutdownCh) })
 }
 
+// lanURLs returns the http URLs by which this server can be reached from other
+// machines on the LAN — one per usable non-loopback IPv4 address. The port is
+// omitted when it's the default 80, so the URL is as short as possible.
+func (s *server) lanURLs() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var urls []string
+	for _, iface := range ifaces {
+		// Skip interfaces that are down or loopback.
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			ipnet, ok := a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			ip := ipnet.IP.To4()
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue // IPv4 only; skip 169.254.x.x auto-config addresses
+			}
+			host := ip.String()
+			if s.port == "80" || s.port == "" {
+				urls = append(urls, "http://"+host)
+			} else {
+				urls = append(urls, "http://"+host+":"+s.port)
+			}
+		}
+	}
+	return urls
+}
+
+// handleNetInfo reports the LAN URLs and port so the console can show the operator
+// how a second machine can reach the app.
+func (s *server) handleNetInfo(w http.ResponseWriter, r *http.Request) {
+	host, _ := os.Hostname()
+	var urls []string
+	if s.lanAccess {
+		urls = s.lanURLs()
+	}
+	writeJSON(w, map[string]any{
+		"hostname":  host,
+		"port":      s.port,
+		"lanAccess": s.lanAccess,
+		"urls":      urls,
+	})
+}
+
+// handleQR renders the ?data= text as a QR-code PNG (stdlib-only encoder, see
+// qr.go). Used by the console's "connect over LAN" modal.
+func (s *server) handleQR(w http.ResponseWriter, r *http.Request) {
+	data := r.URL.Query().Get("data")
+	if data == "" {
+		http.Error(w, "missing data", http.StatusBadRequest)
+		return
+	}
+	if len(data) > 200 {
+		http.Error(w, "data too long", http.StatusBadRequest)
+		return
+	}
+	png, err := qrPNGForText(data, 8, 4)
+	if err != nil {
+		http.Error(w, "could not encode QR: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(png)
+}
+
 // ---- helpers --------------------------------------------------------------
 
 func decode(r *http.Request, v any) error { return json.NewDecoder(r.Body).Decode(v) }
@@ -1752,31 +1836,60 @@ func main() {
 	mux.HandleFunc("/api/photo/score", s.handlePhotoScore)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
+	mux.HandleFunc("/api/netinfo", s.handleNetInfo)
+	mux.HandleFunc("/api/qr", s.handleQR)
 
-	port := os.Getenv("PHOTOJUDGE_PORT")
-	if port == "" {
-		port = "8753"
+	// Resolve the listen port: photo-judge.properties (default 80, or a free port
+	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
+	cfg := loadConfig(baseDir)
+	port := strconv.Itoa(cfg.Port)
+	if cfg.AutoPort {
+		port = "0" // let the OS pick any free port
 	}
-	addr := "127.0.0.1:" + port
-	u := "http://" + addr + "/"
+	if env := os.Getenv("PHOTOJUDGE_PORT"); env != "" {
+		port = env
+	}
+	// Bind to all interfaces (0.0.0.0) when LAN access is allowed, so other devices
+	// on the network — and this machine's own LAN IP — can reach the console; bind to
+	// loopback only when it's turned off. Either way the operator's own browser is
+	// opened at 127.0.0.1, a secure context that keeps the Window Management API working.
+	s.lanAccess = cfg.LanAccess
+	host := "127.0.0.1"
+	if cfg.LanAccess {
+		host = "0.0.0.0"
+	}
+	addr := host + ":" + port
+	loopAddr := "127.0.0.1:" + port // how a second launch / the local browser reaches us
+	reqURL := "http://" + loopAddr + "/"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
 	// raw "address in use" error. A second double-click thus just opens the console.
+	// (With autoPort the bind can't collide, so this hand-off only applies to a
+	// fixed port.)
 	ln, lerr := net.Listen("tcp", addr)
 	if lerr != nil {
-		if running, runningVer := probeRunning(addr); running {
-			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", u)
+		if running, runningVer := probeRunning(loopAddr); running {
+			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", reqURL)
 			if newerVer(appVersion, runningVer) {
-				reportVersion(addr) // make the running console show an update banner
+				reportVersion(loopAddr) // make the running console show an update banner
 				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
 				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
 			}
-			openBrowser(u)
+			openBrowser(reqURL)
 			os.Exit(0)
 		}
-		log.Fatalf("could not start Photo Judge on %s: %v", addr, lerr)
+		log.Fatalf("could not start Photo Judge on %s: %v\n"+
+			"If another program is using this port, edit %s (change \"port\" or set autoPort=true) and restart.",
+			addr, lerr, configFileName)
 	}
+
+	// Read the real port back from the listener — with autoPort (port 0) the OS chose
+	// it — and always point the local browser at loopback (a secure context).
+	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
+		s.port = strconv.Itoa(tcp.Port)
+	}
+	u := "http://127.0.0.1:" + s.port + "/"
 
 	srv := &http.Server{Handler: mux}
 	go func() {
