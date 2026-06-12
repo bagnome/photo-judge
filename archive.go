@@ -291,7 +291,10 @@ func (s *server) handleArchivePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such archive", 404)
 		return
 	}
-	pdf := buildArchivePDF(arch)
+	s.mu.Lock()
+	header := s.settings.PDFHeader
+	s.mu.Unlock()
+	pdf := buildArchivePDF(arch, header)
 	name := fmt.Sprintf("archived-session-%s.pdf", id)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, name))

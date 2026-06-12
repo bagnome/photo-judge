@@ -14,6 +14,15 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Settings page** — a new **⚙️ Settings** page (in the menu) collects app-wide options
+  in one place: lock the scorekeeper to the operator's photo; allow only one live screen
+  at a time (revealing one blacks out the rest); a **logo library** (upload several, pick
+  the active title-card logo, delete the rest); a custom **PDF header** for the score-sheet
+  and archive PDFs (capped to two lines); LAN access; and metadata import split into two
+  toggles (photographer and title). Saved to `settings.json`. The LAN and metadata
+  toggles are gated by `photo-judge.properties` — a `false` there takes priority and greys
+  the toggle out (the effective value is the properties value AND the setting). LAN changes
+  apply on the next restart; the rest apply immediately.
 - **Physical print scoring** — the **🏆 Scoring** page now has a **📋 Physical prints**
   mode (alongside the existing on-screen mode) for judging printed entries that have no
   image file in the app. Pick a session and category, then fill a spreadsheet-style table

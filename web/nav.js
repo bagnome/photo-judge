@@ -12,6 +12,7 @@
     { href: '/categories',      icon: '🗂️', label: 'Manage categories' },
     { href: '/score',           icon: '🏆', label: 'Scoring' },
     { href: '/archived',        icon: '🗄️', label: 'Archived Sessions' },
+    { href: '/settings',        icon: '⚙️', label: 'Settings' },
     { href: '/getting-started', icon: '📖', label: 'Getting Started' }
   ];
   var RAIL = 54, OPEN = 248, MOBILE = 760;

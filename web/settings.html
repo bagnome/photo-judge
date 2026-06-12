@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Judge — Settings</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
+ .wrap{max-width:760px;padding:16px 16px 60px}
+ .card{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:18px 20px;margin:0 0 16px}
+ .card h2{margin:0 0 4px;font-size:16px}
+ .card .sub{color:#8a9099;font-size:13px;line-height:1.5;margin:0 0 14px}
+ .row{display:flex;align-items:flex-start;gap:14px;justify-content:space-between;padding:10px 0;border-top:1px solid #2c2f35}
+ .row:first-of-type{border-top:none}
+ .row .txt{flex:1 1 auto}
+ .row .txt .t{font-size:14px;color:#e8e8e8}
+ .row .txt .d{color:#8a9099;font-size:12.5px;line-height:1.45;margin-top:3px}
+ .row .txt .warn{color:#d9a441}
+ /* switch */
+ .sw{position:relative;flex:none;width:44px;height:24px}
+ .sw input{opacity:0;width:0;height:0;position:absolute}
+ .sw .sl{position:absolute;inset:0;background:#3a3e45;border-radius:24px;cursor:pointer;transition:.15s}
+ .sw .sl::before{content:"";position:absolute;height:18px;width:18px;left:3px;top:3px;background:#cfd2d6;border-radius:50%;transition:.15s}
+ .sw input:checked + .sl{background:#2d6cdf}
+ .sw input:checked + .sl::before{transform:translateX(20px);background:#fff}
+ .sw input:disabled + .sl{opacity:.45;cursor:not-allowed}
+ input[type=text]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
+ input[type=text]:focus{border-color:#2d6cdf;outline:none}
+ .counter{color:#777;font-size:12px;margin-top:5px}
+ button{font-size:14px;padding:8px 12px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;cursor:pointer}
+ button:hover{background:#363a42}
+ button.primary{background:#2d6cdf;border-color:#2d6cdf}
+ button.primary:hover{background:#3b78e6}
+ .logos{display:flex;flex-wrap:wrap;gap:12px;margin:4px 0 12px}
+ .logo{position:relative;width:140px;border:2px solid #3a3e45;border-radius:8px;background:#0d0d0d;overflow:hidden;cursor:pointer}
+ .logo.active{border-color:#2d6cdf}
+ .logo img{display:block;width:100%;height:90px;object-fit:contain;background:#000}
+ .logo .lbl{font-size:11px;color:#aab;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .logo .badge{position:absolute;top:4px;left:4px;background:#2d6cdf;color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;display:none}
+ .logo.active .badge{display:block}
+ .logo .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+ .logo .del:hover{background:#a83232}
+ .empty{color:#777;font-size:13px}
+ #toasts{position:fixed;bottom:16px;left:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
+ .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:340px}
+ .toast.show{opacity:1;transform:none}
+ .toast.del{background:#a83232}
+ @media (max-width:760px){ header{display:flex;flex-wrap:wrap;gap:10px} .logo{width:calc(50% - 6px)} }
+</style>
+</head>
+<body>
+<header>Photo Judge — Settings</header>
+<div class="wrap">
+
+  <div class="card">
+    <h2>Scoring</h2>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Lock the scorekeeper to the operator's photo</div>
+        <div class="d">The Scoring page follows whatever photo the operator is presenting; the scorekeeper can't flip ahead on their own.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="lockScorekeeper"><span class="sl"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Presenting</h2>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Only one live screen at a time</div>
+        <div class="d">Revealing a screen automatically blacks out all the others, so two monitors never show at once.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="singleLiveScreen"><span class="sl"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Title card logo</h2>
+    <div class="sub">Upload one or more logos and pick which appears above the category name on the judges' title cards. A transparent PNG looks best on the black card. Uploaded logos are kept here until you delete them.</div>
+    <div class="logos" id="logos"></div>
+    <input type="file" id="logofile" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple style="display:none">
+    <button id="uploadlogo">⤒ Upload logo</button>
+  </div>
+
+  <div class="card">
+    <h2>PDF header</h2>
+    <div class="sub">Heading shown at the top of the score-sheet and archive PDFs — e.g. your club's name. Leave blank to use "Photo Judge".</div>
+    <input type="text" id="pdfHeader" maxlength="90" placeholder="Photo Judge" autocomplete="off">
+    <div class="counter"><span id="pdfcount">0</span> / 90 characters (kept short so it fits two lines)</div>
+  </div>
+
+  <div class="card">
+    <h2>Network</h2>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Allow control from other devices on the network (LAN)</div>
+        <div class="d" id="lannote">Shows the LAN address and QR code so a phone or second laptop can connect. Takes effect after restarting the app.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="lanAccess"><span class="sl"></span></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Read metadata from uploaded photos</h2>
+    <div class="sub" id="metanote">When a photo has the matching info embedded, fill it in automatically on upload.</div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Photographer (EXIF/PNG artist or author)</div>
+        <div class="d">Fill the photographer box from the photo's metadata.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="importPhotographer"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Title</div>
+        <div class="d">Use the photo's embedded title as its on-screen name (filename).</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="importTitle"><span class="sl"></span></label>
+    </div>
+  </div>
+
+</div>
+<div id="toasts"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const enc = encodeURIComponent;
+const TOGGLES = ['lockScorekeeper','singleLiveScreen','lanAccess','importPhotographer','importTitle'];
+let state = null; // last GET response
+
+function toast(msg, kind){
+ const t = document.createElement('div');
+ t.className = 'toast' + (kind ? ' '+kind : '');
+ t.textContent = msg;
+ $('toasts').appendChild(t);
+ requestAnimationFrame(() => t.classList.add('show'));
+ setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 250); }, 2600);
+}
+
+function collect(){
+ return {
+   lockScorekeeper: $('lockScorekeeper').checked,
+   singleLiveScreen: $('singleLiveScreen').checked,
+   activeLogo: state ? state.settings.activeLogo : '',
+   pdfHeader: $('pdfHeader').value,
+   lanAccess: $('lanAccess').checked,
+   importPhotographer: $('importPhotographer').checked,
+   importTitle: $('importTitle').checked
+ };
+}
+
+async function save(){
+ const r = await post('/api/settings', collect());
+ if(!r.ok){ toast('Could not save settings', 'del'); return; }
+ state = await r.json();
+ apply(state);
+ toast('Settings saved');
+}
+
+function apply(st){
+ state = st;
+ const s = st.settings;
+ $('lockScorekeeper').checked = s.lockScorekeeper;
+ $('singleLiveScreen').checked = s.singleLiveScreen;
+ $('lanAccess').checked = s.lanAccess;
+ $('importPhotographer').checked = s.importPhotographer;
+ $('importTitle').checked = s.importTitle;
+ if(document.activeElement !== $('pdfHeader')){ $('pdfHeader').value = s.pdfHeader || ''; }
+ $('pdfcount').textContent = ($('pdfHeader').value || '').length;
+
+ // properties-file gates: a false there forces the matching setting off.
+ const lanForced = !st.propsLanAccess;
+ $('lanAccess').disabled = lanForced;
+ let lan = 'Shows the LAN address and QR code so a phone or second laptop can connect. Takes effect after restarting the app.';
+ if(lanForced) lan = '<span class="warn">Turned off by lanAccess=false in photo-judge.properties — that takes priority over this switch.</span>';
+ else if(st.effLanAccess !== st.boundLanAccess) lan += ' <span class="warn">Restart the app to apply your change.</span>';
+ $('lannote').innerHTML = lan;
+
+ const metaForced = !st.propsImportMetadata;
+ $('importPhotographer').disabled = metaForced;
+ $('importTitle').disabled = metaForced;
+ $('metanote').innerHTML = metaForced
+   ? '<span class="warn">Turned off by importMetadata=false in photo-judge.properties — set it to true there to use these.</span>'
+   : 'When a photo has the matching info embedded, fill it in automatically on upload.';
+
+ renderLogos(st);
+}
+
+function renderLogos(st){
+ const box = $('logos'); box.innerHTML = '';
+ const logos = st.logos || [];
+ if(!logos.length){ box.innerHTML = '<div class="empty">No logos yet — upload one below.</div>'; return; }
+ logos.forEach(name => {
+   const active = st.settings.activeLogo === name;
+   const el = document.createElement('div');
+   el.className = 'logo' + (active ? ' active' : '');
+   el.innerHTML = '<span class="badge">Active</span>'
+     + '<button class="del" title="Delete this logo">×</button>'
+     + '<img src="/api/logo?file='+enc(name)+'" alt="">'
+     + '<div class="lbl">'+esc(name)+'</div>';
+   el.onclick = (e) => {
+     if(e.target.classList.contains('del')){ e.stopPropagation(); deleteLogo(name); return; }
+     state.settings.activeLogo = active ? '' : name; // click active again to clear
+     save();
+   };
+   box.appendChild(el);
+ });
+}
+
+async function deleteLogo(name){
+ if(!confirm('Delete logo "'+name+'"? This removes the file.')) return;
+ const r = await post('/api/logo/delete', {file:name});
+ if(!r.ok){ toast('Could not delete logo', 'del'); return; }
+ await load();
+ toast('Logo deleted', 'del');
+}
+
+$('uploadlogo').onclick = () => $('logofile').click();
+$('logofile').onchange = async () => {
+ const files = $('logofile').files;
+ if(!files.length) return;
+ const fd = new FormData();
+ for(const f of files) fd.append('files', f);
+ const r = await fetch('/api/logo/upload', {method:'POST', body:fd});
+ $('logofile').value = '';
+ if(!r.ok){ toast('Upload failed', 'del'); return; }
+ await load();
+ toast('Logo uploaded');
+};
+
+TOGGLES.forEach(id => $(id).addEventListener('change', save));
+$('pdfHeader').addEventListener('input', () => { $('pdfcount').textContent = $('pdfHeader').value.length; });
+$('pdfHeader').addEventListener('change', save);
+
+async function load(){
+ try { const r = await fetch('/api/settings'); apply(await r.json()); }
+ catch(e){ toast('Could not load settings', 'del'); }
+}
+load();
+</script>
+<script src="/nav.js"></script>
+</body>
+</html>

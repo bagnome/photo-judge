@@ -178,6 +178,11 @@ function curScreen(){ return screens.find(s => s.name === curName) || null; }
 function applyState(st){
  screens = st.screens || [];
  sessions = st.sessions || [];
+ // The "lock scorekeeper to the operator" setting forces the lock on (and disables
+ // the toggle); otherwise the scorekeeper controls it.
+ const forceLock = !!(st.settings && st.settings.lockScorekeeper);
+ if(forceLock){ $('lock').checked = true; $('lock').disabled = true; $('lock').title = 'Locked to the operator in Settings'; }
+ else { $('lock').disabled = false; $('lock').title = ''; }
  updatePhysicalControls();  // keep the physical-mode dropdowns fresh (never re-renders the table)
  // Honor a ?mode=physical deep-link once the dropdowns are populated.
  if(!appliedWantMode){ appliedWantMode = true; if(wantMode === 'physical') setMode('physical'); }

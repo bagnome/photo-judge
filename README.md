@@ -144,6 +144,11 @@ that workflow.
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
   grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
   LAN remote control above.
+- **Settings page** — one place for app-wide options: lock the scorekeeper to the
+  operator, allow only one live screen at a time, a logo library (upload/choose/delete the
+  title-card logo), a custom PDF header, LAN access, and per-field photo-metadata import.
+  Saved to `settings.json`; the LAN and metadata toggles are gated by `photo-judge.properties`
+  (a `false` there wins).
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -187,8 +192,9 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
    ```
    photo-judge.exe
    categories.txt          ← the editable category list (seeded with defaults)
-   photo-judge.properties  ← settings (port / autoPort), seeded with defaults
-   logo\                   ← optional: drop one image here for the title cards
+   photo-judge.properties  ← startup settings (port / autoPort / gates), seeded
+   settings.json           ← app settings from the Settings page
+   logo\                   ← title-card logo library (managed on the Settings page)
    photos\                 ← all session photos live here
      001\                ← a session (stable sequential ID)
        session.json      ← { id, date, created, categories[] }
@@ -267,6 +273,8 @@ new sessions — copy to the local drive for an event).
 | `archive.go` | Session archiving — write metadata JSON, delete photos, search archives |
 | `metadata.go` | Reads photographer / title from JPEG EXIF & PNG text chunks on upload |
 | `physical.go` | Physical-print scoring (no image file) — store/search per session |
+| `settings.go` | App settings (`settings.json`) + logo library; gated by properties |
+| `web/settings.html` | Settings page (toggles, logo library, PDF header) |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |
