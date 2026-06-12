@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -181,21 +182,24 @@ func (p *pdfWriter) render() []byte {
 // ---- score-sheet layout ---------------------------------------------------
 
 // photoRow is one line of the score sheet: the displayed photo name (filename
-// without extension) and an optional operator-entered photographer name.
+// without extension), an optional operator-entered photographer name, and an
+// optional judge's score.
 type photoRow struct {
 	name         string
 	photographer string
+	score        string
 }
 
 // photoRows gathers the rows for one category/orientation in display order,
-// pairing each photo with its photographer name from the folder's names.json.
+// pairing each photo with its photographer name (names.json) and score (scores.json).
 func (s *server) photoRows(sid, cat, orient string) []photoRow {
 	dir := s.photosDir(sid, cat, orient)
 	files := s.photoFiles(sid, cat, orient)
 	names := loadNames(dir)
+	scores := loadScores(dir)
 	rows := make([]photoRow, len(files))
 	for i, f := range files {
-		rows[i] = photoRow{name: strings.TrimSuffix(f, filepath.Ext(f)), photographer: names[f]}
+		rows[i] = photoRow{name: strings.TrimSuffix(f, filepath.Ext(f)), photographer: names[f], score: scores[f]}
 	}
 	return rows
 }
@@ -249,6 +253,9 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 			if row.photographer != "" {
 				p.text(phX, p.y-16, "F1", 10, truncateToWidth(row.photographer, 10, phColW))
 			}
+			if row.score != "" {
+				p.text(scX, p.y-16, "F1", 10, truncateToWidth(row.score, 10, right-scX))
+			}
 			p.hline(left, right, p.y-rowH+3, 0.78, 0.5)
 			p.y -= rowH
 		}
@@ -282,6 +289,131 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 	}
 	if !any {
 		p.text(left, p.y-12, "F1", 12, "No photos have been uploaded for this session yet.")
+	}
+	return p.render()
+}
+
+// ---- archived-session report ----------------------------------------------
+
+// buildArchivePDF renders a printable record of an archived session: a header with
+// the session's date / id / archive date / categories, then a filled-in table per
+// category (Landscape before Portrait) listing each photo's number, title,
+// photographer and score.
+func buildArchivePDF(arch ArchivedSession) []byte {
+	const rowH = 22.0
+	left := pdfMargin
+	right := pdfPageW - pdfMargin // 558
+	numX := left
+	nameX := left + 38
+	phX := 320.0
+	scX := 500.0
+	nameColW := phX - nameX - 12
+	phColW := scX - phX - 8
+
+	// Group photos by category + orientation, each in display (position) order.
+	type key struct{ cat, orient string }
+	groups := map[key][]ArchivedPhoto{}
+	for _, ph := range arch.Photos {
+		k := key{ph.Category, ph.Orientation}
+		groups[k] = append(groups[k], ph)
+	}
+	for k := range groups {
+		g := groups[k]
+		sort.SliceStable(g, func(i, j int) bool { return g[i].Position < g[j].Position })
+	}
+
+	// Category order: active categories first, then any others found in the photos.
+	seen := map[string]bool{}
+	var catOrder []string
+	add := func(c string) {
+		if !seen[c] {
+			seen[c] = true
+			catOrder = append(catOrder, c)
+		}
+	}
+	for _, c := range arch.Categories {
+		add(c)
+	}
+	for _, ph := range arch.Photos {
+		add(ph.Category)
+	}
+
+	p := newPDF()
+	p.newPage()
+	p.text(left, p.y-18, "F2", 18, "Photo Judge — Archived Session")
+	p.y -= 26
+	p.text(left, p.y-11, "F1", 11, arch.Date+"   (Session #"+arch.SessionID+")")
+	p.y -= 15
+	p.text(left, p.y-10, "F1", 10, fmt.Sprintf("Archived %s   ·   %d photo(s)", arch.ArchivedDate, arch.PhotoCount))
+	p.y -= 15
+	if len(arch.Categories) > 0 {
+		p.text(left, p.y-9, "F1", 9, truncateToWidth("Categories: "+strings.Join(arch.Categories, ", "), 9, right-left))
+		p.y -= 16
+	} else {
+		p.y -= 4
+	}
+
+	orientation := func(orient string, rows []ArchivedPhoto) {
+		header := func(suffix string) {
+			p.text(nameX, p.y-11, "F2", 11, orient+suffix)
+			p.y -= 15
+			p.text(numX, p.y-9, "F2", 9, "Order")
+			p.text(nameX, p.y-9, "F2", 9, "Title")
+			p.text(phX, p.y-9, "F2", 9, "Photographer")
+			p.text(scX, p.y-9, "F2", 9, "Score")
+			p.y -= 11
+			p.hline(left, right, p.y+2, 0.3, 0.8)
+			p.y -= 2
+		}
+		if p.y-(15+11+2+rowH) < pdfMargin {
+			p.newPage()
+		}
+		header("")
+		for _, ph := range rows {
+			if p.y-rowH < pdfMargin {
+				p.newPage()
+				header(" (continued)")
+			}
+			p.text(numX, p.y-14, "F1", 10, fmt.Sprintf("%d", ph.Position))
+			p.text(nameX, p.y-14, "F1", 10, truncateToWidth(ph.Title, 10, nameColW))
+			if ph.Photographer != "" {
+				p.text(phX, p.y-14, "F1", 10, truncateToWidth(ph.Photographer, 10, phColW))
+			}
+			if ph.Score != "" {
+				p.text(scX, p.y-14, "F1", 10, truncateToWidth(ph.Score, 10, right-scX))
+			}
+			p.hline(left, right, p.y-rowH+3, 0.85, 0.5)
+			p.y -= rowH
+		}
+		p.y -= 6
+	}
+
+	any := false
+	for _, cat := range catOrder {
+		land := groups[key{cat, "Landscape"}]
+		port := groups[key{cat, "Portrait"}]
+		if len(land) == 0 && len(port) == 0 {
+			continue
+		}
+		any = true
+		if p.y-90 < pdfMargin {
+			p.newPage()
+		}
+		p.y -= 6
+		p.text(left, p.y-13, "F2", 14, cat)
+		p.y -= 18
+		p.hline(left, right, p.y+4, 0.4, 1.0)
+		p.y -= 4
+		if len(land) > 0 {
+			orientation("Landscape", land)
+		}
+		if len(port) > 0 {
+			orientation("Portrait", port)
+		}
+		p.y -= 6
+	}
+	if !any {
+		p.text(left, p.y-12, "F1", 12, "This archived session had no photos.")
 	}
 	return p.render()
 }
