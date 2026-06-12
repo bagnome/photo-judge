@@ -31,6 +31,8 @@
  #counter{font-variant-numeric:tabular-nums;color:#cdd;font-size:15px;min-width:120px;text-align:center}
  #lockrow{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:14px;color:#cdd;cursor:pointer;user-select:none}
  #lockrow input{width:16px;height:16px;cursor:pointer}
+ #lockrow.forced{color:#79d28e;cursor:default}
+ #lockrow.forced input{cursor:not-allowed}
  .panel{flex:0 0 320px;background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:18px}
  .panel h3{margin:0 0 14px;font-size:15px}
  .field{margin-bottom:16px}
@@ -123,7 +125,7 @@
   <div class="panel">
     <h3>Score this photo</h3>
     <div id="op"><span class="opwhat" id="opwhat">—</span><div class="same">● You're viewing the operator's current photo</div></div>
-    <label id="lockrow"><input type="checkbox" id="lock"> 🔒 Lock to the operator's photo</label>
+    <label id="lockrow"><input type="checkbox" id="lock"> <span id="locktext">🔒 Lock to the operator’s photo</span></label>
     <button id="gotoop" class="primary">Jump to operator's photo</button>
     <div class="field" style="margin-top:16px">
       <div class="lbl">Photo</div>
@@ -181,8 +183,12 @@ function applyState(st){
  // The "lock scorekeeper to the operator" setting forces the lock on (and disables
  // the toggle); otherwise the scorekeeper controls it.
  const forceLock = !!(st.settings && st.settings.lockScorekeeper);
- if(forceLock){ $('lock').checked = true; $('lock').disabled = true; $('lock').title = 'Locked to the operator in Settings'; }
- else { $('lock').disabled = false; $('lock').title = ''; }
+ $('lock').disabled = forceLock;
+ if(forceLock){ $('lock').checked = true; }
+ $('locktext').textContent = forceLock
+   ? '🔒 Locked to the operator’s photo (set in Settings)'
+   : '🔒 Lock to the operator’s photo';
+ $('lockrow').classList.toggle('forced', forceLock);
  updatePhysicalControls();  // keep the physical-mode dropdowns fresh (never re-renders the table)
  // Honor a ?mode=physical deep-link once the dropdowns are populated.
  if(!appliedWantMode){ appliedWantMode = true; if(wantMode === 'physical') setMode('physical'); }

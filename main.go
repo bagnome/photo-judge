@@ -1817,6 +1817,9 @@ func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 		ct = "text/css; charset=utf-8"
 	}
 	w.Header().Set("Content-Type", ct)
+	// Always revalidate so an upgraded build's pages/scripts aren't served stale from
+	// the browser cache (it's all localhost, so there's no real bandwidth cost).
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(data)
 }
 
