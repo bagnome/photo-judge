@@ -185,6 +185,12 @@ fixed port, or `autoPort=true` to let the OS assign any free one (the command wi
 prints the chosen address). For development, the `PHOTOJUDGE_PORT` environment
 variable overrides the file.
 
+By default the server binds to all interfaces so other devices on the LAN can reach
+the console (see the **LAN remote control** feature); the operator's own browser is
+still opened at `http://127.0.0.1`, a secure context that keeps the Window Management
+API working. Set `lanAccess=false` in `photo-judge.properties` to bind to loopback
+only (this computer only).
+
 Double-clicking the exe again while it's already running won't start a second copy
 — it detects the running instance and just reopens the console pointing at it. If
 the copy you launch is **newer** than the one running, the console shows a banner

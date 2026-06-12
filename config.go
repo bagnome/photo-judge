@@ -20,8 +20,9 @@ const defaultPort = 80
 
 // appConfig holds the settings read from photo-judge.properties.
 type appConfig struct {
-	Port     int  // TCP port to listen on (ignored when AutoPort is true)
-	AutoPort bool // when true, ask the OS for any free port instead of using Port
+	Port      int  // TCP port to listen on (ignored when AutoPort is true)
+	AutoPort  bool // when true, ask the OS for any free port instead of using Port
+	LanAccess bool // when true, bind all interfaces so other LAN devices can connect
 }
 
 // configTemplate is the default file seeded on first run. It documents each key.
@@ -40,13 +41,20 @@ port=80
 # can't find the already-running copy (each launch picks a different port), so
 # prefer a fixed port for normal use.
 autoPort=false
+
+# Allow control from other devices on the same network (a second laptop, a phone,
+# or a tablet). When true, the app listens on all network interfaces, the console
+# shows its LAN address and a QR code, and you may need to allow it through the
+# Windows Firewall (see the User Guide). Set to false to listen on this computer
+# only (most private/secure; the LAN address and QR are hidden).
+lanAccess=true
 `
 
 // loadConfig reads photo-judge.properties from baseDir, seeding it with defaults
 // on first run. Unknown keys are ignored and any malformed value falls back to
 // its default, so a hand-edited file can never stop the app from starting.
 func loadConfig(baseDir string) appConfig {
-	cfg := appConfig{Port: defaultPort, AutoPort: false}
+	cfg := appConfig{Port: defaultPort, AutoPort: false, LanAccess: true}
 	path := filepath.Join(baseDir, configFileName)
 
 	data, err := os.ReadFile(path)
@@ -80,18 +88,23 @@ func loadConfig(baseDir string) appConfig {
 				cfg.Port = n
 			}
 		case "autoport":
-			cfg.AutoPort = parseConfigBool(val)
+			cfg.AutoPort = parseConfigBool(val, false)
+		case "lanaccess":
+			cfg.LanAccess = parseConfigBool(val, true)
 		}
 	}
 	return cfg
 }
 
-// parseConfigBool reads a forgiving boolean (true/yes/on/1 are true; anything
-// else is false) so users aren't tripped up by capitalization or "yes".
-func parseConfigBool(v string) bool {
+// parseConfigBool reads a forgiving boolean: true/yes/on/1 are true and
+// false/no/off/0 are false (any capitalization). An unrecognized value returns
+// def, so a typo can't silently flip a setting away from its intended default.
+func parseConfigBool(v string, def bool) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "true", "yes", "on", "1":
 		return true
+	case "false", "no", "off", "0":
+		return false
 	}
-	return false
+	return def
 }

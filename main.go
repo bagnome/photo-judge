@@ -179,6 +179,10 @@ type server struct {
 	// to build the LAN URLs shown on the console for remote control.
 	port string
 
+	// lanAccess mirrors the config flag: when false the server is bound to loopback
+	// only, so the console hides the LAN bar.
+	lanAccess bool
+
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -1550,10 +1554,15 @@ func (s *server) lanURLs() []string {
 // how a second machine can reach the app.
 func (s *server) handleNetInfo(w http.ResponseWriter, r *http.Request) {
 	host, _ := os.Hostname()
+	var urls []string
+	if s.lanAccess {
+		urls = s.lanURLs()
+	}
 	writeJSON(w, map[string]any{
-		"hostname": host,
-		"port":     s.port,
-		"urls":     s.lanURLs(),
+		"hostname":  host,
+		"port":      s.port,
+		"lanAccess": s.lanAccess,
+		"urls":      urls,
 	})
 }
 
@@ -1760,8 +1769,18 @@ func main() {
 	if env := os.Getenv("PHOTOJUDGE_PORT"); env != "" {
 		port = env
 	}
-	addr := "127.0.0.1:" + port
-	reqURL := "http://" + addr + "/"
+	// Bind to all interfaces (0.0.0.0) when LAN access is allowed, so other devices
+	// on the network — and this machine's own LAN IP — can reach the console; bind to
+	// loopback only when it's turned off. Either way the operator's own browser is
+	// opened at 127.0.0.1, a secure context that keeps the Window Management API working.
+	s.lanAccess = cfg.LanAccess
+	host := "127.0.0.1"
+	if cfg.LanAccess {
+		host = "0.0.0.0"
+	}
+	addr := host + ":" + port
+	loopAddr := "127.0.0.1:" + port // how a second launch / the local browser reaches us
+	reqURL := "http://" + loopAddr + "/"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
@@ -1770,10 +1789,10 @@ func main() {
 	// fixed port.)
 	ln, lerr := net.Listen("tcp", addr)
 	if lerr != nil {
-		if running, runningVer := probeRunning(addr); running {
+		if running, runningVer := probeRunning(loopAddr); running {
 			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", reqURL)
 			if newerVer(appVersion, runningVer) {
-				reportVersion(addr) // make the running console show an update banner
+				reportVersion(loopAddr) // make the running console show an update banner
 				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
 				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
 			}
@@ -1785,12 +1804,12 @@ func main() {
 			addr, lerr, configFileName)
 	}
 
-	// Use the listener's real address for the URL — with autoPort (port 0) the OS
-	// chose the actual port, so read it back rather than trusting the requested one.
+	// Read the real port back from the listener — with autoPort (port 0) the OS chose
+	// it — and always point the local browser at loopback (a secure context).
 	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
 		s.port = strconv.Itoa(tcp.Port)
 	}
-	u := "http://" + ln.Addr().String() + "/"
+	u := "http://127.0.0.1:" + s.port + "/"
 
 	srv := &http.Server{Handler: mux}
 	go func() {

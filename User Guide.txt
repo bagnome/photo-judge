@@ -50,6 +50,11 @@ CONTROLLING IT FROM ANOTHER DEVICE ON THE NETWORK  (optional)
    as the computer running Photo Judge. The judges' monitors stay
    plugged into the main computer; you just get a second control page.
 
+   This is on by default. To turn it off (so the app only answers on
+   the computer itself), open  photo-judge.properties  and set
+   lanAccess=false , then restart - the address bar and QR button
+   disappear.
+
    WHERE TO FIND THE ADDRESS
      At the top of the operator console there is a bar:
         "Control from another device on this network: http://192.168.x.x"
@@ -305,12 +310,19 @@ Nothing happens / can't reach the page
    save, and restart.
 
 Another device on the network can't open the page
-   * Check both devices are on the SAME network (not guest Wi-Fi).
-   * Type the address exactly as shown on the console bar, including
-     the port if one is shown (e.g. http://192.168.1.5:8753 ).
-   * Allow Photo Judge through Windows Firewall and set the network
-     to Private - see "CONTROLLING IT FROM ANOTHER DEVICE" in
-     section 1.
+   * Quick check: in a browser ON THE HOST computer, open the LAN
+     address shown on the bar (e.g. http://192.168.1.5 ). If even that
+     fails, the issue is the app/Windows, not the other device:
+       - make sure  lanAccess=true  in photo-judge.properties (the
+         default) and restart; if the address bar is missing entirely,
+         it's off or the computer has no network connection.
+   * If the host can open it but the other device can't:
+       - check both devices are on the SAME network (not guest Wi-Fi),
+       - type the address exactly as shown, including the port if one
+         is shown (e.g. http://192.168.1.5:8753 ),
+       - allow Photo Judge through Windows Firewall and set the network
+         to Private - see "CONTROLLING IT FROM ANOTHER DEVICE" in
+         section 1.
 
 
 ------------------------------------------------------------

@@ -21,7 +21,9 @@ not yet released.
   third-party dependency) that opens the control page on a phone instantly; when the
   machine has multiple addresses, the modal lets you pick which one. The User Guide gains
   a section on the one-time Windows Firewall / network setup needed to allow remote
-  devices to connect. The judges' output windows stay on the host machine.
+  devices to connect. The judges' output windows stay on the host machine. Remote
+  access can be turned off with `lanAccess=false` in `photo-judge.properties`, which
+  binds the server to this computer only and hides the address bar and QR button.
 
 ### Changed
 - **Default port is now 80, with a settings file** — Photo Judge listens on port `80`
