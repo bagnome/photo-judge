@@ -72,6 +72,7 @@
   <select id="session"></select>
   <button id="editsession">Edit date</button>
   <button id="pdfbtn">⤓ Score sheet</button>
+  <button id="archivesession" style="display:none">🗄 Archive Session</button>
   <button id="delsession" class="danger">Delete</button>
   <span class="sep">|</span>
   <label>New</label>
@@ -139,6 +140,9 @@ function render(){
  // Categories offered for loading = the selected session's active slate (per-session).
  const selSession = state.sessions.find(s => s.id === sel.value);
  const sessionCats = selSession ? (selSession.categories || []) : [];
+
+ // "Archive Session" is only offered once a session's date is in the past.
+ $('archivesession').style.display = (selSession && selSession.date < todayStr()) ? '' : 'none';
 
  // Screen rows
  const rows = $('rows'); rows.innerHTML = '';
@@ -228,6 +232,29 @@ $('delsession').onclick = async () => {
  const r = await post('/api/session/delete', {id});
  if(!r.ok){ alert('Could not delete:\n\n'+(await r.text())); return; }
  toast('Session #'+id+' deleted — recoverable in photos\\_deleted', 'del');
+};
+
+// today's date as YYYY-MM-DD in local time (for the "is this session in the past?" check).
+function todayStr(){
+ const d = new Date();
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+$('archivesession').onclick = async () => {
+ const id = currentSession();
+ if(!id){ alert('No session selected.'); return; }
+ const ss = state.sessions.find(s => s.id === id) || {};
+ if(!confirm(
+   'Archive session #'+id+' ('+(ss.date||'')+')?\n\n'
+ + 'This saves the photo titles, photographers, scores, categories and dates to an '
+ + 'archive file you can view and download later on the Archived Sessions page — but it '
+ + 'PERMANENTLY DELETES the photo image files to save space.\n\n'
+ + 'Once archived, the session is read-only and cannot be changed. This cannot be undone.'
+ )) return;
+ const r = await post('/api/session/archive', {id});
+ if(!r.ok){ alert('Could not archive:\n\n'+(await r.text())); return; }
+ const j = await r.json();
+ toast('Session #'+id+' archived ('+(j.photoCount||0)+' photos) — view it on the Archived Sessions page', 'del');
 };
 
 function chooseMonitor(screens){

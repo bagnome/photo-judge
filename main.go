@@ -390,22 +390,29 @@ func (s *server) scanSessions() {
 	log.Printf("loaded %d existing session(s)", len(sess))
 }
 
-// nextID = max-ever + 1, counting soft-deleted sessions, so IDs are never reused.
+// nextID = max-ever + 1, counting soft-deleted AND archived sessions, so IDs are
+// never reused even after an archived session's photo folder has been removed.
 func (s *server) nextID() string {
 	max := 0
-	check := func(dir string) {
+	bump := func(name string) {
+		if n, err := strconv.Atoi(name); err == nil && n > max {
+			max = n
+		}
+	}
+	checkDirs := func(dir string) {
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			if n, err := strconv.Atoi(e.Name()); err == nil && n > max {
-				max = n
+			if e.IsDir() {
+				bump(e.Name())
 			}
 		}
 	}
-	check(filepath.Join(s.baseDir, "photos"))
-	check(filepath.Join(s.baseDir, "photos", "_deleted"))
+	checkDirs(filepath.Join(s.baseDir, "photos"))
+	checkDirs(filepath.Join(s.baseDir, "photos", "_deleted"))
+	// Archived sessions live only as archives/<id>.json — the photo folders are gone.
+	for _, e := range readDirNames(s.archivesDir()) {
+		bump(strings.TrimSuffix(e, ".json"))
+	}
 	return fmt.Sprintf("%03d", max+1)
 }
 
@@ -1796,6 +1803,9 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(baseDir, "logo"), 0o755); err != nil {
 		log.Printf("note: could not create logo folder: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(baseDir, "archives"), 0o755); err != nil {
+		log.Printf("note: could not create archives folder: %v", err)
+	}
 	s.loadCategories()
 	s.scanSessions()
 	s.scanLogo()
@@ -1815,6 +1825,7 @@ func main() {
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
 	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
+	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
 	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
@@ -1822,7 +1833,11 @@ func main() {
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
+	mux.HandleFunc("/api/session/archive", s.handleSessionArchive)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
+	mux.HandleFunc("/api/archives", s.handleArchivesList)
+	mux.HandleFunc("/api/archive/download", s.handleArchiveDownload)
+	mux.HandleFunc("/api/archive/pdf", s.handleArchivePDF)
 	mux.HandleFunc("/api/session/categories", s.handleSessionCategories)
 	mux.HandleFunc("/api/session/category/add", s.handleCategoryAdd)
 	mux.HandleFunc("/api/session/category/activate", s.handleCategoryActivate)
