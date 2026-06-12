@@ -115,7 +115,9 @@ that workflow.
   live indicator of which photo the operator is on, a highlight when both are on the
   same photo, and a **Jump to operator's photo** shortcut. Scores are saved per photo
   and surface as a badge on the Upload / Reorder grid and pre-filled in the score-sheet
-  PDF.
+  PDF. A separate **Physical prints** mode records printed entries that have no image
+  file — a spreadsheet-style table of title / photographer / score per category that
+  auto-extends as you type (Tab between fields, Enter for the next row).
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
   for the selected session: a section per category (in the session's category order),
   Landscape before Portrait, one row per photo in display order with the photo name
@@ -264,6 +266,7 @@ new sessions — copy to the local drive for an event).
 | `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
 | `archive.go` | Session archiving — write metadata JSON, delete photos, search archives |
 | `metadata.go` | Reads photographer / title from JPEG EXIF & PNG text chunks on upload |
+| `physical.go` | Physical-print scoring (no image file) — store/search per session |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |

@@ -28,6 +28,7 @@
  a.dl{background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;padding:8px 12px}
  a.dl:hover{background:#363a42}
  .photos{border-top:1px solid #2c2f35;overflow-x:auto}
+ .subhead{padding:12px 12px 4px;color:#9aa0a6;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
  table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
  th,td{padding:7px 12px;text-align:left;border-bottom:1px solid #2c2f35;white-space:nowrap}
  th{color:#9aa0a6;font-weight:500;position:sticky;top:0;background:#23262c;user-select:none}
@@ -54,6 +55,14 @@
   <div class="f"><label>Photo title</label><input type="text" id="title" placeholder="title contains…"></div>
   <button id="search" class="primary">Search</button>
   <button id="clear">Clear</button>
+  <div class="f"><label>Sort by</label>
+    <select id="sortkey">
+      <option value="date">Session date</option>
+      <option value="created">Created date</option>
+      <option value="sid">Session ID</option>
+    </select>
+  </div>
+  <button id="sortdir" data-dir="desc" title="Toggle ascending / descending">↓</button>
 </div>
 <div id="results"></div>
 
@@ -61,6 +70,23 @@
 const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Sort the session cards by the chosen key (session date / created / id) and direction.
+function sortArchives(arr){
+ const key = $('sortkey').value;
+ const desc = $('sortdir').dataset.dir !== 'asc';
+ const val = a => {
+   if(key === 'sid') return parseInt(a.sessionId, 10) || 0;
+   if(key === 'created') return a.created || a.archivedDate || '';
+   return a.date || '';
+ };
+ arr.sort((a, b) => {
+   const va = val(a), vb = val(b);
+   const cmp = (typeof va === 'number') ? (va - vb) : String(va).localeCompare(String(vb));
+   return desc ? -cmp : cmp;
+ });
+ return arr;
+}
 
 function query(){
  const p = new URLSearchParams();
@@ -81,6 +107,7 @@ async function search(){
    const r = await fetch('/api/archives?' + p.toString());
    archives = (await r.json()).archives || [];
  } catch(e){ $('results').innerHTML = '<div class="empty">Could not load archives.</div>'; return; }
+ sortArchives(archives);
 
  if(!archives.length){
    $('results').innerHTML = '<div class="empty">' +
@@ -93,38 +120,58 @@ async function search(){
  const expandFilter = !!(photog || title);
  archives.forEach((a, idx) => {
    const photos = a.photos || [];
-   const rows = photos.map(ph => {
+   const phys = a.physicalPrints || [];
+   const both = photos.length && phys.length;
+
+   const photoRows = photos.map(ph => {
      const hit = (photog && (ph.photographer||'').toLowerCase().includes(photog)) ||
                  (title  && (ph.title||'').toLowerCase().includes(title));
      return '<tr class="'+(hit?'hit':'')+'">'
        + '<td>'+esc(ph.category)+'</td><td>'+esc(ph.orientation)+'</td>'
        + '<td>'+esc(ph.title)+'</td><td>'+esc(ph.photographer)+'</td><td class="sc">'+esc(ph.score)+'</td></tr>';
    }).join('');
-   const table = '<div class="photos" id="ph'+idx+'"'+(expandFilter?'':' hidden')+'>'
+   const photoTable = photos.length ? (
+       (both ? '<div class="subhead">Photos</div>' : '')
      + '<table><thead><tr><th data-type="text">Category</th><th data-type="text">Orientation</th>'
      + '<th data-type="text">Title</th><th data-type="text">Photographer</th>'
-     + '<th data-type="num">Score</th></tr></thead>'
-     + '<tbody>'+rows+'</tbody></table></div>';
+     + '<th data-type="num">Score</th></tr></thead><tbody>'+photoRows+'</tbody></table>') : '';
+
+   const physRows = phys.map(p => {
+     const hit = (photog && (p.photographer||'').toLowerCase().includes(photog)) ||
+                 (title  && (p.title||'').toLowerCase().includes(title));
+     return '<tr class="'+(hit?'hit':'')+'">'
+       + '<td>'+esc(p.category)+'</td><td>'+esc(p.title)+'</td>'
+       + '<td>'+esc(p.photographer)+'</td><td class="sc">'+esc(p.score)+'</td></tr>';
+   }).join('');
+   const physTable = phys.length ? (
+       '<div class="subhead">Physical prints</div>'
+     + '<table><thead><tr><th data-type="text">Category</th><th data-type="text">Title</th>'
+     + '<th data-type="text">Photographer</th><th data-type="num">Score</th></tr></thead>'
+     + '<tbody>'+physRows+'</tbody></table>') : '';
+
+   const detail = '<div class="photos" id="ph'+idx+'"'+(expandFilter?'':' hidden')+'>' + photoTable + physTable + '</div>';
+   let count = (a.photoCount||0) + ' photo'+((a.photoCount===1)?'':'s');
+   if(phys.length) count += '  ·  ' + phys.length + ' physical print' + (phys.length===1?'':'s');
    out.push(
      '<div class="card">'
    + '<div class="chead">'
    +   '<div><span class="sid">Session #'+esc(a.sessionId)+'</span>'
-   +     '<span class="meta">Competition date: '+esc(a.date)+'  ·  Archived '+esc(a.archivedDate)+'  ·  '+(a.photoCount||0)+' photo'+((a.photoCount===1)?'':'s')+'</span>'
+   +     '<span class="meta">Competition date: '+esc(a.date)+(a.created?('  ·  Created '+esc(a.created.slice(0,10))):'')+'  ·  Archived '+esc(a.archivedDate)+'  ·  '+count+'</span>'
    +     '<div class="cats">Categories: '+(a.categories&&a.categories.length?esc(a.categories.join(', ')):'—')+'</div>'
    +   '</div>'
    +   '<div class="cactions">'
-   +     '<button class="toggle" data-i="'+idx+'">'+(expandFilter?'Hide photos':'Show photos')+'</button>'
+   +     '<button class="toggle" data-i="'+idx+'">'+(expandFilter?'Hide details':'Show details')+'</button>'
    +     '<a class="dl" href="/api/archive/pdf?session='+enc(a.sessionId)+'">⤓ PDF</a>'
    +     '<a class="dl" href="/api/archive/download?session='+enc(a.sessionId)+'">⤓ JSON</a>'
    +   '</div>'
-   + '</div>' + table + '</div>');
+   + '</div>' + detail + '</div>');
  });
  $('results').innerHTML = out.join('');
  document.querySelectorAll('.toggle').forEach(b => b.onclick = () => {
    const box = $('ph'+b.dataset.i);
    const hidden = box.hasAttribute('hidden');
    if(hidden) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
-   b.textContent = hidden ? 'Hide photos' : 'Show photos';
+   b.textContent = hidden ? 'Hide details' : 'Show details';
  });
  document.querySelectorAll('.photos table').forEach(makeSortable);
 }
@@ -166,6 +213,13 @@ function makeSortable(table){
 $('search').onclick = search;
 $('clear').onclick = () => { ['from','to','sid','photog','title'].forEach(id => $(id).value=''); search(); };
 ['sid','photog','title'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') search(); }));
+$('sortkey').addEventListener('change', search);
+$('sortdir').onclick = () => {
+ const d = $('sortdir').dataset.dir === 'asc' ? 'desc' : 'asc';
+ $('sortdir').dataset.dir = d;
+ $('sortdir').textContent = d === 'asc' ? '↑' : '↓';
+ search();
+};
 
 // Pre-fill the search fields from the URL so a search can be bookmarked or linked.
 const params = new URLSearchParams(location.search);

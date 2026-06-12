@@ -269,6 +269,9 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 		if len(land) == 0 && len(port) == 0 {
 			continue
 		}
+		if !any {
+			p.sectionHeader("Digital Prints")
+		}
 		any = true
 		// Keep the category heading with at least the start of its first sub-table.
 		if p.y-90 < pdfMargin {
@@ -287,9 +290,11 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 		}
 		p.y -= 6
 	}
-	if !any {
+	physical := s.loadPhysical(sess.ID)
+	if !any && len(physical) == 0 {
 		p.text(left, p.y-12, "F1", 12, "No photos have been uploaded for this session yet.")
 	}
+	p.physicalSection(physical, sess.Categories)
 	return p.render()
 }
 
@@ -395,6 +400,9 @@ func buildArchivePDF(arch ArchivedSession) []byte {
 		if len(land) == 0 && len(port) == 0 {
 			continue
 		}
+		if !any {
+			p.sectionHeader("Digital Prints")
+		}
 		any = true
 		if p.y-90 < pdfMargin {
 			p.newPage()
@@ -412,10 +420,96 @@ func buildArchivePDF(arch ArchivedSession) []byte {
 		}
 		p.y -= 6
 	}
-	if !any {
+	if !any && len(arch.PhysicalPrints) == 0 {
 		p.text(left, p.y-12, "F1", 12, "This archived session had no photos.")
 	}
+	p.physicalSection(arch.PhysicalPrints, catOrder)
 	return p.render()
+}
+
+// sectionHeader draws a large section title (e.g. "Digital Prints" / "Physical
+// Prints") with an underline, starting a new page if there isn't room.
+func (p *pdfWriter) sectionHeader(title string) {
+	if p.y-50 < pdfMargin {
+		p.newPage()
+	}
+	p.y -= 10
+	p.text(pdfMargin, p.y-15, "F2", 15, title)
+	p.y -= 20
+	p.hline(pdfMargin, pdfPageW-pdfMargin, p.y+4, 0.4, 1.0)
+	p.y -= 4
+}
+
+// physicalSection appends a "Physical Prints" section to the PDF: a table per
+// category with Title / Photographer / Score. catOrder gives the preferred category
+// ordering (any categories not listed are appended after). No-op when empty.
+func (p *pdfWriter) physicalSection(prints []PhysicalPrint, catOrder []string) {
+	if len(prints) == 0 {
+		return
+	}
+	const rowH = 22.0
+	left := pdfMargin
+	right := pdfPageW - pdfMargin
+	titleX := left
+	phX := 300.0
+	scX := 500.0
+	titleColW := phX - titleX - 12
+	phColW := scX - phX - 8
+
+	byCat := map[string][]PhysicalPrint{}
+	for _, pr := range prints {
+		byCat[pr.Category] = append(byCat[pr.Category], pr)
+	}
+	seen := map[string]bool{}
+	var order []string
+	for _, c := range catOrder {
+		if len(byCat[c]) > 0 && !seen[c] {
+			seen[c] = true
+			order = append(order, c)
+		}
+	}
+	for _, pr := range prints {
+		if !seen[pr.Category] {
+			seen[pr.Category] = true
+			order = append(order, pr.Category)
+		}
+	}
+
+	p.sectionHeader("Physical Prints")
+
+	for _, cat := range order {
+		rows := byCat[cat]
+		header := func(suffix string) {
+			p.text(titleX, p.y-12, "F2", 12, cat+suffix)
+			p.y -= 16
+			p.text(titleX, p.y-9, "F2", 9, "Title")
+			p.text(phX, p.y-9, "F2", 9, "Photographer")
+			p.text(scX, p.y-9, "F2", 9, "Score")
+			p.y -= 11
+			p.hline(left, right, p.y+2, 0.3, 0.8)
+			p.y -= 2
+		}
+		if p.y-(16+11+2+rowH) < pdfMargin {
+			p.newPage()
+		}
+		header("")
+		for _, pr := range rows {
+			if p.y-rowH < pdfMargin {
+				p.newPage()
+				header(" (continued)")
+			}
+			p.text(titleX, p.y-14, "F1", 10, truncateToWidth(pr.Title, 10, titleColW))
+			if pr.Photographer != "" {
+				p.text(phX, p.y-14, "F1", 10, truncateToWidth(pr.Photographer, 10, phColW))
+			}
+			if pr.Score != "" {
+				p.text(scX, p.y-14, "F1", 10, truncateToWidth(pr.Score, 10, right-scX))
+			}
+			p.hline(left, right, p.y-rowH+3, 0.85, 0.5)
+			p.y -= rowH
+		}
+		p.y -= 6
+	}
 }
 
 // handleSessionPDF streams the score sheet for ?session=<id> as a PDF download.

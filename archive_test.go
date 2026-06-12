@@ -69,6 +69,9 @@ func TestSessionArchive(t *testing.T) {
 	if a.SessionID != ss.ID || a.Date != "2000-01-01" || a.ArchivedDate != todayStr() {
 		t.Errorf("archive metadata wrong: %+v", a)
 	}
+	if a.Created == "" {
+		t.Error("archive should capture the session's created timestamp")
+	}
 	if a.PhotoCount != 2 || len(a.Photos) != 2 {
 		t.Fatalf("expected 2 photos, got %d", a.PhotoCount)
 	}

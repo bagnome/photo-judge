@@ -304,6 +304,22 @@ the menu's address / QR code, or section 1).
   and are pre-filled into the Score column of the score-sheet
   PDF (section 4 / the "Score sheet" button).
 
+PHYSICAL PRINTS (entries with no photo file)
+   Some nights you also judge actual printed photos that were never
+   uploaded. Switch to the "📋 Physical prints" button at the top of
+   the Scoring page to record those.
+     * Pick the Session and Category at the top.
+     * A small table appears with columns: Print title, Photographer,
+       and Score. Just type them in - there's no image to show.
+     * A fresh empty row appears automatically as soon as you start
+       filling the last one, so you can keep going down the list.
+     * Press Tab to move across the fields, and Enter to drop to the
+       next row. Each entry saves on its own as you go.
+     * The "x" at the end of a row removes that entry.
+   Physical prints belong to the session you picked, so they're kept
+   with it - they appear in the score-sheet PDF and, if you archive the
+   session, in the archived record too.
+
 
 ------------------------------------------------------------
  9. ARCHIVING SESSIONS  (saving records + freeing space)
@@ -333,10 +349,11 @@ VIEWING ARCHIVED SESSIONS
    and how many photos it had.
      * SEARCH by any combination of: date range, session ID,
        photographer name, or photo title. (Searching a photographer
-       or title expands the matching photos and highlights the hits.)
-     * "Show photos" lists that session's photos with their category,
-       orientation, title, photographer and score. Click any column
-       heading to sort the list by it (click again to reverse).
+       or title expands the matching entries and highlights the hits;
+       this covers physical prints too.)
+     * "Show details" lists that session's photos - and any physical
+       prints - with their title, photographer and score. Click any
+       column heading to sort the list by it (click again to reverse).
      * "⤓ PDF" downloads a printable report of the session; "⤓ JSON"
        saves the raw record (handy for a spreadsheet or your own files).
 
