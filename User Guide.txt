@@ -96,6 +96,16 @@ CONTROLLING IT FROM ANOTHER DEVICE ON THE NETWORK  (optional)
        "Open window" only appears on the main computer, since judges'
        windows can't be opened from a phone.
 
+READING PHOTO METADATA  (optional)
+   If your photographers embed their name and the photo's title in the
+   image file, the app can read them automatically on upload. Open
+   photo-judge.properties and set  importMetadata=true , then restart.
+   From then on, an uploaded photo's embedded photographer (artist /
+   author) fills the photographer box, and its embedded title is used
+   as the photo's on-screen name. Missing values change nothing, and
+   you can still edit the photographer by hand. (Off by default - see
+   section 4 for how it appears on the Upload page.)
+
 
 ------------------------------------------------------------
  2. THE BIG PICTURE
@@ -182,6 +192,13 @@ F) PRESENT
 * PHOTOGRAPHER: type a name in the box under a photo to record
   who took it. It's saved automatically and is pre-filled into
   the score-sheet PDF.
+* FROM METADATA (optional): if you turn on  importMetadata=true  in
+  photo-judge.properties, each uploaded photo is checked for an
+  embedded photographer (artist/author) and title. A photographer is
+  filled into the box for you, and a title is used as the photo's
+  on-screen name (instead of the file's name). Anything missing is
+  left as-is, and you can still edit the photographer by hand. (Off by
+  default; see section 1.)
 * REORDER: drag a thumbnail to a new spot within its section.
   The number badge shows the display order. Saved instantly.
   (Photos can't be dragged between Landscape and Portrait —

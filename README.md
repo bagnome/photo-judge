@@ -209,6 +209,10 @@ still opened at `http://127.0.0.1`, a secure context that keeps the Window Manag
 API working. Set `lanAccess=false` in `photo-judge.properties` to bind to loopback
 only (this computer only).
 
+Set `importMetadata=true` in `photo-judge.properties` to pull the **photographer**
+(EXIF/PNG artist/author) and **title** (used as the photo's filename) from each
+uploaded photo's embedded metadata; it's off by default.
+
 Double-clicking the exe again while it's already running won't start a second copy
 — it detects the running instance and just reopens the console pointing at it. If
 the copy you launch is **newer** than the one running, the console shows a banner
@@ -259,6 +263,7 @@ new sessions — copy to the local drive for an event).
 | `main.go` | The entire backend — HTTP server, sessions, screens, SSE, uploads (standard library only) |
 | `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
 | `archive.go` | Session archiving — write metadata JSON, delete photos, search archives |
+| `metadata.go` | Reads photographer / title from JPEG EXIF & PNG text chunks on upload |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |

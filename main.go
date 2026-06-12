@@ -183,6 +183,10 @@ type server struct {
 	// only, so the console hides the LAN bar.
 	lanAccess bool
 
+	// importMetadata mirrors the config flag: when true, uploads fill the
+	// photographer (and use the embedded title as the filename) from image metadata.
+	importMetadata bool
+
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -1169,6 +1173,20 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		orient := orientationOf(f, base) // reads dimensions, then seeks f back to start
+
+		// Optionally pull the title (used as the saved filename) and photographer
+		// from the photo's embedded metadata. Anything missing keeps the defaults.
+		var photographer string
+		if s.importMetadata {
+			title, ph := imageMetadata(f, base) // seeks f, rewinds to start
+			photographer = ph
+			if title != "" {
+				if n := sanitizeUploadName(title, filepath.Ext(base)); n != "" {
+					base = n
+				}
+			}
+		}
+
 		dir := s.photosDir(sid, cat, orient)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			f.Close()
@@ -1181,6 +1199,9 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			skipped = append(skipped, fh.Filename)
 			continue
+		}
+		if photographer != "" {
+			_ = setName(dir, name, photographer)
 		}
 		saved = append(saved, savedItem{File: name, Orientation: orient})
 		added[orient] = append(added[orient], name)
@@ -1865,6 +1886,7 @@ func main() {
 	// Resolve the listen port: photo-judge.properties (default 80, or a free port
 	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
 	cfg := loadConfig(baseDir)
+	s.importMetadata = cfg.ImportMetadata
 	port := strconv.Itoa(cfg.Port)
 	if cfg.AutoPort {
 		port = "0" // let the OS pick any free port

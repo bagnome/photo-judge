@@ -3,8 +3,33 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestLoadConfigAppendsMissingKeys(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, configFileName)
+	if err := os.WriteFile(path, []byte("port=8753\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loadConfig(dir)
+	got := func() string { b, _ := os.ReadFile(path); return string(b) }
+	s := got()
+	if !strings.Contains(s, "port=8753") {
+		t.Error("existing setting was lost")
+	}
+	for _, key := range []string{"autoPort=", "lanAccess=", "importMetadata="} {
+		if !strings.Contains(s, key) {
+			t.Errorf("missing setting %q was not appended:\n%s", key, s)
+		}
+	}
+	// Idempotent: loading again must not duplicate the appended settings.
+	loadConfig(dir)
+	if n := strings.Count(got(), "importMetadata="); n != 1 {
+		t.Errorf("append not idempotent: importMetadata appears %d times", n)
+	}
+}
 
 func TestLoadConfigSeedsDefaultOnFirstRun(t *testing.T) {
 	dir := t.TempDir()
@@ -23,6 +48,19 @@ func TestLoadConfigSeedsDefaultOnFirstRun(t *testing.T) {
 	// Re-loading the seeded file must yield the same defaults.
 	if again := loadConfig(dir); again.Port != defaultPort || again.AutoPort || !again.LanAccess {
 		t.Fatalf("reload of seeded file: got %+v, want defaults", again)
+	}
+}
+
+func TestLoadConfigImportMetadata(t *testing.T) {
+	dir := t.TempDir()
+	if cfg := loadConfig(dir); cfg.ImportMetadata {
+		t.Error("importMetadata should default to false")
+	}
+	if err := os.WriteFile(filepath.Join(dir, configFileName), []byte("importMetadata=true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if cfg := loadConfig(dir); !cfg.ImportMetadata {
+		t.Error("importMetadata=true was not parsed")
 	}
 }
 
