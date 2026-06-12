@@ -13,6 +13,16 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **Scoring page** — a new **🏆 Scoring** page (opened from the console) lets a
+  scorekeeper follow any screen and record a score per photo. Pick a screen to follow,
+  then flip through that category's photos independently of what the operator is
+  presenting (Prev / Next or ← / → arrows). A live indicator shows which photo the
+  operator is currently on, highlights when you're viewing that same photo, and a
+  **Jump to operator's photo** button snaps to it. The score you type is saved per
+  photo and shows up as a badge on the Upload / Reorder grid and pre-filled in the
+  **Score** column of the downloaded score-sheet PDF.
+
 ### Changed
 - **Output screens fill the window** — the judge-facing photo now scales up to the
   largest size that fits the window while keeping its aspect ratio (letterboxed with

@@ -150,7 +150,7 @@ Per screen row:
 
 Top of page:
    Black all     - instantly black every screen.
-   Close App     - stops the program when you're done (see #9).
+   Close App     - stops the program when you're done (see #10).
 
 The monitor not in use simply stays black on its own - there is
 nothing extra to switch off.
@@ -185,7 +185,35 @@ most recent session's categories, so your setup carries forward.
 
 
 ------------------------------------------------------------
- 8. LOGO  (optional)
+ 8. SCORING  ("Scoring" page)
+------------------------------------------------------------
+
+A scorekeeper can record a score for each photo while the
+operator runs the show. Click "Scoring" on the Console (it
+opens in its own tab, so one person can keep score while
+another presents).
+
+* FOLLOW A SCREEN: pick a screen at the top. The page shows
+  the photos from whatever that screen currently has loaded
+  (session / category / orientation).
+* FLIP INDEPENDENTLY: use Prev / Next (or the left/right arrow
+  keys) to move through the photos yourself - this does NOT
+  change what the judges see. You can score ahead of, or behind,
+  whatever the operator is presenting.
+* OPERATOR INDICATOR: a panel shows which photo the operator is
+  currently showing on that screen. When you're looking at the
+  same photo, it turns green ("You're viewing the operator's
+  current photo"). "Jump to operator's photo" snaps you to it.
+* ENTER A SCORE: type a score in the box and press Enter. It's
+  saved for that photo. Clear the box and press Enter to remove
+  it.
+* Scores show up as a green badge on the Upload / Reorder page
+  and are pre-filled into the Score column of the score-sheet
+  PDF (section 4 / the "Score sheet" button).
+
+
+------------------------------------------------------------
+ 9. LOGO  (optional)
 ------------------------------------------------------------
 
 To show a club logo above the category name on every title card,
@@ -196,7 +224,7 @@ No image in logo\  =  title cards show just the text.
 
 
 ------------------------------------------------------------
- 9. STOPPING THE APP
+ 10. STOPPING THE APP
 ------------------------------------------------------------
 
 Click "Close App" on the control page (recommended), or close
@@ -206,7 +234,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 10. GOOD TO KNOW
+ 11. GOOD TO KNOW
 ------------------------------------------------------------
 
 * Loading a category shows the TITLE CARD first - press Next to
@@ -219,7 +247,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 11. TROUBLESHOOTING
+ 12. TROUBLESHOOTING
 ------------------------------------------------------------
 
 A window didn't open / was blocked
@@ -246,7 +274,7 @@ Nothing happens / can't reach the page
 
 
 ------------------------------------------------------------
- 12. MOVING THE APP TO ANOTHER COMPUTER
+ 13. MOVING THE APP TO ANOTHER COMPUTER
 ------------------------------------------------------------
 
 The app runs from any folder and rebuilds anything missing.

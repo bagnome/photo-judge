@@ -181,21 +181,24 @@ func (p *pdfWriter) render() []byte {
 // ---- score-sheet layout ---------------------------------------------------
 
 // photoRow is one line of the score sheet: the displayed photo name (filename
-// without extension) and an optional operator-entered photographer name.
+// without extension), an optional operator-entered photographer name, and an
+// optional judge's score.
 type photoRow struct {
 	name         string
 	photographer string
+	score        string
 }
 
 // photoRows gathers the rows for one category/orientation in display order,
-// pairing each photo with its photographer name from the folder's names.json.
+// pairing each photo with its photographer name (names.json) and score (scores.json).
 func (s *server) photoRows(sid, cat, orient string) []photoRow {
 	dir := s.photosDir(sid, cat, orient)
 	files := s.photoFiles(sid, cat, orient)
 	names := loadNames(dir)
+	scores := loadScores(dir)
 	rows := make([]photoRow, len(files))
 	for i, f := range files {
-		rows[i] = photoRow{name: strings.TrimSuffix(f, filepath.Ext(f)), photographer: names[f]}
+		rows[i] = photoRow{name: strings.TrimSuffix(f, filepath.Ext(f)), photographer: names[f], score: scores[f]}
 	}
 	return rows
 }
@@ -248,6 +251,9 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 			p.text(nameX, p.y-16, "F1", 10, truncateToWidth(row.name, 10, nameColW))
 			if row.photographer != "" {
 				p.text(phX, p.y-16, "F1", 10, truncateToWidth(row.photographer, 10, phColW))
+			}
+			if row.score != "" {
+				p.text(scX, p.y-16, "F1", 10, truncateToWidth(row.score, 10, right-scX))
 			}
 			p.hline(left, right, p.y-rowH+3, 0.78, 0.5)
 			p.y -= rowH
