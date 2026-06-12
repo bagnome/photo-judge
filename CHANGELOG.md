@@ -14,6 +14,17 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Session archiving** — once a competition night is over, an **🗄 Archive Session**
+  button (shown on the console only for sessions whose date is in the past) saves that
+  session's record — photo titles, photographers, scores, categories, orientations, the
+  date, and the archive date — to a single JSON file under `archives\`, then
+  **permanently deletes the photo image files** to reclaim disk space. The session leaves
+  the console (it's read-only afterward). A confirmation dialog spells out that the photos
+  will be deleted and the session can't be changed; the action can't be undone. A new
+  **Archived Sessions** page (in the menu) lists every archived session and lets you
+  search by date range, session ID, photographer, or photo title, expand a session to see
+  its photos (sortable by any column), and download any session's archive as a printable
+  **PDF** report or as **JSON**. IDs are never reused, even after the photo folder is gone.
 - **Navigation side menu** — page-to-page links now live in a single collapsible menu
   pinned to the right edge of every control page, instead of being scattered across each
   page's top bar. Collapsed it's a slim rail of clickable page icons; expanded it shows

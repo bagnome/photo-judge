@@ -131,6 +131,12 @@ that workflow.
   code** button renders a scannable code (a small standard-library-only QR encoder, no
   third-party dependency) to open the control page on a phone instantly. The judges'
   output windows stay on the host machine.
+- **Session archiving** — when a competition night is over, archive its session: the
+  photo metadata (titles, photographers, scores, categories, orientations, dates) is saved
+  to `archives\<id>.json` and the **photo image files are permanently deleted** to reclaim
+  space. The session becomes read-only and leaves the console; archived sessions are
+  browsable on the **Archived Sessions** page (search by date range / session ID /
+  photographer / title) and downloadable as JSON.
 - **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
   Scoring, Getting Started) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
@@ -252,6 +258,7 @@ new sessions — copy to the local drive for an event).
 |------|------------|
 | `main.go` | The entire backend — HTTP server, sessions, screens, SSE, uploads (standard library only) |
 | `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
+| `archive.go` | Session archiving — write metadata JSON, delete photos, search archives |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |
@@ -259,6 +266,7 @@ new sessions — copy to the local drive for an event).
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |
 | `web/score.html` | Scoring page (follow a screen, record scores) |
+| `web/archived.html` | Archived Sessions page (search / view / download archives) |
 | `web/getting-started.html` | Illustrated Getting Started walkthrough |
 | `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |

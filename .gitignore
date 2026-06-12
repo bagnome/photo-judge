@@ -5,6 +5,7 @@
 # Runtime data and user content, created/managed by the app at run time
 /photos/
 /logo/
+/archives/
 /screens.json
 /applog.txt
 /photo-judge.properties

@@ -31,6 +31,7 @@ Nothing to install. Everything lives next to the program file.
 On first run the app creates these next to itself:
      photos\                  - where all photos are stored
      logo\                    - optional logo for the title cards
+     archives\                - records of archived sessions (see #9)
      categories.txt           - seed for the first session's categories
      photo-judge.properties   - settings you can change (see below)
 
@@ -224,7 +225,7 @@ Per screen row:
 
 Top of page:
    Black all     - instantly black every screen.
-   Close App     - stops the program when you're done (see #10).
+   Close App     - stops the program when you're done (see #11).
 
 The monitor not in use simply stays black on its own - there is
 nothing extra to switch off.
@@ -288,7 +289,52 @@ the menu's address / QR code, or section 1).
 
 
 ------------------------------------------------------------
- 9. LOGO  (optional)
+ 9. ARCHIVING SESSIONS  (saving records + freeing space)
+------------------------------------------------------------
+
+When a competition night is finished and you no longer need the
+actual photo files, you can ARCHIVE the session. This saves a
+permanent record of the session - the photo titles, photographers,
+scores, categories, orientations, the session date, and the date you
+archived it - to a file, and then DELETES the photo image files to
+free up disk space.
+
+HOW TO ARCHIVE
+   1. On the console, pick the session in the Session menu.
+   2. An  "🗄 Archive Session"  button appears next to it - but ONLY
+      for sessions whose date is in the past. (Today's or future
+      sessions can't be archived; finish the night first.)
+   3. Click it and confirm. The warning is important:
+        * the photo image files are PERMANENTLY DELETED (this is not
+          the recoverable "Delete" - the pictures are gone),
+        * the session becomes read-only and leaves the console,
+        * it cannot be undone.
+
+VIEWING ARCHIVED SESSIONS
+   Open  "Archived Sessions"  from the menu. Every archived session
+   is listed with its date, the date it was archived, its categories,
+   and how many photos it had.
+     * SEARCH by any combination of: date range, session ID,
+       photographer name, or photo title. (Searching a photographer
+       or title expands the matching photos and highlights the hits.)
+     * "Show photos" lists that session's photos with their category,
+       orientation, title, photographer and score. Click any column
+       heading to sort the list by it (click again to reverse).
+     * "⤓ PDF" downloads a printable report of the session; "⤓ JSON"
+       saves the raw record (handy for a spreadsheet or your own files).
+
+GOOD TO KNOW
+   * Archives are stored next to the program in an  archives\  folder,
+     one  <id>.json  file per session.
+   * Session ID numbers are never reused, so an archived session's
+     number won't be handed to a future session.
+   * Archiving only removes that session's CURRENT photos. If you want
+     to keep the pictures themselves, copy them out of  photos\
+     before archiving.
+
+
+------------------------------------------------------------
+ 10. LOGO  (optional)
 ------------------------------------------------------------
 
 To show a club logo above the category name on every title card,
@@ -299,7 +345,7 @@ No image in logo\  =  title cards show just the text.
 
 
 ------------------------------------------------------------
- 10. STOPPING THE APP
+ 11. STOPPING THE APP
 ------------------------------------------------------------
 
 Click "Close App" on the control page (recommended), or close
@@ -309,7 +355,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 11. GOOD TO KNOW
+ 12. GOOD TO KNOW
 ------------------------------------------------------------
 
 * Loading a category shows the TITLE CARD first - press Next to
@@ -322,7 +368,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 12. TROUBLESHOOTING
+ 13. TROUBLESHOOTING
 ------------------------------------------------------------
 
 A window didn't open / was blocked
@@ -370,7 +416,7 @@ Another device on the network can't open the page
 
 
 ------------------------------------------------------------
- 13. MOVING THE APP TO ANOTHER COMPUTER
+ 14. MOVING THE APP TO ANOTHER COMPUTER
 ------------------------------------------------------------
 
 The app runs from any folder and rebuilds anything missing.
@@ -381,6 +427,7 @@ To bring your existing content, copy the exe AND keep these in
 the same folder with it:
      photos\          (all sessions, photos, AND each session's
                        category setup - the main data)
+     archives\        (records of any archived sessions)
      logo\            (your logo)
      screens.json     (your saved screens)
      photo-judge.properties  (only if you changed the port; the
