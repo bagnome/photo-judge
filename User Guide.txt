@@ -89,6 +89,11 @@ CONTROLLING IT FROM ANOTHER DEVICE ON THE NETWORK  (optional)
        on the console for the current address.
      * This is for control only - it does not add judges' monitors.
        Open output windows still belong to the main computer.
+     * The pages are touch-friendly on a phone or tablet. On the
+       Upload / Reorder page, drag a photo by its "⠿ drag" grip to
+       reorder it (on a computer you can also just drag the photo).
+       "Open window" only appears on the main computer, since judges'
+       windows can't be opened from a phone.
 
 
 ------------------------------------------------------------

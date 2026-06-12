@@ -131,6 +131,11 @@ that workflow.
   code** button renders a scannable code (a small standard-library-only QR encoder, no
   third-party dependency) to open the control page on a phone instantly. The judges'
   output windows stay on the host machine.
+- **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
+  Scoring, Getting Started) is responsive and touch-friendly, so it works from a phone or
+  tablet: the console's screen table becomes one card per screen, panes stack, tap targets
+  grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
+  LAN remote control above.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---

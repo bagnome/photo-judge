@@ -14,6 +14,16 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Mobile-friendly control pages** — the operator console and the Upload/Reorder,
+  Manage categories, Scoring, and Getting Started pages are now responsive, so the show
+  can be run from a phone or tablet (handy with the LAN remote-control address). Each page
+  declares a mobile viewport; on a narrow screen the console's screen table reflows into
+  one labelled card per screen, the category panes and the scoring stage/panel stack
+  vertically, tap targets grow, and text inputs use a 16px font so phones don't zoom on
+  focus. Photo reordering on the Upload page was reworked to use pointer events: grab a
+  tile anywhere with a mouse, or use the new **⠿ drag** grip on a touchscreen (so swiping
+  elsewhere still scrolls). Controls that only work on the host computer (opening a judge
+  window) are hidden on touch devices. The judge **output** display is unchanged.
 - **Scoring page** — a new **🏆 Scoring** page (opened from the console) lets a
   scorekeeper follow any screen and record a score per photo. Pick a screen to follow,
   then flip through that category's photos independently of what the operator is
