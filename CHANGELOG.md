@@ -14,6 +14,16 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Import photographer / title from photo metadata** — with `importMetadata=true` in
+  `photo-judge.properties` (off by default), uploading a photo reads its embedded
+  metadata: an EXIF/PNG **artist/author** value is filled in as the photographer, and a
+  **title** value is used as the photo's on-screen name (its filename) instead of the
+  original filename. Anything missing falls back to the usual behavior, and the
+  photographer can still be edited by hand. JPEG (EXIF `Artist`/`ImageDescription` and the
+  Windows `XPAuthor`/`XPTitle` tags) and PNG (`tEXt`/`zTXt`/`iTXt` `Author`/`Title`)
+  are read with the standard library only. (On startup the app now also appends any
+  newly-added settings to an existing `photo-judge.properties`, so upgrading picks up new
+  options without deleting the file or losing your edits.)
 - **Session archiving** — once a competition night is over, an **🗄 Archive Session**
   button (shown on the console only for sessions whose date is in the past) saves that
   session's record — photo titles, photographers, scores, categories, orientations, the
