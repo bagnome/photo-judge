@@ -2,7 +2,6 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Photo Judge — Categories</title>
 <style>
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
@@ -10,7 +9,7 @@
  header a{color:#7fa9f0;text-decoration:none;font-weight:500;font-size:13px}
  .bar{padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #333}
  label{color:#9aa0a6;font-size:13px}
- select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
+ select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
  button{cursor:pointer}
  button:hover{background:#363a42}
  button:disabled{opacity:.4;cursor:not-allowed}
@@ -43,19 +42,10 @@
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
  .toast.show{opacity:1;transform:none}
  .toast.del{background:#a83232}
- @media (max-width:760px){
-   header{flex-wrap:wrap;gap:10px}
-   select,input,button{font-size:16px;padding:9px 12px} /* 16px avoids iOS zoom-on-focus */
-   .panes{flex-direction:column;gap:12px}
-   .pane{max-height:none;width:100%}
-   .list{max-height:46vh}
-   .item{padding:11px 12px} /* bigger tap target */
-   .actions button{flex:1 1 auto;min-height:44px}
- }
 </style>
 </head>
 <body>
-<header>Photo Judge — Categories</header>
+<header>Photo Judge — Categories <a href="/">← Console</a> <a href="/admin">▤ Upload / Reorder</a></header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <span class="note">Categories are per session. The <b>Active</b> order sets the console dropdowns and the score-sheet PDF. A new session inherits the latest session's setup.</span>
@@ -229,6 +219,5 @@ $('session').addEventListener('change', loadDetail);
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
-<script src="/nav.js"></script>
 </body>
 </html>

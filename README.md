@@ -50,7 +50,7 @@ that workflow.
 ```
             ┌──────────────────────────────┐
             │  photo-judge.exe             │   one static binary
-            │  ├─ local web server         │   http://127.0.0.1 (port 80)
+            │  ├─ local web server         │   http://127.0.0.1:8753
             │  └─ embedded HTML/JS/CSS     │   (go:embed)
             └──────────────┬───────────────┘
                            │  Server-Sent Events (live)
@@ -109,39 +109,16 @@ that workflow.
   the rest), plus a global **Black all**.
 - **Optional title-card logo** — drop one image in `logo\` and it appears above the
   category name on every title card.
-- **Scorekeeping** — a **🏆 Scoring** page (opened from the console) lets a
-  scorekeeper follow any screen and record a score per photo. They flip through the
-  category independently of what the operator is presenting (Prev/Next or ←/→), with a
-  live indicator of which photo the operator is on, a highlight when both are on the
-  same photo, and a **Jump to operator's photo** shortcut. Scores are saved per photo
-  and surface as a badge on the Upload / Reorder grid and pre-filled in the score-sheet
-  PDF.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
-  for the selected session: a section per category (in the session's category order),
+  for the selected session: a section per category (in `categories.txt` order),
   Landscape before Portrait, one row per photo in display order with the photo name
-  and blank spaces for the photographer name and a score. Any photographer names and
-  judge scores already recorded are pre-filled. Generated in-process with the standard
+  and blank spaces for the photographer name and a score. Any photographer names
+  recorded on the upload page are pre-filled. Generated in-process with the standard
   library only — no PDF dependency.
 - **Getting Started guide** — an in-app, illustrated walkthrough (a **Getting Started**
   button on the console) that takes a new operator from creating a session through to
   presenting, with a screenshot for each step. Its images are embedded in the exe, so it
   works offline on a copied build.
-- **LAN remote control** — the console shows the computer's LAN address so the show can
-  be driven from a second laptop, phone, or tablet on the same network, and a **Show QR
-  code** button renders a scannable code (a small standard-library-only QR encoder, no
-  third-party dependency) to open the control page on a phone instantly. The judges'
-  output windows stay on the host machine.
-- **Session archiving** — when a competition night is over, archive its session: the
-  photo metadata (titles, photographers, scores, categories, orientations, dates) is saved
-  to `archives\<id>.json` and the **photo image files are permanently deleted** to reclaim
-  space. The session becomes read-only and leaves the console; archived sessions are
-  browsable on the **Archived Sessions** page (search by date range / session ID /
-  photographer / title) and downloadable as JSON.
-- **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
-  Scoring, Getting Started) is responsive and touch-friendly, so it works from a phone or
-  tablet: the console's screen table becomes one card per screen, panes stack, tap targets
-  grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
-  LAN remote control above.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -179,15 +156,14 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
      because the exe isn't code-signed → **More info → Run anyway** (one time).
 2. A small command window opens **and** your browser opens to the operator console
    automatically. Leave the command window open while you use the app (closing it
-   stops the server). If the tab didn't open, browse to **http://127.0.0.1**.
+   stops the server). If the tab didn't open, browse to **http://127.0.0.1:8753**.
 3. On first run the app creates, next to itself:
 
    ```
    photo-judge.exe
-   categories.txt          ← the editable category list (seeded with defaults)
-   photo-judge.properties  ← settings (port / autoPort), seeded with defaults
-   logo\                   ← optional: drop one image here for the title cards
-   photos\                 ← all session photos live here
+   categories.txt        ← the editable category list (seeded with defaults)
+   logo\                 ← optional: drop one image here for the title cards
+   photos\               ← all session photos live here
      001\                ← a session (stable sequential ID)
        session.json      ← { id, date, created, categories[] }
        Pictorial\
@@ -197,17 +173,8 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
    screens.json          ← saved output-window definitions (state)
    ```
 
-By default the server listens on **port 80** (so the console is just
-`http://127.0.0.1`). Edit `photo-judge.properties` to change it — set `port=…` for a
-fixed port, or `autoPort=true` to let the OS assign any free one (the command window
-prints the chosen address). For development, the `PHOTOJUDGE_PORT` environment
-variable overrides the file.
-
-By default the server binds to all interfaces so other devices on the LAN can reach
-the console (see the **LAN remote control** feature); the operator's own browser is
-still opened at `http://127.0.0.1`, a secure context that keeps the Window Management
-API working. Set `lanAccess=false` in `photo-judge.properties` to bind to loopback
-only (this computer only).
+The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
+(default `8753`).
 
 Double-clicking the exe again while it's already running won't start a second copy
 — it detects the running instance and just reopens the console pointing at it. If
@@ -257,20 +224,13 @@ new sessions — copy to the local drive for an event).
 | Path | What it is |
 |------|------------|
 | `main.go` | The entire backend — HTTP server, sessions, screens, SSE, uploads (standard library only) |
-| `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
-| `archive.go` | Session archiving — write metadata JSON, delete photos, search archives |
-| `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
-| `web/nav.js` | Shared right-side navigation menu injected into every control page |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |
-| `web/score.html` | Scoring page (follow a screen, record scores) |
-| `web/archived.html` | Archived Sessions page (search / view / download archives) |
 | `web/getting-started.html` | Illustrated Getting Started walkthrough |
 | `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
-| `photo-judge.properties` | Runtime settings (port / autoPort), seeded on first run |
 | `User Guide.txt` | End-user (operator) guide |
 | `CHANGELOG.md` | Release history |
 | `VERSION` | Current version (single source of truth, embedded into the exe) |

@@ -175,14 +175,6 @@ type server struct {
 	// while this one is running; the console shows an "update available" banner.
 	newerVersion string
 
-	// port is the TCP port the server actually bound to (set once at startup). Used
-	// to build the LAN URLs shown on the console for remote control.
-	port string
-
-	// lanAccess mirrors the config flag: when false the server is bound to loopback
-	// only, so the console hides the LAN bar.
-	lanAccess bool
-
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
 }
@@ -390,29 +382,22 @@ func (s *server) scanSessions() {
 	log.Printf("loaded %d existing session(s)", len(sess))
 }
 
-// nextID = max-ever + 1, counting soft-deleted AND archived sessions, so IDs are
-// never reused even after an archived session's photo folder has been removed.
+// nextID = max-ever + 1, counting soft-deleted sessions, so IDs are never reused.
 func (s *server) nextID() string {
 	max := 0
-	bump := func(name string) {
-		if n, err := strconv.Atoi(name); err == nil && n > max {
-			max = n
-		}
-	}
-	checkDirs := func(dir string) {
+	check := func(dir string) {
 		entries, _ := os.ReadDir(dir)
 		for _, e := range entries {
-			if e.IsDir() {
-				bump(e.Name())
+			if !e.IsDir() {
+				continue
+			}
+			if n, err := strconv.Atoi(e.Name()); err == nil && n > max {
+				max = n
 			}
 		}
 	}
-	checkDirs(filepath.Join(s.baseDir, "photos"))
-	checkDirs(filepath.Join(s.baseDir, "photos", "_deleted"))
-	// Archived sessions live only as archives/<id>.json — the photo folders are gone.
-	for _, e := range readDirNames(s.archivesDir()) {
-		bump(strings.TrimSuffix(e, ".json"))
-	}
+	check(filepath.Join(s.baseDir, "photos"))
+	check(filepath.Join(s.baseDir, "photos", "_deleted"))
 	return fmt.Sprintf("%03d", max+1)
 }
 
@@ -1073,7 +1058,7 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := s.photosDir(sid, cat, orient)
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir)})
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir)})
 }
 
 // handlePhotoName sets (or clears, when name is empty) the photographer associated
@@ -1098,33 +1083,6 @@ func (s *server) handlePhotoName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	w.WriteHeader(204)
-}
-
-// handlePhotoScore sets (or, when score is empty, clears) the score for one photo,
-// persisted to the folder's scores.json. It pushes the console so the Upload /
-// Reorder grid (which refreshes from the console stream) shows the new score.
-func (s *server) handlePhotoScore(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Session, Category, Orientation, File, Score string }
-	if decode(r, &body) != nil {
-		http.Error(w, "bad body", 400)
-		return
-	}
-	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
-		http.Error(w, "bad names", 400)
-		return
-	}
-	dir := s.photosDir(body.Session, body.Category, body.Orientation)
-	base := filepath.Base(body.File)
-	if _, err := os.Stat(filepath.Join(dir, base)); err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if err := setScore(dir, base, body.Score); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	s.pushConsole()
 	w.WriteHeader(204)
 }
 
@@ -1365,7 +1323,6 @@ func (s *server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	removeFromOrder(dir, base)
 	removeFromNames(dir, base)
-	removeFromScores(dir, base)
 	log.Printf("photo soft-deleted: %s -> %s", src, dest)
 	writeJSON(w, map[string]any{"files": s.photoFiles(body.Session, body.Category, body.Orientation)})
 }
@@ -1417,56 +1374,6 @@ func removeFromNames(dir, file string) {
 	}
 	delete(m, file)
 	_ = writeNames(dir, m)
-}
-
-// scores.json maps a photo's filename to a judge's score, kept per orientation
-// folder alongside order.json/names.json. Scores are entered on the Scoring page
-// and surface on the Upload / Reorder grid and the Score column of the PDF. A score
-// is stored as a free-form string (a number like "8.5", but anything short is fine).
-
-func loadScores(dir string) map[string]string {
-	m := map[string]string{}
-	data, err := os.ReadFile(filepath.Join(dir, "scores.json"))
-	if err != nil {
-		return m
-	}
-	_ = json.Unmarshal(data, &m)
-	if m == nil {
-		m = map[string]string{}
-	}
-	return m
-}
-
-func writeScores(dir string, m map[string]string) error {
-	b, _ := json.MarshalIndent(m, "", "  ")
-	return os.WriteFile(filepath.Join(dir, "scores.json"), b, 0o644)
-}
-
-// setScore records (or, when score is blank, clears) the score for one file.
-func setScore(dir, file, score string) error {
-	m := loadScores(dir)
-	score = strings.TrimSpace(score)
-	if len(score) > 32 {
-		score = score[:32]
-	}
-	if score == "" {
-		if _, ok := m[file]; !ok {
-			return nil
-		}
-		delete(m, file)
-	} else {
-		m[file] = score
-	}
-	return writeScores(dir, m)
-}
-
-func removeFromScores(dir, file string) {
-	m := loadScores(dir)
-	if _, ok := m[file]; !ok {
-		return
-	}
-	delete(m, file)
-	_ = writeScores(dir, m)
 }
 
 func removeFromOrder(dir, name string) {
@@ -1597,82 +1504,6 @@ func (s *server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	s.shutdownOnce.Do(func() { close(s.shutdownCh) })
 }
 
-// lanURLs returns the http URLs by which this server can be reached from other
-// machines on the LAN — one per usable non-loopback IPv4 address. The port is
-// omitted when it's the default 80, so the URL is as short as possible.
-func (s *server) lanURLs() []string {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-	var urls []string
-	for _, iface := range ifaces {
-		// Skip interfaces that are down or loopback.
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			ipnet, ok := a.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			ip := ipnet.IP.To4()
-			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-				continue // IPv4 only; skip 169.254.x.x auto-config addresses
-			}
-			host := ip.String()
-			if s.port == "80" || s.port == "" {
-				urls = append(urls, "http://"+host)
-			} else {
-				urls = append(urls, "http://"+host+":"+s.port)
-			}
-		}
-	}
-	return urls
-}
-
-// handleNetInfo reports the LAN URLs and port so the console can show the operator
-// how a second machine can reach the app.
-func (s *server) handleNetInfo(w http.ResponseWriter, r *http.Request) {
-	host, _ := os.Hostname()
-	var urls []string
-	if s.lanAccess {
-		urls = s.lanURLs()
-	}
-	writeJSON(w, map[string]any{
-		"hostname":  host,
-		"port":      s.port,
-		"lanAccess": s.lanAccess,
-		"urls":      urls,
-	})
-}
-
-// handleQR renders the ?data= text as a QR-code PNG (stdlib-only encoder, see
-// qr.go). Used by the console's "connect over LAN" modal.
-func (s *server) handleQR(w http.ResponseWriter, r *http.Request) {
-	data := r.URL.Query().Get("data")
-	if data == "" {
-		http.Error(w, "missing data", http.StatusBadRequest)
-		return
-	}
-	if len(data) > 200 {
-		http.Error(w, "data too long", http.StatusBadRequest)
-		return
-	}
-	png, err := qrPNGForText(data, 8, 4)
-	if err != nil {
-		http.Error(w, "could not encode QR: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write(png)
-}
-
 // ---- helpers --------------------------------------------------------------
 
 func decode(r *http.Request, v any) error { return json.NewDecoder(r.Body).Decode(v) }
@@ -1771,14 +1602,7 @@ func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 		http.Error(w, "not found", 404)
 		return
 	}
-	ct := "text/html; charset=utf-8"
-	switch {
-	case strings.HasSuffix(name, ".js"):
-		ct = "application/javascript; charset=utf-8"
-	case strings.HasSuffix(name, ".css"):
-		ct = "text/css; charset=utf-8"
-	}
-	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write(data)
 }
 
@@ -1803,9 +1627,6 @@ func main() {
 	if err := os.MkdirAll(filepath.Join(baseDir, "logo"), 0o755); err != nil {
 		log.Printf("note: could not create logo folder: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(baseDir, "archives"), 0o755); err != nil {
-		log.Printf("note: could not create archives folder: %v", err)
-	}
 	s.loadCategories()
 	s.scanSessions()
 	s.scanLogo()
@@ -1824,20 +1645,13 @@ func main() {
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
-	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
-	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
-	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
-	mux.HandleFunc("/api/session/archive", s.handleSessionArchive)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
-	mux.HandleFunc("/api/archives", s.handleArchivesList)
-	mux.HandleFunc("/api/archive/download", s.handleArchiveDownload)
-	mux.HandleFunc("/api/archive/pdf", s.handleArchivePDF)
 	mux.HandleFunc("/api/session/categories", s.handleSessionCategories)
 	mux.HandleFunc("/api/session/category/add", s.handleCategoryAdd)
 	mux.HandleFunc("/api/session/category/activate", s.handleCategoryActivate)
@@ -1856,63 +1670,33 @@ func main() {
 	mux.HandleFunc("/api/order", s.handleOrderSet)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
 	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
-	mux.HandleFunc("/api/photo/score", s.handlePhotoScore)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
-	mux.HandleFunc("/api/netinfo", s.handleNetInfo)
-	mux.HandleFunc("/api/qr", s.handleQR)
 
-	// Resolve the listen port: photo-judge.properties (default 80, or a free port
-	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
-	cfg := loadConfig(baseDir)
-	port := strconv.Itoa(cfg.Port)
-	if cfg.AutoPort {
-		port = "0" // let the OS pick any free port
+	port := os.Getenv("PHOTOJUDGE_PORT")
+	if port == "" {
+		port = "8753"
 	}
-	if env := os.Getenv("PHOTOJUDGE_PORT"); env != "" {
-		port = env
-	}
-	// Bind to all interfaces (0.0.0.0) when LAN access is allowed, so other devices
-	// on the network — and this machine's own LAN IP — can reach the console; bind to
-	// loopback only when it's turned off. Either way the operator's own browser is
-	// opened at 127.0.0.1, a secure context that keeps the Window Management API working.
-	s.lanAccess = cfg.LanAccess
-	host := "127.0.0.1"
-	if cfg.LanAccess {
-		host = "0.0.0.0"
-	}
-	addr := host + ":" + port
-	loopAddr := "127.0.0.1:" + port // how a second launch / the local browser reaches us
-	reqURL := "http://" + loopAddr + "/"
+	addr := "127.0.0.1:" + port
+	u := "http://" + addr + "/"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
 	// raw "address in use" error. A second double-click thus just opens the console.
-	// (With autoPort the bind can't collide, so this hand-off only applies to a
-	// fixed port.)
 	ln, lerr := net.Listen("tcp", addr)
 	if lerr != nil {
-		if running, runningVer := probeRunning(loopAddr); running {
-			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", reqURL)
+		if running, runningVer := probeRunning(addr); running {
+			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", u)
 			if newerVer(appVersion, runningVer) {
-				reportVersion(loopAddr) // make the running console show an update banner
+				reportVersion(addr) // make the running console show an update banner
 				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
 				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
 			}
-			openBrowser(reqURL)
+			openBrowser(u)
 			os.Exit(0)
 		}
-		log.Fatalf("could not start Photo Judge on %s: %v\n"+
-			"If another program is using this port, edit %s (change \"port\" or set autoPort=true) and restart.",
-			addr, lerr, configFileName)
+		log.Fatalf("could not start Photo Judge on %s: %v", addr, lerr)
 	}
-
-	// Read the real port back from the listener — with autoPort (port 0) the OS chose
-	// it — and always point the local browser at loopback (a secure context).
-	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
-		s.port = strconv.Itoa(tcp.Port)
-	}
-	u := "http://127.0.0.1:" + s.port + "/"
 
 	srv := &http.Server{Handler: mux}
 	go func() {
