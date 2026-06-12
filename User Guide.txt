@@ -24,12 +24,25 @@ Nothing to install. Everything lives next to the program file.
      * Leave the command window open while you use the app
        (you can minimize it). Closing it stops the app.
      * If the browser didn't open, or you closed the tab, just
-       go to:   http://127.0.0.1:8753
+       go to:   http://127.0.0.1
+       (If you changed the port - see below - add it, e.g.
+        http://127.0.0.1:8753 .)
 
 On first run the app creates these next to itself:
-     photos\          - where all photos are stored
-     logo\            - optional logo for the title cards
-     categories.txt   - seed for the first session's categories
+     photos\                  - where all photos are stored
+     logo\                    - optional logo for the title cards
+     categories.txt           - seed for the first session's categories
+     photo-judge.properties   - settings you can change (see below)
+
+CHANGING THE PORT  (optional)
+   By default the app listens on port 80, so the control page is at
+   http://127.0.0.1 . If something else on the computer already uses
+   port 80, open  photo-judge.properties  in Notepad and either:
+     * set a different number, e.g.   port=8753   (then use
+       http://127.0.0.1:8753 ), or
+     * set   autoPort=true   to let the app pick any free port for
+       you (the command window prints the address it chose).
+   Save the file and restart the app for changes to take effect.
 
 
 ------------------------------------------------------------
@@ -242,7 +255,13 @@ The app won't start (security warning)
 
 Nothing happens / can't reach the page
    Make sure the command window is still open, and visit
-   http://127.0.0.1:8753 in your browser.
+   http://127.0.0.1 in your browser (or http://127.0.0.1:PORT if
+   you set a custom "port" in photo-judge.properties).
+
+"could not start ... port" in the command window
+   Another program is using the port. Open photo-judge.properties,
+   change "port" to a free number (e.g. 8753) or set autoPort=true,
+   save, and restart.
 
 
 ------------------------------------------------------------
@@ -259,6 +278,8 @@ the same folder with it:
                        category setup - the main data)
      logo\            (your logo)
      screens.json     (your saved screens)
+     photo-judge.properties  (only if you changed the port; the
+                              new computer makes its own otherwise)
 
 (categories.txt only seeds a brand-new first session, so you
 don't need to copy it once you have sessions.)

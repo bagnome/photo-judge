@@ -1673,30 +1673,44 @@ func main() {
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 
-	port := os.Getenv("PHOTOJUDGE_PORT")
-	if port == "" {
-		port = "8753"
+	// Resolve the listen port: photo-judge.properties (default 80, or a free port
+	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
+	cfg := loadConfig(baseDir)
+	port := strconv.Itoa(cfg.Port)
+	if cfg.AutoPort {
+		port = "0" // let the OS pick any free port
+	}
+	if env := os.Getenv("PHOTOJUDGE_PORT"); env != "" {
+		port = env
 	}
 	addr := "127.0.0.1:" + port
-	u := "http://" + addr + "/"
+	reqURL := "http://" + addr + "/"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
 	// raw "address in use" error. A second double-click thus just opens the console.
+	// (With autoPort the bind can't collide, so this hand-off only applies to a
+	// fixed port.)
 	ln, lerr := net.Listen("tcp", addr)
 	if lerr != nil {
 		if running, runningVer := probeRunning(addr); running {
-			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", u)
+			fmt.Printf("Photo Judge is already running. Opening the console at %s\n", reqURL)
 			if newerVer(appVersion, runningVer) {
 				reportVersion(addr) // make the running console show an update banner
 				fmt.Printf("\nHeads up: the copy you just launched is v%s, but the running app is v%s.\n", appVersion, runningVer)
 				fmt.Printf("To update, click \"Close App\" in the running Photo Judge, then start it again.\n")
 			}
-			openBrowser(u)
+			openBrowser(reqURL)
 			os.Exit(0)
 		}
-		log.Fatalf("could not start Photo Judge on %s: %v", addr, lerr)
+		log.Fatalf("could not start Photo Judge on %s: %v\n"+
+			"If another program is using this port, edit %s (change \"port\" or set autoPort=true) and restart.",
+			addr, lerr, configFileName)
 	}
+
+	// Use the listener's real address for the URL — with autoPort (port 0) the OS
+	// chose the actual port, so read it back rather than trusting the requested one.
+	u := "http://" + ln.Addr().String() + "/"
 
 	srv := &http.Server{Handler: mux}
 	go func() {

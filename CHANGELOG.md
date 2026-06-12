@@ -14,6 +14,13 @@ not yet released.
 ## [Unreleased]
 
 ### Changed
+- **Default port is now 80, with a settings file** — Photo Judge listens on port `80`
+  by default, so the control page is simply `http://127.0.0.1` (no port number to
+  remember). A new `photo-judge.properties` file is created next to the exe on first run
+  where the port can be changed (`port=…`) or handed to the app to choose automatically
+  (`autoPort=true` finds any free port). The file is plain text with comments; a leading
+  byte-order mark from editors like Notepad is tolerated. (`PHOTOJUDGE_PORT` still
+  overrides for development.)
 - **Output screens fill the window** — the judge-facing photo now scales up to the
   largest size that fits the window while keeping its aspect ratio (letterboxed with
   black bars), instead of being capped at the image's native size. Small photos no

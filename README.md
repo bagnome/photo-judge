@@ -50,7 +50,7 @@ that workflow.
 ```
             ┌──────────────────────────────┐
             │  photo-judge.exe             │   one static binary
-            │  ├─ local web server         │   http://127.0.0.1:8753
+            │  ├─ local web server         │   http://127.0.0.1 (port 80)
             │  └─ embedded HTML/JS/CSS     │   (go:embed)
             └──────────────┬───────────────┘
                            │  Server-Sent Events (live)
@@ -156,14 +156,15 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
      because the exe isn't code-signed → **More info → Run anyway** (one time).
 2. A small command window opens **and** your browser opens to the operator console
    automatically. Leave the command window open while you use the app (closing it
-   stops the server). If the tab didn't open, browse to **http://127.0.0.1:8753**.
+   stops the server). If the tab didn't open, browse to **http://127.0.0.1**.
 3. On first run the app creates, next to itself:
 
    ```
    photo-judge.exe
-   categories.txt        ← the editable category list (seeded with defaults)
-   logo\                 ← optional: drop one image here for the title cards
-   photos\               ← all session photos live here
+   categories.txt          ← the editable category list (seeded with defaults)
+   photo-judge.properties  ← settings (port / autoPort), seeded with defaults
+   logo\                   ← optional: drop one image here for the title cards
+   photos\                 ← all session photos live here
      001\                ← a session (stable sequential ID)
        session.json      ← { id, date, created, categories[] }
        Pictorial\
@@ -173,8 +174,11 @@ GOOS=windows GOARCH=amd64 go build -o photo-judge.exe .
    screens.json          ← saved output-window definitions (state)
    ```
 
-The port can be overridden with the `PHOTOJUDGE_PORT` environment variable
-(default `8753`).
+By default the server listens on **port 80** (so the console is just
+`http://127.0.0.1`). Edit `photo-judge.properties` to change it — set `port=…` for a
+fixed port, or `autoPort=true` to let the OS assign any free one (the command window
+prints the chosen address). For development, the `PHOTOJUDGE_PORT` environment
+variable overrides the file.
 
 Double-clicking the exe again while it's already running won't start a second copy
 — it detects the running instance and just reopens the console pointing at it. If
@@ -224,6 +228,7 @@ new sessions — copy to the local drive for an event).
 | Path | What it is |
 |------|------------|
 | `main.go` | The entire backend — HTTP server, sessions, screens, SSE, uploads (standard library only) |
+| `config.go` | Reads `photo-judge.properties` (port / autoPort) at startup |
 | `web/console.html` | Operator console (private control surface) |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
@@ -231,6 +236,7 @@ new sessions — copy to the local drive for an event).
 | `web/getting-started.html` | Illustrated Getting Started walkthrough |
 | `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
+| `photo-judge.properties` | Runtime settings (port / autoPort), seeded on first run |
 | `User Guide.txt` | End-user (operator) guide |
 | `CHANGELOG.md` | Release history |
 | `VERSION` | Current version (single source of truth, embedded into the exe) |

@@ -7,6 +7,7 @@
 /logo/
 /screens.json
 /applog.txt
+/photo-judge.properties
 
 # Image files — never commit test photos or logos, wherever they land
 *.jpg
