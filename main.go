@@ -179,13 +179,17 @@ type server struct {
 	// to build the LAN URLs shown on the console for remote control.
 	port string
 
-	// lanAccess mirrors the config flag: when false the server is bound to loopback
-	// only, so the console hides the LAN bar.
+	// lanAccess is the EFFECTIVE value the server bound with (properties AND settings).
+	// When false the server is bound to loopback only and the console hides the LAN bar.
 	lanAccess bool
 
-	// importMetadata mirrors the config flag: when true, uploads fill the
-	// photographer (and use the embedded title as the filename) from image metadata.
-	importMetadata bool
+	// propsLanAccess / propsImportMetadata are the properties-file values. They act as
+	// a ceiling over the matching Settings fields (a "false" here wins).
+	propsLanAccess      bool
+	propsImportMetadata bool
+
+	// settings holds the operator-tunable options (settings.json), guarded by mu.
+	settings Settings
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -301,7 +305,8 @@ func (s *server) consoleSnapshot() []byte {
 		Sessions     []*Session `json:"sessions"`
 		Categories   []string   `json:"categories"`
 		Screens      []*Screen  `json:"screens"`
-	}{appVersion, s.newerVersion, s.sessions, s.categories, screens}
+		Settings     Settings   `json:"settings"`
+	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -337,37 +342,30 @@ func (s *server) loadCategories() {
 	s.categories = cats
 }
 
-// scanLogo finds an optional brand logo to show on title cards. Any image dropped
-// into the logo\ folder is used (first by name); detected once at startup.
-func (s *server) scanLogo() {
-	dir := filepath.Join(s.baseDir, "logo")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	var found []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if imageExts[strings.ToLower(filepath.Ext(e.Name()))] {
-			found = append(found, e.Name())
-		}
-	}
-	if len(found) == 0 {
-		return
-	}
-	sort.Strings(found)
-	s.logoFile = filepath.Join(dir, found[0])
-	log.Printf("logo: showing %s on title cards", found[0])
-}
-
+// handleLogo serves the active title-card logo, or a specific one from the library
+// when ?file=<name> is given (used by the Settings page gallery).
 func (s *server) handleLogo(w http.ResponseWriter, r *http.Request) {
-	if s.logoFile == "" {
+	if name := r.URL.Query().Get("file"); name != "" {
+		if !safeName(name) {
+			http.Error(w, "bad file", 400)
+			return
+		}
+		path := filepath.Join(s.logoDir(), name)
+		if _, err := os.Stat(path); err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, path)
+		return
+	}
+	s.mu.Lock()
+	lf := s.logoFile
+	s.mu.Unlock()
+	if lf == "" {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, s.logoFile)
+	http.ServeFile(w, r, lf)
 }
 
 func (s *server) scanSessions() {
@@ -1020,13 +1018,24 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown action", 400)
 		return
 	}
+	// "Only one live screen" setting: revealing a screen blacks out all the others,
+	// so the rest never show at once (same effect as Make live, applied automatically).
+	revealedOthers := false
+	if !sc.Blackout && s.settings.SingleLiveScreen {
+		for n, other := range s.screens {
+			if n != sc.Name {
+				other.Blackout = true
+			}
+		}
+		revealedOthers = true
+	}
 	var names []string
 	for n := range s.screens {
 		names = append(names, n)
 	}
 	s.mu.Unlock()
 
-	if body.Action == "makelive" {
+	if body.Action == "makelive" || revealedOthers {
 		for _, n := range names {
 			s.pushScreen(n)
 		}
@@ -1158,6 +1167,10 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		File        string `json:"file"`
 		Orientation string `json:"orientation"`
 	}
+	s.mu.Lock()
+	wantPhotographer := s.effImportPhotographer()
+	wantTitle := s.effImportTitle()
+	s.mu.Unlock()
 	var saved []savedItem
 	var skipped []string
 	added := map[string][]string{} // orientation -> filenames, for per-folder order.json
@@ -1175,12 +1188,16 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		orient := orientationOf(f, base) // reads dimensions, then seeks f back to start
 
 		// Optionally pull the title (used as the saved filename) and photographer
-		// from the photo's embedded metadata. Anything missing keeps the defaults.
+		// from the photo's embedded metadata. Each is gated separately (properties
+		// importMetadata AND the matching Settings toggle); anything off/missing keeps
+		// the defaults.
 		var photographer string
-		if s.importMetadata {
+		if wantPhotographer || wantTitle {
 			title, ph := imageMetadata(f, base) // seeks f, rewinds to start
-			photographer = ph
-			if title != "" {
+			if wantPhotographer {
+				photographer = ph
+			}
+			if wantTitle && title != "" {
 				if n := sanitizeUploadName(title, filepath.Ext(base)); n != "" {
 					base = n
 				}
@@ -1800,6 +1817,9 @@ func serveAsset(w http.ResponseWriter, sub fs.FS, name string) {
 		ct = "text/css; charset=utf-8"
 	}
 	w.Header().Set("Content-Type", ct)
+	// Always revalidate so an upgraded build's pages/scripts aren't served stale from
+	// the browser cache (it's all localhost, so there's no real bandwidth cost).
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(data)
 }
 
@@ -1829,7 +1849,8 @@ func main() {
 	}
 	s.loadCategories()
 	s.scanSessions()
-	s.scanLogo()
+	s.loadSettings()
+	s.refreshLogo() // resolve the active logo (settings + logo\ contents)
 	s.loadScreens()
 
 	sub, _ := fs.Sub(webFS, "web")
@@ -1847,6 +1868,7 @@ func main() {
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
 	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
 	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
+	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "settings.html") })
 	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
@@ -1884,11 +1906,16 @@ func main() {
 	mux.HandleFunc("/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("/api/netinfo", s.handleNetInfo)
 	mux.HandleFunc("/api/qr", s.handleQR)
+	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/logo/upload", s.handleLogoUpload)
+	mux.HandleFunc("/api/logo/delete", s.handleLogoDelete)
 
 	// Resolve the listen port: photo-judge.properties (default 80, or a free port
 	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
 	cfg := loadConfig(baseDir)
-	s.importMetadata = cfg.ImportMetadata
+	// The properties values gate the matching Settings (a "false" in properties wins).
+	s.propsLanAccess = cfg.LanAccess
+	s.propsImportMetadata = cfg.ImportMetadata
 	port := strconv.Itoa(cfg.Port)
 	if cfg.AutoPort {
 		port = "0" // let the OS pick any free port
@@ -1900,9 +1927,10 @@ func main() {
 	// on the network — and this machine's own LAN IP — can reach the console; bind to
 	// loopback only when it's turned off. Either way the operator's own browser is
 	// opened at 127.0.0.1, a secure context that keeps the Window Management API working.
-	s.lanAccess = cfg.LanAccess
+	// LAN access is the effective value: properties AND the Settings toggle.
+	s.lanAccess = s.effLanAccess()
 	host := "127.0.0.1"
-	if cfg.LanAccess {
+	if s.lanAccess {
 		host = "0.0.0.0"
 	}
 	addr := host + ":" + port

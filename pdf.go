@@ -179,6 +179,53 @@ func (p *pdfWriter) render() []byte {
 	return out.Bytes()
 }
 
+// ---- shared title block ---------------------------------------------------
+
+// wrapToLines word-wraps s to at most maxLines lines that each fit maxW at the given
+// font size; overflow words are dropped and each line is width-clamped as a safety net.
+func wrapToLines(s string, size, maxW float64, maxLines int) []string {
+	var lines []string
+	cur := ""
+	for _, w := range strings.Fields(s) {
+		cand := strings.TrimSpace(cur + " " + w)
+		if cur == "" || textWidth(cand, size) <= maxW {
+			cur = cand
+			continue
+		}
+		lines = append(lines, cur)
+		cur = w
+		if len(lines) >= maxLines {
+			cur = ""
+			break
+		}
+	}
+	if cur != "" && len(lines) < maxLines {
+		lines = append(lines, cur)
+	}
+	if len(lines) == 0 {
+		return []string{s}
+	}
+	for i := range lines {
+		lines[i] = truncateToWidth(lines[i], size, maxW)
+	}
+	return lines
+}
+
+// titleBlock draws the PDF heading: a (custom or default) title, wrapped to at most
+// two lines, followed by the document type (e.g. "Score Sheet").
+func (p *pdfWriter) titleBlock(header, docType string) {
+	title := strings.TrimSpace(header)
+	if title == "" {
+		title = "Photo Judge"
+	}
+	for _, ln := range wrapToLines(title, 18, pdfPageW-2*pdfMargin, 2) {
+		p.text(pdfMargin, p.y-18, "F2", 18, ln)
+		p.y -= 23
+	}
+	p.text(pdfMargin, p.y-13, "F2", 13, docType)
+	p.y -= 19
+}
+
 // ---- score-sheet layout ---------------------------------------------------
 
 // photoRow is one line of the score sheet: the displayed photo name (filename
@@ -217,12 +264,15 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 	scX := 500.0
 	nameColW := phX - nameX - 12
 
+	s.mu.Lock()
+	header := s.settings.PDFHeader
+	s.mu.Unlock()
+
 	p := newPDF()
 	p.newPage()
 
 	// Title block.
-	p.text(left, p.y-18, "F2", 18, "Photo Judge — Score Sheet")
-	p.y -= 26
+	p.titleBlock(header, "Score Sheet")
 	p.text(left, p.y-11, "F1", 11, sess.Date+"   (Session #"+sess.ID+")")
 	p.y -= 24
 
@@ -304,7 +354,7 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 // the session's date / id / archive date / categories, then a filled-in table per
 // category (Landscape before Portrait) listing each photo's number, title,
 // photographer and score.
-func buildArchivePDF(arch ArchivedSession) []byte {
+func buildArchivePDF(arch ArchivedSession, header string) []byte {
 	const rowH = 22.0
 	left := pdfMargin
 	right := pdfPageW - pdfMargin // 558
@@ -345,8 +395,7 @@ func buildArchivePDF(arch ArchivedSession) []byte {
 
 	p := newPDF()
 	p.newPage()
-	p.text(left, p.y-18, "F2", 18, "Photo Judge — Archived Session")
-	p.y -= 26
+	p.titleBlock(header, "Archived Session")
 	p.text(left, p.y-11, "F1", 11, arch.Date+"   (Session #"+arch.SessionID+")")
 	p.y -= 15
 	p.text(left, p.y-10, "F1", 10, fmt.Sprintf("Archived %s   ·   %d photo(s)", arch.ArchivedDate, arch.PhotoCount))

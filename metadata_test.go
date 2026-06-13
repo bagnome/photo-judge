@@ -165,7 +165,7 @@ func uploadFile(t *testing.T, s *server, sid, cat, filename string, content []by
 
 func TestUploadImportsMetadata(t *testing.T) {
 	s := newTestServer(t)
-	s.importMetadata = true
+	s.propsImportMetadata = true // properties allows it; settings default both imports on
 	ss, err := s.createSession("2026-06-01")
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +187,7 @@ func TestUploadImportsMetadata(t *testing.T) {
 
 func TestUploadIgnoresMetadataWhenOff(t *testing.T) {
 	s := newTestServer(t)
-	s.importMetadata = false
+	s.propsImportMetadata = false // properties off → effective import off regardless of settings
 	ss, err := s.createSession("2026-06-01")
 	if err != nil {
 		t.Fatal(err)

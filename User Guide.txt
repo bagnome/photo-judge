@@ -368,14 +368,45 @@ GOOD TO KNOW
 
 
 ------------------------------------------------------------
- 10. LOGO  (optional)
+ 10. SETTINGS  ("Settings" page)
 ------------------------------------------------------------
 
-To show a club logo above the category name on every title card,
-put one image file into the  logo\  folder, then start the app.
-A see-through (transparent) PNG looks best on the black card.
-No image in logo\  =  title cards show just the text.
-(Detected when the app starts, so restart after adding/changing.)
+Open "Settings" from the menu on the right to set app-wide options.
+Each one saves as soon as you change it.
+
+SCORING
+   * Lock the scorekeeper to the operator's photo - the Scoring page
+     follows whatever the operator is presenting and the scorekeeper
+     can't flip ahead on their own (the lock toggle there is forced on).
+
+PRESENTING
+   * Only one live screen at a time - revealing a screen automatically
+     blacks out all the others, so two monitors never show at once.
+
+TITLE CARD LOGO
+   To show a club logo above the category name on the judges' title
+   cards, click "Upload logo" and pick image file(s). They're kept in
+   a little gallery; click one to make it the Active logo (click it
+   again to use none), or the "x" to delete it. A see-through
+   (transparent) PNG looks best on the black card. Logos stay until
+   you delete them.
+
+PDF HEADER
+   The heading at the top of the score-sheet and archive PDFs - put
+   your club's name here, for example. Leave it blank to use
+   "Photo Judge". It's limited to a length that fits two lines.
+
+NETWORK
+   * Allow control from other devices (LAN) - see section 1. This is
+     also a switch here, but a "lanAccess=false" in
+     photo-judge.properties wins, and a change takes effect after you
+     restart the app.
+
+READING PHOTO METADATA
+   * Two switches - one for the photographer, one for the title - that
+     fill those in from an uploaded photo's embedded metadata (see
+     section 4). These only work when importMetadata=true in
+     photo-judge.properties; a "false" there greys them out.
 
 
 ------------------------------------------------------------
@@ -417,7 +448,8 @@ The display window isn't truly fullscreen
    Click anywhere on that window, or press the F key.
 
 My logo isn't showing
-   Make sure one image is in the logo\ folder, then restart.
+   Open the Settings page (section 10), upload a logo, and click it so
+   it's marked Active.
 
 The app won't start (security warning)
    More info -> Run anyway. It is an unrecognized program only
@@ -462,8 +494,9 @@ the same folder with it:
      photos\          (all sessions, photos, AND each session's
                        category setup - the main data)
      archives\        (records of any archived sessions)
-     logo\            (your logo)
+     logo\            (your logos)
      screens.json     (your saved screens)
+     settings.json    (your Settings-page choices)
      photo-judge.properties  (only if you changed the port; the
                               new computer makes its own otherwise)
 

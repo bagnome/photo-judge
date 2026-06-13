@@ -19,6 +19,7 @@ func newTestServer(t *testing.T) *server {
 		t.Fatal(err)
 	}
 	s.loadCategories() // seeds s.categories from defaults (first-session seed)
+	s.loadSettings()   // default settings (LAN + both metadata imports allowed)
 	return s
 }
 
