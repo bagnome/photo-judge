@@ -75,10 +75,11 @@ var uploadExts = map[string]bool{
 // ---- data types -----------------------------------------------------------
 
 type Session struct {
-	ID         string   `json:"id"`         // "001" — stable folder name, never changes
-	Date       string   `json:"date"`       // human label, freely editable
-	Created    string   `json:"created"`    // RFC3339
-	Categories []string `json:"categories"` // ACTIVE categories, in display order
+	ID          string   `json:"id"`                    // "001" — stable folder name, never changes
+	Date        string   `json:"date"`                  // human label, freely editable
+	Description string   `json:"description,omitempty"` // optional free-text note so an operator can tell sessions apart
+	Created     string   `json:"created"`               // RFC3339
+	Categories  []string `json:"categories"`            // ACTIVE categories, in display order
 	// InactiveCategories are this session's deactivated categories (shown
 	// alphabetically in the manager). Omitted from older session.json files, which
 	// load as an empty set.
@@ -190,6 +191,10 @@ type server struct {
 
 	// settings holds the operator-tunable options (settings.json), guarded by mu.
 	settings Settings
+
+	// exportPageSize is the default page size for the export picker's session list,
+	// from photo-judge.properties (exportPageSize). Set once at startup.
+	exportPageSize int
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -418,7 +423,7 @@ func (s *server) nextID() string {
 	return fmt.Sprintf("%03d", max+1)
 }
 
-func (s *server) createSession(date string) (*Session, error) {
+func (s *server) createSession(date, description string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	id := s.nextID()
@@ -432,7 +437,7 @@ func (s *server) createSession(date string) (*Session, error) {
 	} else {
 		active = append([]string{}, s.categories...)
 	}
-	ss := &Session{ID: id, Date: date, Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive}
+	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -485,13 +490,14 @@ func (s *server) handleReportVersion(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleSessionCreate(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Date string `json:"date"`
+		Date        string `json:"date"`
+		Description string `json:"description"`
 	}
 	if decode(r, &body) != nil || !validDate(body.Date) {
 		http.Error(w, "date must be YYYY-MM-DD", 400)
 		return
 	}
-	ss, err := s.createSession(body.Date)
+	ss, err := s.createSession(body.Date, body.Description)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -521,10 +527,10 @@ func (s *server) screensUsing(id string) []string {
 	return names
 }
 
-// handleSessionEdit changes only the date label (session.json). The ID and folder
-// are untouched, so there's no rename and nothing else has to move.
+// handleSessionEdit changes the date label and description (session.json). The ID and
+// folder are untouched, so there's no rename and nothing else has to move.
 func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
-	var body struct{ ID, Date string }
+	var body struct{ ID, Date, Description string }
 	if decode(r, &body) != nil || !safeName(body.ID) {
 		http.Error(w, "bad request", 400)
 		return
@@ -541,6 +547,7 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ss.Date = body.Date
+	ss.Description = strings.TrimSpace(body.Description)
 	b, _ := json.MarshalIndent(ss, "", "  ")
 	err := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
 	sort.Slice(s.sessions, func(i, j int) bool { return s.sessions[i].Date < s.sessions[j].Date })
@@ -549,7 +556,7 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	log.Printf("session %s date edited to %s", body.ID, body.Date)
+	log.Printf("session %s edited (date %s)", body.ID, body.Date)
 	s.pushConsole()
 	writeJSON(w, ss)
 }
@@ -1852,6 +1859,7 @@ func main() {
 	s.loadSettings()
 	s.refreshLogo() // resolve the active logo (settings + logo\ contents)
 	s.loadScreens()
+	s.sweepImportTmp() // clear any leftover import staging from a previous run
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
@@ -1871,6 +1879,7 @@ func main() {
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "settings.html") })
 	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.HandleFunc("/modal.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "modal.js") })
+	mux.HandleFunc("/portation.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "portation.js") })
 	mux.Handle("/getting-started-images/", http.FileServer(http.FS(gettingStartedFS)))
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
@@ -1884,6 +1893,10 @@ func main() {
 	mux.HandleFunc("/api/archives", s.handleArchivesList)
 	mux.HandleFunc("/api/archive/download", s.handleArchiveDownload)
 	mux.HandleFunc("/api/archive/pdf", s.handleArchivePDF)
+	mux.HandleFunc("/api/sessions/all", s.handleSessionsAll)
+	mux.HandleFunc("/api/export", s.handleExport)
+	mux.HandleFunc("/api/import/preview", s.handleImportPreview)
+	mux.HandleFunc("/api/import/commit", s.handleImportCommit)
 	mux.HandleFunc("/api/session/categories", s.handleSessionCategories)
 	mux.HandleFunc("/api/session/category/add", s.handleCategoryAdd)
 	mux.HandleFunc("/api/session/category/activate", s.handleCategoryActivate)
@@ -1917,6 +1930,7 @@ func main() {
 	// The properties values gate the matching Settings (a "false" in properties wins).
 	s.propsLanAccess = cfg.LanAccess
 	s.propsImportMetadata = cfg.ImportMetadata
+	s.exportPageSize = cfg.ExportPageSize
 	port := strconv.Itoa(cfg.Port)
 	if cfg.AutoPort {
 		port = "0" // let the OS pick any free port

@@ -25,7 +25,7 @@ func seedPhoto(t *testing.T, s *server, sid, cat, orient, file string) {
 
 func TestPhotoScore(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2026-06-01")
+	ss, err := s.createSession("2026-06-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestPhotoScore(t *testing.T) {
 // TestScoreSurvivesPhotoDelete checks a soft-deleted photo's score is dropped.
 func TestScoreSurvivesPhotoDelete(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2026-06-01")
+	ss, err := s.createSession("2026-06-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}

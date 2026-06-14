@@ -32,12 +32,13 @@ type ArchivedPhoto struct {
 
 // ArchivedSession is the full record written to archives\<id>.json.
 type ArchivedSession struct {
-	SessionID    string          `json:"sessionId"`
-	Date         string          `json:"date"`         // the competition date (session label)
-	Created      string          `json:"created,omitempty"` // when the session was created (RFC3339)
-	Categories   []string        `json:"categories"`   // active category order at archive time
-	ArchivedDate   string          `json:"archivedDate"` // YYYY-MM-DD it was archived
-	ArchivedAt     string          `json:"archivedAt"`   // RFC3339 timestamp
+	SessionID      string          `json:"sessionId"`
+	Date           string          `json:"date"`                  // the competition date (session label)
+	Description    string          `json:"description,omitempty"` // operator's free-text note, preserved from the session
+	Created        string          `json:"created,omitempty"`     // when the session was created (RFC3339)
+	Categories     []string        `json:"categories"`            // active category order at archive time
+	ArchivedDate   string          `json:"archivedDate"`          // YYYY-MM-DD it was archived
+	ArchivedAt     string          `json:"archivedAt"`            // RFC3339 timestamp
 	PhotoCount     int             `json:"photoCount"`
 	Photos         []ArchivedPhoto `json:"photos"`
 	PhysicalPrints []PhysicalPrint `json:"physicalPrints,omitempty"` // judged physical prints
@@ -66,6 +67,7 @@ func (s *server) buildArchive(ss *Session) ArchivedSession {
 	arch := ArchivedSession{
 		SessionID:    ss.ID,
 		Date:         ss.Date,
+		Description:  ss.Description,
 		Created:      ss.Created,
 		Categories:   append([]string{}, ss.Categories...),
 		ArchivedDate: todayStr(),

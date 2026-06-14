@@ -6,6 +6,9 @@
 /photos/
 /logo/
 /archives/
+/_import_tmp/
+*.pjs
+*.pjss
 /screens.json
 /settings.json
 /applog.txt

@@ -226,6 +226,19 @@ func (p *pdfWriter) titleBlock(header, docType string) {
 	p.y -= 19
 }
 
+// descLine draws an optional session description below the heading, wrapped to at
+// most two lines at 10pt. A no-op when the description is empty.
+func (p *pdfWriter) descLine(desc string) {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return
+	}
+	for _, ln := range wrapToLines(desc, 10, pdfPageW-2*pdfMargin, 2) {
+		p.text(pdfMargin, p.y-10, "F1", 10, ln)
+		p.y -= 13
+	}
+}
+
 // ---- score-sheet layout ---------------------------------------------------
 
 // photoRow is one line of the score sheet: the displayed photo name (filename
@@ -274,7 +287,9 @@ func (s *server) buildScoreSheetPDF(sess *Session) []byte {
 	// Title block.
 	p.titleBlock(header, "Score Sheet")
 	p.text(left, p.y-11, "F1", 11, sess.Date+"   (Session #"+sess.ID+")")
-	p.y -= 24
+	p.y -= 15
+	p.descLine(sess.Description)
+	p.y -= 9
 
 	phColW := scX - phX - 8 // room for a pre-filled photographer name before Score
 
@@ -398,6 +413,7 @@ func buildArchivePDF(arch ArchivedSession, header string) []byte {
 	p.titleBlock(header, "Archived Session")
 	p.text(left, p.y-11, "F1", 11, arch.Date+"   (Session #"+arch.SessionID+")")
 	p.y -= 15
+	p.descLine(arch.Description)
 	p.text(left, p.y-10, "F1", 10, fmt.Sprintf("Archived %s   ·   %d photo(s)", arch.ArchivedDate, arch.PhotoCount))
 	p.y -= 15
 	if len(arch.Categories) > 0 {
