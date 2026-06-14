@@ -168,8 +168,8 @@ function render(){
 
    const tdL = document.createElement('td'); tdL.dataset.label='Load';
    tdL.appendChild(btn('Load', () => {
-     if(!currentSession()){ alert('Create or select a session first.'); return; }
-     if(!cs.value){ alert('Pick a category.'); return; }
+     if(!currentSession()){ pjAlert('Create or select a session first.'); return; }
+     if(!cs.value){ pjAlert('Pick a category.'); return; }
      post('/api/screen/load', {name:sc.name, sessionId:currentSession(), category:cs.value, orientation:os.value});
    }));
    tr.appendChild(tdL);
@@ -194,9 +194,9 @@ function render(){
 
 $('newbtn').onclick = async () => {
  const d = $('newdate').value;
- if(!d){ alert('Pick a date for the session.'); return; }
+ if(!d){ pjAlert('Pick a date for the session.'); return; }
  const r = await post('/api/session/create', {date:d});
- if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Create failed: '+(await r.text())); return; }
  const s = await r.json();
  pendingSelect = s.id;
  toast('Session #'+s.id+' ('+s.date+') created');
@@ -204,20 +204,20 @@ $('newbtn').onclick = async () => {
 
 $('editsession').onclick = async () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const cur = (state.sessions.find(s => s.id === id) || {}).date || '';
- const d = prompt('New date for session #'+id+' (YYYY-MM-DD):', cur);
+ const d = await pjPrompt('New date for session #'+id+' (YYYY-MM-DD):', cur, {title:'Edit session date', okLabel:'Save'});
  if(!d) return;
- if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert('Please use YYYY-MM-DD format (e.g. 2026-06-09).'); return; }
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ pjAlert('Please use YYYY-MM-DD format (e.g. 2026-06-09).'); return; }
  const r = await post('/api/session/edit', {id, date:d});
- if(!r.ok){ alert('Edit failed: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Edit failed: '+(await r.text())); return; }
  pendingSelect = id;
  toast('Session #'+id+' date changed to '+d, 'edit');
 };
 
 $('pdfbtn').onclick = () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const a = document.createElement('a');
  a.href = '/api/session/pdf?session=' + encodeURIComponent(id);
  a.download = '';
@@ -226,11 +226,11 @@ $('pdfbtn').onclick = () => {
 
 $('delsession').onclick = async () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const ss = state.sessions.find(s => s.id === id) || {};
- if(!confirm('Delete session #'+id+' ('+(ss.date||'')+')?\n\nIts photos move to photos\\_deleted (recoverable on disk) and it disappears from the app.')) return;
+ if(!await pjConfirm('Delete session #'+id+' ('+(ss.date||'')+')?\n\nIts photos move to photos\\_deleted (recoverable on disk) and it disappears from the app.', {title:'Delete session', okLabel:'Delete', danger:true})) return;
  const r = await post('/api/session/delete', {id});
- if(!r.ok){ alert('Could not delete:\n\n'+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Could not delete:\n\n'+(await r.text())); return; }
  toast('Session #'+id+' deleted — recoverable in photos\\_deleted', 'del');
 };
 
@@ -242,17 +242,18 @@ function todayStr(){
 
 $('archivesession').onclick = async () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const ss = state.sessions.find(s => s.id === id) || {};
- if(!confirm(
+ if(!await pjConfirm(
    'Archive session #'+id+' ('+(ss.date||'')+')?\n\n'
  + 'This saves the photo titles, photographers, scores, categories and dates to an '
  + 'archive file you can view and download later on the Archived Sessions page — but it '
  + 'PERMANENTLY DELETES the photo image files to save space.\n\n'
- + 'Once archived, the session is read-only and cannot be changed. This cannot be undone.'
+ + 'Once archived, the session is read-only and cannot be changed. This cannot be undone.',
+   {title:'Archive session', okLabel:'Archive', danger:true}
  )) return;
  const r = await post('/api/session/archive', {id});
- if(!r.ok){ alert('Could not archive:\n\n'+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Could not archive:\n\n'+(await r.text())); return; }
  const j = await r.json();
  toast('Session #'+id+' archived ('+(j.photoCount||0)+' photos) — view it on the Archived Sessions page', 'del');
 };
@@ -283,7 +284,7 @@ function chooseMonitor(screens){
 // sits on that monitor, a plain fullscreen in the output page lands there.
 async function openOutputWindow(name){
  const w = window.open('/output?screen='+encodeURIComponent(name), 'pjwin_'+name, 'width=1024,height=640');
- if(!w){ alert('Your browser blocked the pop-up window.\n\nAllow pop-ups for this site, then click “⧉ Open window” on the screen’s row to launch it.'); return; }
+ if(!w){ pjAlert('Your browser blocked the pop-up window.\n\nAllow pop-ups for this site, then click “⧉ Open window” on the screen’s row to launch it.', {title:'Pop-up blocked'}); return; }
  w.focus();
  if(!('getScreenDetails' in window)) return;                 // older browser: drag + F fallback
  let screens;
@@ -299,15 +300,15 @@ async function openOutputWindow(name){
 }
 
 $('createscreen').onclick = async () => {
- const name = prompt('Name this screen (e.g. "Landscape monitor"):');
+ const name = await pjPrompt('Name this screen (e.g. "Landscape monitor"):', '', {title:'Create screen', okLabel:'Create', placeholder:'Landscape monitor'});
  if(!name || !name.trim()) return;
  const r = await post('/api/screen/create', {name: name.trim()});
- if(!r.ok){ alert('Could not create screen: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Could not create screen: '+(await r.text())); return; }
  toast('Screen “'+name.trim()+'” created — use ⧉ Open window on its row to launch it');
 };
 
-function deleteScreen(name){
- if(!confirm('Delete screen “'+name+'”?\n\nIf its output window is open it will go black. Screens are saved between launches, so this removes it for good.')) return;
+async function deleteScreen(name){
+ if(!await pjConfirm('Delete screen “'+name+'”?\n\nIf its output window is open it will go black. Screens are saved between launches, so this removes it for good.', {title:'Delete screen', okLabel:'Delete', danger:true})) return;
  post('/api/screen/delete', {name}).then(r => {
    if(r.ok) toast('Screen “'+name+'” deleted', 'del');
    else toast('Could not delete screen', 'del');
@@ -321,7 +322,7 @@ $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout)
 $('session').addEventListener('change', render);
 
 $('closeapp').onclick = async () => {
- if(!confirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.')) return;
+ if(!await pjConfirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.', {title:'Close Photo Judge', okLabel:'Close app', danger:true})) return;
  try { await post('/api/shutdown', {}); } catch(e){}
  if(es) es.close();
  document.body.innerHTML = '<div style="padding:48px;font-family:system-ui;color:#9aa0a6;font-size:16px">Photo Judge has been closed.<br><br>You can close this tab and the output windows now.</div>';
@@ -331,6 +332,7 @@ const es = new EventSource('/api/events?role=console');
 es.onmessage = e => { state = JSON.parse(e.data); render(); };
 render();
 </script>
+<script src="/modal.js"></script>
 <script src="/nav.js"></script>
 </body>
 </html>
