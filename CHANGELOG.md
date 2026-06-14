@@ -14,6 +14,22 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Session import / export** — a new **⇄ Import / Export** button on the console opens a
+  wizard for moving whole sessions (photos and all) between computers. **Export** lists
+  every session (live and archived) with filters (active/archived, photographer, photo
+  title, date range), sorting and pagination; pick sessions into a basket and download
+  them as a portable file — **`.pjs`** for one session or **`.pjss`** for several (both are
+  ordinary zip bundles that include the images, metadata, scores, physical prints and, for
+  past nights, the archive record). **Import** reads one or more `.pjs`/`.pjss` files, shows
+  a preview of the sessions inside, and lets you choose which to bring in and (optionally)
+  one to make the active session. Imported sessions always get a fresh ID so they can never
+  collide with existing ones; the wizard shows the old→new ID mapping. The page size of the
+  export list is configurable via `exportPageSize` in `photo-judge.properties` (default 50).
+- **Session description** — a session can carry an optional free-text note (e.g. "April
+  club competition — judged by Jane") to tell sessions apart. Sessions are now created and
+  edited through a small modal (date + description) from the console, the description shows
+  below the action bar and on the Archived Sessions page, and it prints on the score-sheet
+  and archive PDFs.
 - **In-app dialogs** — the browser's plain alert/confirm/prompt pop-ups have been replaced
   throughout with dark, centered modals styled to match the QR-code dialog, so every
   prompt, confirmation, and message now looks consistent with the rest of the app.

@@ -31,7 +31,7 @@ func listPhysical(t *testing.T, s *server, sid string) []PhysicalPrint {
 
 func TestPhysicalPrintsCRUD(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2026-06-01")
+	ss, err := s.createSession("2026-06-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestPhysicalPrintsCRUD(t *testing.T) {
 
 func TestPhysicalPrintsArchived(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2000-01-01") // past, so it can be archived
+	ss, err := s.createSession("2000-01-01", "") // past, so it can be archived
 	if err != nil {
 		t.Fatal(err)
 	}

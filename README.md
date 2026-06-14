@@ -79,8 +79,16 @@ that workflow.
 ## Features
 
 - **Sessions** — organize each competition night. Keyed by a stable sequential ID
-  (the folder name, e.g. `001`) with the **date as an editable label**. Create,
-  relabel, or soft-delete (recoverable) sessions.
+  (the folder name, e.g. `001`) with the **date as an editable label** and an optional
+  **description** (a free-text note to tell sessions apart, shown on the console, the
+  Archived Sessions page, and the PDFs). Create, relabel, or soft-delete (recoverable)
+  sessions from a small date + description modal.
+- **Import / export sessions** — move whole sessions (photos and all) between computers
+  via the **⇄ Import / Export** wizard. Bundle one session into a **`.pjs`** file or several
+  into a **`.pjss`** (both are zip archives that include the images, metadata, scores and
+  physical prints, plus the archive record for past nights). The export list is filterable,
+  sortable and paginated; import previews each file's sessions and assigns fresh IDs so
+  nothing collides, showing the old→new mapping.
 - **Categories, per session** — manage each session's categories in the **Manage
   categories** page: two panes (**Inactive** / **Active**) where you move categories
   between them, reorder the active ones, add new ones, and delete unused ones (a category
@@ -282,6 +290,8 @@ new sessions — copy to the local drive for an event).
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |
 | `web/modal.js` | Shared in-app dialogs (alert/confirm/prompt replacements) for every page |
+| `portation.go` | Session import/export — `.pjs`/`.pjss` zip bundles, preview & commit |
+| `web/portation.js` | The console's Import / Export wizard (export picker + import preview) |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |

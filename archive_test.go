@@ -27,7 +27,7 @@ func listArchives(t *testing.T, s *server, qs string) []ArchivedSession {
 
 func TestSessionArchive(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2000-01-01") // safely in the past whenever the test runs
+	ss, err := s.createSession("2000-01-01", "") // safely in the past whenever the test runs
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestSessionArchive(t *testing.T) {
 	}
 
 	// IDs must never be reused — a new session gets a higher ID than the archived one.
-	ss2, err := s.createSession("2000-02-01")
+	ss2, err := s.createSession("2000-02-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestSessionArchive(t *testing.T) {
 
 func TestArchiveRejectsNonPastSession(t *testing.T) {
 	s := newTestServer(t)
-	ss, err := s.createSession("2999-01-01") // future
+	ss, err := s.createSession("2999-01-01", "") // future
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,6 +24,7 @@ type appConfig struct {
 	AutoPort       bool // when true, ask the OS for any free port instead of using Port
 	LanAccess      bool // when true, bind all interfaces so other LAN devices can connect
 	ImportMetadata bool // when true, read photographer/title from image metadata on upload
+	ExportPageSize int  // rows per page in the Import/Export wizard's session list
 }
 
 // configHeader and configBlocks make up the seeded properties file. Splitting it
@@ -62,6 +63,9 @@ lanAccess=true`},
 # title (its on-screen name) instead of the original filename. Anything missing
 # falls back to the usual behavior, and you can still edit the photographer by hand.
 importMetadata=false`},
+	{"exportpagesize", `# How many sessions to show per page in the Import / Export wizard's session
+# list. Lower it on a small screen, raise it to scroll through more at once.
+exportPageSize=50`},
 }
 
 // configTemplate assembles the full default file from the header and every block.
@@ -80,7 +84,7 @@ func configTemplate() string {
 // on first run. Unknown keys are ignored and any malformed value falls back to
 // its default, so a hand-edited file can never stop the app from starting.
 func loadConfig(baseDir string) appConfig {
-	cfg := appConfig{Port: defaultPort, AutoPort: false, LanAccess: true, ImportMetadata: false}
+	cfg := appConfig{Port: defaultPort, AutoPort: false, LanAccess: true, ImportMetadata: false, ExportPageSize: 50}
 	path := filepath.Join(baseDir, configFileName)
 
 	data, err := os.ReadFile(path)
@@ -121,6 +125,10 @@ func loadConfig(baseDir string) appConfig {
 			cfg.LanAccess = parseConfigBool(val, true)
 		case "importmetadata":
 			cfg.ImportMetadata = parseConfigBool(val, false)
+		case "exportpagesize":
+			if n, err := strconv.Atoi(val); err == nil && n >= 10 && n <= 500 {
+				cfg.ExportPageSize = n
+			}
 		}
 	}
 

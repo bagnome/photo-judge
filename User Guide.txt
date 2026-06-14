@@ -143,8 +143,13 @@ GETTING AROUND - Every page has a menu down the RIGHT edge that
 ------------------------------------------------------------
 
 A) CREATE / PICK A SESSION  (do this first!)
-   On the control page, use the date box + "Create session",
-   or pick an existing one from the Session dropdown.
+   On the control page, click "➕ New session" to open a small
+   box: choose the date and (optionally) type a DESCRIPTION - a
+   short note to tell sessions apart, e.g. "April competition -
+   judged by Jane". Click "Create". Or pick an existing session
+   from the Session dropdown; "Edit session" changes its date and
+   description. The description shows under the toolbar, on the
+   Archived Sessions page, and on the printed score sheet.
 
 B) SET UP CATEGORIES  (optional - see section 7)
    Click "Manage categories" to activate/reorder/add this
@@ -365,6 +370,48 @@ GOOD TO KNOW
    * Archiving only removes that session's CURRENT photos. If you want
      to keep the pictures themselves, copy them out of  photos\
      before archiving.
+
+
+------------------------------------------------------------
+ IMPORT / EXPORT - MOVING SESSIONS BETWEEN COMPUTERS
+------------------------------------------------------------
+
+You can carry whole sessions - their photos and everything else -
+from one computer to another. Click  "⇄ Import / Export"  on the
+console to open the wizard. It uses two file types, which are just
+zip files with a Photo Judge extension:
+     .pjs   = one session
+     .pjss  = several sessions
+Both contain everything a session needs (the photos, titles,
+photographers, scores, physical prints, and - for archived nights -
+the archive record), so a single file is all you have to copy.
+
+EXPORTING
+   1. On the "Export" tab you'll see a list of every session, live
+      AND archived. Narrow it with the filters (active/archived,
+      photographer, photo title, date range) and click a column to
+      sort. Long lists are paged.
+   2. Click  "Add ->"  on each session you want to send; they collect
+      in the "Selected for export" box. (Or use a row's "⤓ .pjs" to
+      export just that one immediately.)
+   3. Click  "Export".  One session downloads as a  .pjs  file, several
+      as a  .pjss.  Copy that file to a USB stick, email, etc.
+
+IMPORTING
+   1. On the "Import" tab, choose (or drag in) one or more .pjs/.pjss
+      files. A table lists the sessions inside each one.
+   2. Tick which sessions to "Import" (all are ticked by default). If
+      you want one of them to become the selected session on the
+      console afterward, tick its "Make active" box (only one allowed).
+   3. Click  "Import".  Each imported session is given a NEW ID number
+      so it can't clash with sessions already on this computer; the
+      table then shows the new ID next to the old one.
+
+GOOD TO KNOW
+   * Importing never overwrites an existing session - you always get a
+     fresh copy with a new ID.
+   * The export list shows up to 50 sessions per page; change that with
+     "exportPageSize" in photo-judge.properties if you like.
 
 
 ------------------------------------------------------------
