@@ -25,10 +25,10 @@
 </div>
 <div id="hint">Click anywhere — or press <b>F</b> — for fullscreen on this monitor &nbsp;·&nbsp; screen: <span id="name"></span></div>
 
+<script src="/modal.js"></script>
 <script>
 const q = new URLSearchParams(location.search);
-let name = q.get('screen') || prompt('Screen name:') || 'Screen';
-document.getElementById('name').textContent = name;
+let name = q.get('screen') || '';
 
 const img = document.getElementById('img');
 const title = document.getElementById('title');
@@ -60,10 +60,15 @@ async function register(){
  await fetch('/api/screen/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});
 }
 
-register().then(() => {
+// Opened normally with ?screen=…; fall back to asking only when that's missing.
+async function start(){
+ if(!name){ name = ((await pjPrompt('Screen name:', '', {title:'Output screen', okLabel:'Open'})) || '').trim() || 'Screen'; }
+ document.getElementById('name').textContent = name;
+ await register();
  const es = new EventSource('/api/events?role=output&screen='+encodeURIComponent(name));
  es.onmessage = e => show(JSON.parse(e.data));
-});
+}
+start();
 
 // The window is already positioned on the target monitor, so a plain fullscreen lands there.
 function goFullscreen(){

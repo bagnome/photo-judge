@@ -149,6 +149,9 @@ that workflow.
   title-card logo), a custom PDF header, LAN access, and per-field photo-metadata import.
   Saved to `settings.json`; the LAN and metadata toggles are gated by `photo-judge.properties`
   (a `false` there wins).
+- **Consistent in-app dialogs** — confirmations, prompts, and messages use the app's own
+  dark modals (matching the QR-code dialog) instead of the browser's plain pop-ups, with a
+  red action button for destructive choices; **Enter** confirms and **Esc** cancels.
 - **Close App** button — stops the server cleanly so nothing lingers in memory.
 
 ---
@@ -278,6 +281,7 @@ new sessions — copy to the local drive for an event).
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |
+| `web/modal.js` | Shared in-app dialogs (alert/confirm/prompt replacements) for every page |
 | `web/output.html` | Judge-facing output window (black-by-default display) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |

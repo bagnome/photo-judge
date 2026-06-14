@@ -14,6 +14,11 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **In-app dialogs** — the browser's plain alert/confirm/prompt pop-ups have been replaced
+  throughout with dark, centered modals styled to match the QR-code dialog, so every
+  prompt, confirmation, and message now looks consistent with the rest of the app.
+  Destructive actions (delete session, archive, remove photo, delete screen/logo/category,
+  close app) show a red action button; pressing **Enter** confirms and **Esc** cancels.
 - **Settings page** — a new **⚙️ Settings** page (in the menu) collects app-wide options
   in one place: lock the scorekeeper to the operator's photo; allow only one live screen
   at a time (revealing one blacks out the rest); a **logo library** (upload several, pick

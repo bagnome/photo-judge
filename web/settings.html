@@ -211,7 +211,7 @@ function renderLogos(st){
 }
 
 async function deleteLogo(name){
- if(!confirm('Delete logo "'+name+'"? This removes the file.')) return;
+ if(!await pjConfirm('Delete logo "'+name+'"? This removes the file.', {title:'Delete logo', okLabel:'Delete', danger:true})) return;
  const r = await post('/api/logo/delete', {file:name});
  if(!r.ok){ toast('Could not delete logo', 'del'); return; }
  await load();
@@ -241,6 +241,7 @@ async function load(){
 }
 load();
 </script>
+<script src="/modal.js"></script>
 <script src="/nav.js"></script>
 </body>
 </html>

@@ -285,7 +285,7 @@ async function savePhotographer(orient, fn, input){
 }
 
 async function deletePhoto(orient, fn){
- if(!confirm('Remove "'+fn+'" from '+orient+'?\n\nIt moves to photos\\_deleted (recoverable).')) return;
+ if(!await pjConfirm('Remove "'+fn+'" from '+orient+'?\n\nIt moves to photos\\_deleted (recoverable).', {title:'Remove photo', okLabel:'Remove', danger:true})) return;
  const c = ctx();
  const r = await post('/api/photo/delete', {session:c.session, category:c.category, orientation:orient, file:fn});
  if(!r.ok){ toast('Could not remove: '+(await r.text()), 'del'); return; }
@@ -297,8 +297,8 @@ async function deletePhoto(orient, fn){
 
 function uploadFiles(list){
  const c = ctx();
- if(!c.session){ alert('Create or select a session first.'); return; }
- if(!c.category){ alert('Pick a category.'); return; }
+ if(!c.session){ pjAlert('Create or select a session first.'); return; }
+ if(!c.category){ pjAlert('Pick a category.'); return; }
  if(!list || !list.length) return;
  const fd = new FormData();
  fd.append('session', c.session); fd.append('category', c.category);
@@ -318,7 +318,7 @@ function uploadFiles(list){
 
 $('pdfbtn').onclick = () => {
  const id = $('session').value;
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const a = document.createElement('a');
  a.href = '/api/session/pdf?session=' + enc(id);
  a.download = '';
@@ -327,9 +327,9 @@ $('pdfbtn').onclick = () => {
 
 $('newbtn').onclick = async () => {
  const d = $('newdate').value;
- if(!d){ alert('Pick a date for the session.'); return; }
+ if(!d){ pjAlert('Pick a date for the session.'); return; }
  const r = await post('/api/session/create', {date:d});
- if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Create failed: '+(await r.text())); return; }
  const s = await r.json();
  pendingSession = s.id;
  toast('Session #'+s.id+' ('+s.date+') created');
@@ -348,6 +348,7 @@ drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.rem
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/modal.js"></script>
 <script src="/nav.js"></script>
 </body>
 </html>

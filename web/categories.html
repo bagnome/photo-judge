@@ -211,7 +211,7 @@ $('actActivate').onclick = async () => { const n=selInactive; if(!n) return;
 $('actDeactivate').onclick = async () => { const n=selActive; if(!n) return;
  if(await mutate('/api/session/category/deactivate',{session:sid(),name:n},'Deactivated “'+n+'”')){ selInactive=n; selActive=null; render(); } };
 $('actDelete').onclick = async () => { const n=selInactive; if(!n) return;
- if(!confirm('Delete “'+n+'” from this session?')) return;
+ if(!await pjConfirm('Delete “'+n+'” from this session?', {title:'Delete category', okLabel:'Delete', danger:true})) return;
  if(await mutate('/api/session/category/delete',{session:sid(),name:n},'Deleted “'+n+'”','del')){ selInactive=null; render(); } };
 
 function moveSel(dir){
@@ -229,6 +229,7 @@ $('session').addEventListener('change', loadDetail);
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/modal.js"></script>
 <script src="/nav.js"></script>
 </body>
 </html>
