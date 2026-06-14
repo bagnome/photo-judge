@@ -83,6 +83,40 @@ const GUIDES = [
   ]
  },
  {
+  id:'categories', icon:'🗂️', title:'Configuring categories',
+  intro:'Every session has its own list of judging <b>categories</b>. Manage them on the <b>Manage categories</b> page — the <b>Active</b> order drives the console and scoring dropdowns and the score sheet.',
+  steps:[
+   { title:'Open Manage categories', img:'gs-categories.png',
+     body:'From the menu on the right, open <b>Manage categories</b>, then pick the session at the top. You’ll see two panes: <b>Active</b> (the categories this session uses, in order) and <b>Inactive</b> (ones set aside).' },
+   { title:'Add a category',
+     body:'Type a name in <b>Add category</b> and click <b>Add to Active</b>. The name doubles as the photo folder and the on-screen <b>title-card</b> text, so spell it the way you want the judges to see it.' },
+   { title:'Activate or deactivate',
+     body:'Select a category and use <b>Activate →</b> or <b>← Deactivate</b> to move it between the panes. Deactivating <b>keeps</b> its photos — they’re just hidden from this session’s menus until you re-activate it.' },
+   { title:'Set the order',
+     body:'Select an <b>Active</b> category and use <b>↑ Up</b> / <b>↓ Down</b>. This order is exactly what appears in the console and scoring dropdowns and in the score-sheet PDF (with Landscape before Portrait within each category).' },
+   { title:'Delete one you don’t need',
+     body:'Select an <b>Inactive</b> category and click <b>Delete</b>. A category that still holds photos can’t be deleted — <b>deactivate</b> it instead, which preserves the photos.' },
+  ],
+  note:'Each session carries its own category slate, and a new session inherits the most recent one. The <code>categories.txt</code> file only seeds the very first session.'
+ },
+ {
+  id:'adding-photos', icon:'🖼️', title:'Adding photos',
+  intro:'Add a session’s photos on the <b>Upload / Reorder</b> page — drop them in, set the order the judges will see, and note each photographer.',
+  steps:[
+   { title:'Open Upload / Reorder', img:'gs-upload.png',
+     body:'From the menu on the right, open <b>Upload / Reorder</b>, then pick the <b>session</b> and a <b>category</b> at the top.' },
+   { title:'Drop in your photos',
+     body:'Drag <b>JPG / PNG</b> files onto the drop zone (or click it to browse). Each photo is sorted into <b>Landscape</b> or <b>Portrait</b> automatically by its shape, under the category you picked.' },
+   { title:'Set the viewing order',
+     body:'Drag the thumbnails to arrange them within each orientation — this is the order the judges will see. On a phone or tablet, drag by the <b>⠿</b> grip on each photo.' },
+   { title:'Note the photographers',
+     body:'Type a <b>photographer</b> name under each photo. It shows on the Scoring page and is pre-filled into the score sheet. (With <code>importMetadata=true</code> in <code>photo-judge.properties</code>, an uploaded photo’s embedded artist and title can fill these in for you.)' },
+   { title:'Remove a photo',
+     body:'The <b>✕</b> on a photo moves it to <code>photos\\_deleted</code> — recoverable on disk, not gone for good.' },
+  ],
+  note:'Photos belong to the selected session and category; switch either at the top to manage a different group. They’re only shown to judges when you Load that category onto a screen, so you can add them well ahead of the night.'
+ },
+ {
   id:'scoring', icon:'🏆', title:'Score keeping',
   intro:'Record a score for each photo while the operator runs the show — on the same computer, or on a second device over the network.',
   steps:[
