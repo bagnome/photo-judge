@@ -19,6 +19,7 @@ func newTestServer(t *testing.T) *server {
 		t.Fatal(err)
 	}
 	s.loadCategories() // seeds s.categories from defaults (first-session seed)
+	s.loadSettings()   // default settings (LAN + both metadata imports allowed)
 	return s
 }
 
@@ -63,7 +64,7 @@ func TestCategoryManager(t *testing.T) {
 	s := newTestServer(t)
 
 	// First session inherits the default seed as its active slate.
-	ss, err := s.createSession("2026-06-01")
+	ss, err := s.createSession("2026-06-01", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,7 @@ func TestCategoryManager(t *testing.T) {
 	// A new session inherits the latest session's active order + inactive set.
 	postJSON(t, s.handleCategoryDeactivate, map[string]string{"session": ss.ID, "name": "Macro"})
 	prev := detail(t, s, ss.ID)
-	ss2, err := s.createSession("2026-06-02")
+	ss2, err := s.createSession("2026-06-02", "")
 	if err != nil {
 		t.Fatal(err)
 	}

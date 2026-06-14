@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Judge — Archived Sessions</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
+ .bar{padding:12px 16px;display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap;border-bottom:1px solid #333}
+ .f{display:flex;flex-direction:column;gap:4px}
+ .f label{color:#9aa0a6;font-size:12px}
+ select,input,button{font-size:14px;padding:8px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
+ button{cursor:pointer}
+ button:hover{background:#363a42}
+ button.primary{background:#2d6cdf;border-color:#2d6cdf}
+ button.primary:hover{background:#3b78e6}
+ .intro{color:#8a9099;font-size:13px;padding:10px 16px 0;line-height:1.5}
+ #results{padding:12px 16px 40px}
+ .empty{color:#777;font-size:14px;padding:24px 0}
+ .card{background:#23262c;border:1px solid #3a3e45;border-radius:8px;margin:0 0 14px;overflow:hidden}
+ .chead{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:14px 16px}
+ .sid{font-size:16px;font-weight:600;color:#e8e8e8}
+ .meta{display:block;color:#9aa0a6;font-size:13px;margin-top:3px}
+ .cats{color:#c9ccd1;font-size:13px;margin-top:6px}
+ .cdesc{color:#c9ccd1;font-size:13px;margin-top:6px;white-space:pre-wrap;word-break:break-word}
+ .cactions{display:flex;gap:8px;flex-wrap:wrap}
+ .cactions a,.cactions button{font-size:13px;text-decoration:none;display:inline-block}
+ a.dl{background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;padding:8px 12px}
+ a.dl:hover{background:#363a42}
+ .photos{border-top:1px solid #2c2f35;overflow-x:auto}
+ .subhead{padding:12px 12px 4px;color:#9aa0a6;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+ table{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+ th,td{padding:7px 12px;text-align:left;border-bottom:1px solid #2c2f35;white-space:nowrap}
+ th{color:#9aa0a6;font-weight:500;position:sticky;top:0;background:#23262c;user-select:none}
+ .photos th:hover{color:#cdd}
+ td.sc{font-variant-numeric:tabular-nums}
+ tr.hit{background:#1f2530}
+ .count{color:#777;font-size:13px;margin:0 0 10px}
+ @media (max-width:760px){
+   header{display:flex;flex-wrap:wrap;gap:10px}
+   select,input,button{font-size:16px}
+   .f{flex:1 1 140px}
+   .bar{align-items:stretch}
+ }
+</style>
+</head>
+<body>
+<header>Photo Judge — Archived Sessions</header>
+<div class="intro">Past sessions you've archived. Photos themselves were deleted to save space; this is the saved record (titles, photographers, scores, categories and dates). Search below, sort a session's photo table by clicking a column heading, and download any session's archive as a printable PDF or as JSON.</div>
+<div class="bar">
+  <div class="f"><label>Date from</label><input type="date" id="from"></div>
+  <div class="f"><label>Date to</label><input type="date" id="to"></div>
+  <div class="f"><label>Session ID</label><input type="text" id="sid" placeholder="e.g. 003" size="8"></div>
+  <div class="f"><label>Photographer</label><input type="text" id="photog" placeholder="name contains…"></div>
+  <div class="f"><label>Photo title</label><input type="text" id="title" placeholder="title contains…"></div>
+  <button id="search" class="primary">Search</button>
+  <button id="clear">Clear</button>
+  <div class="f"><label>Sort by</label>
+    <select id="sortkey">
+      <option value="date">Session date</option>
+      <option value="created">Created date</option>
+      <option value="sid">Session ID</option>
+    </select>
+  </div>
+  <button id="sortdir" data-dir="desc" title="Toggle ascending / descending">↓</button>
+</div>
+<div id="results"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = encodeURIComponent;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Sort the session cards by the chosen key (session date / created / id) and direction.
+function sortArchives(arr){
+ const key = $('sortkey').value;
+ const desc = $('sortdir').dataset.dir !== 'asc';
+ const val = a => {
+   if(key === 'sid') return parseInt(a.sessionId, 10) || 0;
+   if(key === 'created') return a.created || a.archivedDate || '';
+   return a.date || '';
+ };
+ arr.sort((a, b) => {
+   const va = val(a), vb = val(b);
+   const cmp = (typeof va === 'number') ? (va - vb) : String(va).localeCompare(String(vb));
+   return desc ? -cmp : cmp;
+ });
+ return arr;
+}
+
+function query(){
+ const p = new URLSearchParams();
+ if($('from').value) p.set('dateFrom', $('from').value);
+ if($('to').value)   p.set('dateTo', $('to').value);
+ if($('sid').value.trim())    p.set('sessionId', $('sid').value.trim());
+ if($('photog').value.trim()) p.set('photographer', $('photog').value.trim());
+ if($('title').value.trim())  p.set('title', $('title').value.trim());
+ return p;
+}
+
+async function search(){
+ const p = query();
+ const photog = ($('photog').value || '').trim().toLowerCase();
+ const title  = ($('title').value || '').trim().toLowerCase();
+ let archives = [];
+ try {
+   const r = await fetch('/api/archives?' + p.toString());
+   archives = (await r.json()).archives || [];
+ } catch(e){ $('results').innerHTML = '<div class="empty">Could not load archives.</div>'; return; }
+ sortArchives(archives);
+
+ if(!archives.length){
+   $('results').innerHTML = '<div class="empty">' +
+     (p.toString() ? 'No archived sessions match your search.' : 'No sessions have been archived yet.') + '</div>';
+   return;
+ }
+
+ const out = [];
+ out.push('<div class="count">'+archives.length+' archived session'+(archives.length===1?'':'s')+'</div>');
+ const expandFilter = !!(photog || title);
+ archives.forEach((a, idx) => {
+   const photos = a.photos || [];
+   const phys = a.physicalPrints || [];
+   const both = photos.length && phys.length;
+
+   const photoRows = photos.map(ph => {
+     const hit = (photog && (ph.photographer||'').toLowerCase().includes(photog)) ||
+                 (title  && (ph.title||'').toLowerCase().includes(title));
+     return '<tr class="'+(hit?'hit':'')+'">'
+       + '<td>'+esc(ph.category)+'</td><td>'+esc(ph.orientation)+'</td>'
+       + '<td>'+esc(ph.title)+'</td><td>'+esc(ph.photographer)+'</td><td class="sc">'+esc(ph.score)+'</td></tr>';
+   }).join('');
+   const photoTable = photos.length ? (
+       (both ? '<div class="subhead">Photos</div>' : '')
+     + '<table><thead><tr><th data-type="text">Category</th><th data-type="text">Orientation</th>'
+     + '<th data-type="text">Title</th><th data-type="text">Photographer</th>'
+     + '<th data-type="num">Score</th></tr></thead><tbody>'+photoRows+'</tbody></table>') : '';
+
+   const physRows = phys.map(p => {
+     const hit = (photog && (p.photographer||'').toLowerCase().includes(photog)) ||
+                 (title  && (p.title||'').toLowerCase().includes(title));
+     return '<tr class="'+(hit?'hit':'')+'">'
+       + '<td>'+esc(p.category)+'</td><td>'+esc(p.title)+'</td>'
+       + '<td>'+esc(p.photographer)+'</td><td class="sc">'+esc(p.score)+'</td></tr>';
+   }).join('');
+   const physTable = phys.length ? (
+       '<div class="subhead">Physical prints</div>'
+     + '<table><thead><tr><th data-type="text">Category</th><th data-type="text">Title</th>'
+     + '<th data-type="text">Photographer</th><th data-type="num">Score</th></tr></thead>'
+     + '<tbody>'+physRows+'</tbody></table>') : '';
+
+   const detail = '<div class="photos" id="ph'+idx+'"'+(expandFilter?'':' hidden')+'>' + photoTable + physTable + '</div>';
+   let count = (a.photoCount||0) + ' photo'+((a.photoCount===1)?'':'s');
+   if(phys.length) count += '  ·  ' + phys.length + ' physical print' + (phys.length===1?'':'s');
+   out.push(
+     '<div class="card">'
+   + '<div class="chead">'
+   +   '<div><span class="sid">Session #'+esc(a.sessionId)+'</span>'
+   +     '<span class="meta">Competition date: '+esc(a.date)+(a.created?('  ·  Created '+esc(a.created.slice(0,10))):'')+'  ·  Archived '+esc(a.archivedDate)+'  ·  '+count+'</span>'
+   +     (a.description?('<div class="cdesc">📝  '+esc(a.description)+'</div>'):'')
+   +     '<div class="cats">Categories: '+(a.categories&&a.categories.length?esc(a.categories.join(', ')):'—')+'</div>'
+   +   '</div>'
+   +   '<div class="cactions">'
+   +     '<button class="toggle" data-i="'+idx+'">'+(expandFilter?'Hide details':'Show details')+'</button>'
+   +     '<a class="dl" href="/api/archive/pdf?session='+enc(a.sessionId)+'">⤓ PDF</a>'
+   +     '<a class="dl" href="/api/archive/download?session='+enc(a.sessionId)+'">⤓ JSON</a>'
+   +   '</div>'
+   + '</div>' + detail + '</div>');
+ });
+ $('results').innerHTML = out.join('');
+ document.querySelectorAll('.toggle').forEach(b => b.onclick = () => {
+   const box = $('ph'+b.dataset.i);
+   const hidden = box.hasAttribute('hidden');
+   if(hidden) box.removeAttribute('hidden'); else box.setAttribute('hidden','');
+   b.textContent = hidden ? 'Hide details' : 'Show details';
+ });
+ document.querySelectorAll('.photos table').forEach(makeSortable);
+}
+
+// Click a column header to sort that session's photo table by it (toggling
+// ascending/descending). Numeric columns (data-type="num") sort numerically; the
+// rest sort as text, with blanks last.
+function makeSortable(table){
+ const ths = [...table.querySelectorAll('thead th')];
+ ths.forEach((th, col) => {
+   th.dataset.label = th.textContent;
+   th.style.cursor = 'pointer';
+   th.title = 'Sort by ' + th.textContent;
+   th.onclick = () => {
+     const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+     const numeric = th.dataset.type === 'num';
+     ths.forEach(o => { o.dataset.dir = ''; o.textContent = o.dataset.label; });
+     th.dataset.dir = dir;
+     th.textContent = th.dataset.label + (dir === 'asc' ? ' ▲' : ' ▼');
+     const tbody = table.querySelector('tbody');
+     const rows = [...tbody.querySelectorAll('tr')];
+     rows.sort((ra, rb) => {
+       const a = ra.children[col].textContent.trim();
+       const b = rb.children[col].textContent.trim();
+       let cmp;
+       if(numeric){
+         if(a === '' || b === ''){ cmp = (a === '' ? 1 : 0) - (b === '' ? 1 : 0); } // blanks last
+         else cmp = parseFloat(a) - parseFloat(b);
+       } else {
+         cmp = a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
+       }
+       return dir === 'asc' ? cmp : -cmp;
+     });
+     rows.forEach(r => tbody.appendChild(r));
+   };
+ });
+}
+
+$('search').onclick = search;
+$('clear').onclick = () => { ['from','to','sid','photog','title'].forEach(id => $(id).value=''); search(); };
+['sid','photog','title'].forEach(id => $(id).addEventListener('keydown', e => { if(e.key==='Enter') search(); }));
+$('sortkey').addEventListener('change', search);
+$('sortdir').onclick = () => {
+ const d = $('sortdir').dataset.dir === 'asc' ? 'desc' : 'asc';
+ $('sortdir').dataset.dir = d;
+ $('sortdir').textContent = d === 'asc' ? '↑' : '↓';
+ search();
+};
+
+// Pre-fill the search fields from the URL so a search can be bookmarked or linked.
+const params = new URLSearchParams(location.search);
+const PARAM = {dateFrom:'from', dateTo:'to', sessionId:'sid', photographer:'photog', title:'title'};
+for(const [k,id] of Object.entries(PARAM)){ if(params.get(k)) $(id).value = params.get(k); }
+search();
+</script>
+<script src="/modal.js"></script>
+<script src="/nav.js"></script>
+</body>
+</html>

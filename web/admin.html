@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Photo Judge — Upload / Reorder</title>
 <style>
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
@@ -9,7 +10,7 @@
  header a{color:#7fa9f0;text-decoration:none;font-weight:500;font-size:13px}
  .bar{padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #333}
  label{color:#9aa0a6;font-size:13px}
- select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
  button{cursor:pointer}
  button:hover{background:#363a42}
  .sep{color:#444}
@@ -29,27 +30,42 @@
  .sectitle{font-size:14px;color:#cdd;font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:8px}
  .sectitle .cnt{color:#777;font-weight:400;font-size:12px}
  .grid{display:flex;flex-wrap:wrap;gap:10px;padding:0 0 6px}
- .tile{width:168px;background:#23262c;border:1px solid #3a3e45;border-radius:6px;overflow:hidden;cursor:grab;user-select:none;position:relative}
- .tile.dragover{outline:2px solid #2d6cdf;outline-offset:-2px}
+ .tile{width:168px;background:#23262c;border:1px solid #3a3e45;border-radius:6px;overflow:hidden;cursor:grab;user-select:none;position:relative;box-sizing:border-box}
  .tile.dragging{opacity:.4}
  .tile img{width:100%;height:112px;object-fit:cover;display:block;background:#000}
  .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
+ .tile .score{position:absolute;top:84px;left:4px;background:#2e7d46;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px}
  .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
  .tile .del:hover{background:#a83232}
  .tile .nm{padding:0 7px 7px}
  .tile .pname{width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:4px;cursor:text}
  .tile .pname:focus{border-color:#2d6cdf;outline:none}
  .tile .pname.set{border-color:#2e7d46}
+ .tile .grip{position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;border-radius:10px;padding:1px 12px;font-size:13px;line-height:1.4;cursor:grab;touch-action:none;user-select:none}
+ .tile.dragging .grip{cursor:grabbing}
  .empty{padding:4px 0 8px;color:#777;font-size:13px}
  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:360px}
  .toast.show{opacity:1;transform:none}
  .toast.del{background:#a83232}
+ @media (max-width:760px){
+   header{flex-wrap:wrap;gap:10px}
+   .bar{gap:8px}
+   .bar .sep{display:none}
+   select,input,button{font-size:16px;padding:9px 12px} /* 16px avoids iOS zoom-on-focus */
+   #drop{padding:30px 18px}
+   .grid{gap:12px}
+   .tile{width:calc(50% - 6px)}
+   .tile img{height:120px}
+   .tile .del{width:30px;height:30px;font-size:18px}
+   .tile .grip{padding:4px 18px;font-size:16px}
+   .tile .pname{font-size:15px;padding:7px 8px}
+ }
 </style>
 </head>
 <body>
-<header>Photo Judge — Upload / Reorder <a href="/">← Console</a> <a href="/categories">▦ Manage categories</a></header>
+<header>Photo Judge — Upload / Reorder</header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
   <button id="pdfbtn">⤓ Score sheet</button>
@@ -84,8 +100,7 @@ const enc = encodeURIComponent;
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const ORIENTS = ['Landscape','Portrait'];
 let sessions = [], pendingSession = null;
-let sect = { Landscape:{files:[],names:{}}, Portrait:{files:[],names:{}} };
-let drag = null; // {orient, i} — reordering is confined to one section
+let sect = { Landscape:{files:[],names:{},scores:{}}, Portrait:{files:[],names:{},scores:{}} };
 
 function toast(msg, kind){
  const t = document.createElement('div');
@@ -159,11 +174,11 @@ async function refreshGrid(){
  if(!updateView()) return; // no session yet — guidance is shown instead of the grid
  const c = ctx();
  $('ctx').textContent = 'session #'+c.session+'  ›  '+c.category;
- if(!c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{}}); renderAll(); return; }
+ if(!c.category){ ORIENTS.forEach(o => sect[o] = {files:[],names:{},scores:{}}); renderAll(); return; }
  await Promise.all(ORIENTS.map(async o => {
    const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
    const j = await r.json();
-   sect[o] = {files: j.files || [], names: j.names || {}};
+   sect[o] = {files: j.files || [], names: j.names || {}, scores: j.scores || {}};
  }));
  renderAll();
 }
@@ -177,7 +192,8 @@ function renderSection(orient){
  if(data.files.length === 0){ g.innerHTML = '<div class="empty">No '+orient.toLowerCase()+' photos yet.</div>'; return; }
  const c = ctx();
  data.files.forEach((fn, i) => {
-   const t = document.createElement('div'); t.className = 'tile'; t.draggable = true; t.dataset.i = i;
+   const t = document.createElement('div'); t.className = 'tile'; t.dataset.i = i; t.dataset.fn = fn;
+   const grip = document.createElement('div'); grip.className = 'grip'; grip.textContent = '⠿ drag';
    const img = document.createElement('img'); img.loading = 'lazy';
    img.src = '/api/photo?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+orient+'&file='+enc(fn);
    const badge = document.createElement('div'); badge.className = 'idx'; badge.textContent = i+1;
@@ -188,31 +204,68 @@ function renderSection(orient){
    const nin = document.createElement('input'); nin.className = 'pname'; nin.type = 'text';
    nin.placeholder = 'Photographer'; nin.value = data.names[fn] || '';
    if(nin.value) nin.classList.add('set');
-   nin.draggable = false;
    nin.addEventListener('keydown', e => { if(e.key === 'Enter') nin.blur(); });
    nin.addEventListener('change', () => savePhotographer(orient, fn, nin));
    nm.appendChild(nin);
-   t.append(img, badge, cap, del, nm);
-   t.addEventListener('dragstart', (e) => {
-     if(e.target && e.target.classList.contains('pname')){ e.preventDefault(); return; } // typing, not reordering
-     drag = {orient, i}; t.classList.add('dragging');
-   });
-   t.addEventListener('dragend',   () => t.classList.remove('dragging'));
-   t.addEventListener('dragover',  e => { if(drag && drag.orient === orient){ e.preventDefault(); t.classList.add('dragover'); } });
-   t.addEventListener('dragleave', () => t.classList.remove('dragover'));
-   t.addEventListener('drop',      e => { e.preventDefault(); t.classList.remove('dragover'); if(drag && drag.orient === orient) moveItem(orient, drag.i, i); });
+   t.append(grip, img, badge, cap, del, nm);
+   const sc = data.scores[fn];
+   if(sc){ const sb = document.createElement('div'); sb.className = 'score'; sb.textContent = '★ '+sc; sb.title = 'Judge score'; t.appendChild(sb); }
+   t.addEventListener('pointerdown', e => startTileDrag(e, orient, t));
    g.appendChild(t);
  });
 }
 
-function moveItem(orient, from, to){
- if(from === null || from === to) return;
- const arr = sect[orient].files;
- const m = arr.splice(from, 1)[0];
- arr.splice(to, 0, m);
- drag = null;
- renderSection(orient);
- saveOrder(orient);
+// Reordering uses pointer events so it works with both a mouse and a touchscreen.
+// On a mouse you can grab anywhere on a tile; on touch you must use the ⠿ grip
+// (so swiping elsewhere still scrolls the page). Order is committed on release.
+let pdrag = null; // {orient, tile, pointerId, startX, startY, active}
+
+function startTileDrag(e, orient, tile){
+ if(e.target.closest('input,button,a,select,textarea')) return; // interacting with a control
+ const onGrip = !!e.target.closest('.grip');
+ if(e.pointerType === 'touch' && !onGrip) return;               // let touch scroll unless using the grip
+ if(e.pointerType === 'mouse' && e.button !== 0) return;        // left button only
+ pdrag = {orient, tile, pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, active:false};
+ try { tile.setPointerCapture(e.pointerId); } catch(_){}
+ tile.addEventListener('pointermove', onTileMove);
+ tile.addEventListener('pointerup', endTileDrag);
+ tile.addEventListener('pointercancel', endTileDrag);
+}
+
+function onTileMove(e){
+ if(!pdrag) return;
+ if(!pdrag.active){
+   if(Math.hypot(e.clientX - pdrag.startX, e.clientY - pdrag.startY) < 8) return; // ignore taps
+   pdrag.active = true;
+   pdrag.tile.classList.add('dragging');
+ }
+ e.preventDefault();
+ const grid = $('grid-'+pdrag.orient);
+ pdrag.tile.style.pointerEvents = 'none'; // see the tile underneath the pointer
+ const under = document.elementFromPoint(e.clientX, e.clientY);
+ pdrag.tile.style.pointerEvents = '';
+ const over = under && under.closest && under.closest('.tile');
+ if(over && over !== pdrag.tile && over.parentNode === grid){
+   const r = over.getBoundingClientRect();
+   const after = e.clientY > r.top + r.height/2 || (e.clientY > r.top && e.clientX > r.left + r.width/2);
+   grid.insertBefore(pdrag.tile, after ? over.nextSibling : over);
+ }
+}
+
+function endTileDrag(){
+ if(!pdrag) return;
+ const d = pdrag; pdrag = null;
+ d.tile.removeEventListener('pointermove', onTileMove);
+ d.tile.removeEventListener('pointerup', endTileDrag);
+ d.tile.removeEventListener('pointercancel', endTileDrag);
+ try { d.tile.releasePointerCapture(d.pointerId); } catch(_){}
+ d.tile.classList.remove('dragging');
+ if(!d.active) return; // it was a tap, not a drag
+ const grid = $('grid-'+d.orient);
+ const newOrder = [...grid.querySelectorAll('.tile')].map(t => t.dataset.fn);
+ sect[d.orient].files = newOrder;
+ renderSection(d.orient); // rebuild badges/handlers from the new order
+ saveOrder(d.orient);
 }
 
 async function saveOrder(orient){
@@ -232,7 +285,7 @@ async function savePhotographer(orient, fn, input){
 }
 
 async function deletePhoto(orient, fn){
- if(!confirm('Remove "'+fn+'" from '+orient+'?\n\nIt moves to photos\\_deleted (recoverable).')) return;
+ if(!await pjConfirm('Remove "'+fn+'" from '+orient+'?\n\nIt moves to photos\\_deleted (recoverable).', {title:'Remove photo', okLabel:'Remove', danger:true})) return;
  const c = ctx();
  const r = await post('/api/photo/delete', {session:c.session, category:c.category, orientation:orient, file:fn});
  if(!r.ok){ toast('Could not remove: '+(await r.text()), 'del'); return; }
@@ -244,8 +297,8 @@ async function deletePhoto(orient, fn){
 
 function uploadFiles(list){
  const c = ctx();
- if(!c.session){ alert('Create or select a session first.'); return; }
- if(!c.category){ alert('Pick a category.'); return; }
+ if(!c.session){ pjAlert('Create or select a session first.'); return; }
+ if(!c.category){ pjAlert('Pick a category.'); return; }
  if(!list || !list.length) return;
  const fd = new FormData();
  fd.append('session', c.session); fd.append('category', c.category);
@@ -265,7 +318,7 @@ function uploadFiles(list){
 
 $('pdfbtn').onclick = () => {
  const id = $('session').value;
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const a = document.createElement('a');
  a.href = '/api/session/pdf?session=' + enc(id);
  a.download = '';
@@ -274,9 +327,9 @@ $('pdfbtn').onclick = () => {
 
 $('newbtn').onclick = async () => {
  const d = $('newdate').value;
- if(!d){ alert('Pick a date for the session.'); return; }
+ if(!d){ pjAlert('Pick a date for the session.'); return; }
  const r = await post('/api/session/create', {date:d});
- if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Create failed: '+(await r.text())); return; }
  const s = await r.json();
  pendingSession = s.id;
  toast('Session #'+s.id+' ('+s.date+') created');
@@ -295,5 +348,7 @@ drop.addEventListener('drop',      e => { e.preventDefault(); drop.classList.rem
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
 </script>
+<script src="/modal.js"></script>
+<script src="/nav.js"></script>
 </body>
 </html>

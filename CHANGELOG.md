@@ -13,6 +13,128 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **How To page** — the **Getting Started** menu item is now a broader **How To** page: a
+  left-hand tab rail of step-by-step guides. The illustrated Getting started walkthrough is
+  the first tab, followed by guides for score keeping, importing/exporting, archiving,
+  rotating a monitor for portrait photos, enabling LAN access, and allowing the app through
+  the Windows Firewall — plus a placeholder for the planned judging mode. Tabs deep-link via
+  the URL hash (e.g. `/how-to#archiving`); the old `/getting-started` link still works.
+- **Session import / export** — a new **⇄ Import / Export** button on the console opens a
+  wizard for moving whole sessions (photos and all) between computers. **Export** lists
+  every session (live and archived) with filters (active/archived, photographer, photo
+  title, date range), sorting and pagination; pick sessions into a basket and download
+  them as a portable file — **`.pjs`** for one session or **`.pjss`** for several (both are
+  ordinary zip bundles that include the images, metadata, scores, physical prints and, for
+  past nights, the archive record). **Import** reads one or more `.pjs`/`.pjss` files, shows
+  a preview of the sessions inside, and lets you choose which to bring in and (optionally)
+  one to make the active session. Imported sessions always get a fresh ID so they can never
+  collide with existing ones; the wizard shows the old→new ID mapping. The page size of the
+  export list is configurable via `exportPageSize` in `photo-judge.properties` (default 50).
+- **Session description** — a session can carry an optional free-text note (e.g. "April
+  club competition — judged by Jane") to tell sessions apart. Sessions are now created and
+  edited through a small modal (date + description) from the console, the description shows
+  below the action bar and on the Archived Sessions page, and it prints on the score-sheet
+  and archive PDFs.
+- **In-app dialogs** — the browser's plain alert/confirm/prompt pop-ups have been replaced
+  throughout with dark, centered modals styled to match the QR-code dialog, so every
+  prompt, confirmation, and message now looks consistent with the rest of the app.
+  Destructive actions (delete session, archive, remove photo, delete screen/logo/category,
+  close app) show a red action button; pressing **Enter** confirms and **Esc** cancels.
+- **Settings page** — a new **⚙️ Settings** page (in the menu) collects app-wide options
+  in one place: lock the scorekeeper to the operator's photo; allow only one live screen
+  at a time (revealing one blacks out the rest); a **logo library** (upload several, pick
+  the active title-card logo, delete the rest); a custom **PDF header** for the score-sheet
+  and archive PDFs (capped to two lines); LAN access; and metadata import split into two
+  toggles (photographer and title). Saved to `settings.json`. The LAN and metadata
+  toggles are gated by `photo-judge.properties` — a `false` there takes priority and greys
+  the toggle out (the effective value is the properties value AND the setting). LAN changes
+  apply on the next restart; the rest apply immediately.
+- **Physical print scoring** — the **🏆 Scoring** page now has a **📋 Physical prints**
+  mode (alongside the existing on-screen mode) for judging printed entries that have no
+  image file in the app. Pick a session and category, then fill a spreadsheet-style table
+  of **title / photographer / score**: a fresh row appears as you start the last one, Tab
+  moves between fields and Enter jumps to the next row, and rows save automatically. The
+  prints are stored per session and are included when the session is archived (shown on
+  the Archived Sessions page, searchable by photographer/title, and in both the score-sheet
+  and archive PDFs, where the uploaded photos are now grouped under a **Digital Prints**
+  heading to match). The Scoring page also accepts a `?mode=physical` deep link.
+- **Sort archived sessions** — the Archived Sessions page can sort the list of sessions by
+  **session date**, **created date**, or **session ID** (ascending or descending). The
+  session's creation date is now saved in the archive and shown on each card.
+- **Import photographer / title from photo metadata** — with `importMetadata=true` in
+  `photo-judge.properties` (off by default), uploading a photo reads its embedded
+  metadata: an EXIF/PNG **artist/author** value is filled in as the photographer, and a
+  **title** value is used as the photo's on-screen name (its filename) instead of the
+  original filename. Anything missing falls back to the usual behavior, and the
+  photographer can still be edited by hand. JPEG (EXIF `Artist`/`ImageDescription` and the
+  Windows `XPAuthor`/`XPTitle` tags) and PNG (`tEXt`/`zTXt`/`iTXt` `Author`/`Title`)
+  are read with the standard library only. (On startup the app now also appends any
+  newly-added settings to an existing `photo-judge.properties`, so upgrading picks up new
+  options without deleting the file or losing your edits.)
+- **Session archiving** — once a competition night is over, an **🗄 Archive Session**
+  button (shown on the console only for sessions whose date is in the past) saves that
+  session's record — photo titles, photographers, scores, categories, orientations, the
+  date, and the archive date — to a single JSON file under `archives\`, then
+  **permanently deletes the photo image files** to reclaim disk space. The session leaves
+  the console (it's read-only afterward). A confirmation dialog spells out that the photos
+  will be deleted and the session can't be changed; the action can't be undone. A new
+  **Archived Sessions** page (in the menu) lists every archived session and lets you
+  search by date range, session ID, photographer, or photo title, expand a session to see
+  its photos (sortable by any column), and download any session's archive as a printable
+  **PDF** report or as **JSON**. IDs are never reused, even after the photo folder is gone.
+- **Navigation side menu** — page-to-page links now live in a single collapsible menu
+  pinned to the right edge of every control page, instead of being scattered across each
+  page's top bar. Collapsed it's a slim rail of clickable page icons; expanded it shows
+  the page names and, at the top, the app's network address plus the **Show QR code**
+  button for sharing access. On phones the rail is hidden and a floating hamburger opens
+  the menu as a full drawer. The console toolbar now carries only session/screen actions,
+  and the per-page "← Console" links and the console's old LAN bar are gone (folded into
+  the menu). Served from a shared `nav.js` so every page stays consistent.
+- **Mobile-friendly control pages** — the operator console and the Upload/Reorder,
+  Manage categories, Scoring, and Getting Started pages are now responsive, so the show
+  can be run from a phone or tablet (handy with the LAN remote-control address). Each page
+  declares a mobile viewport; on a narrow screen the console's screen table reflows into
+  one labelled card per screen, the category panes and the scoring stage/panel stack
+  vertically, tap targets grow, and text inputs use a 16px font so phones don't zoom on
+  focus. Photo reordering on the Upload page was reworked to use pointer events: grab a
+  tile anywhere with a mouse, or use the new **⠿ drag** grip on a touchscreen (so swiping
+  elsewhere still scrolls). Controls that only work on the host computer (opening a judge
+  window) are hidden on touch devices. The judge **output** display is unchanged.
+- **Scoring page** — a new **🏆 Scoring** page (opened from the console) lets a
+  scorekeeper follow any screen and record a score per photo. Pick a screen to follow,
+  then flip through that category's photos independently of what the operator is
+  presenting (Prev / Next or ← / → arrows). A live indicator shows which photo the
+  operator is currently on, highlights when you're viewing that same photo, and a
+  **Jump to operator's photo** button snaps to it — or tick **Lock to the operator's
+  photo** to follow along automatically. The photo's name is shown alongside the
+  photographer. The score you type is saved per photo (one total score for now) and
+  shows up as a badge on the Upload / Reorder grid and pre-filled in the **Score**
+  column of the downloaded score-sheet PDF.
+- **LAN remote control + QR code** — the operator console now shows the computer's
+  network address at the top, so the show can be driven from a second laptop, phone, or
+  tablet on the same network. A **Show QR code** button opens a modal with a scannable
+  code (generated by a small standard-library-only QR encoder, `qr.go`, with no
+  third-party dependency) that opens the control page on a phone instantly; when the
+  machine has multiple addresses, the modal lets you pick which one. The User Guide gains
+  a section on the one-time Windows Firewall / network setup needed to allow remote
+  devices to connect. The judges' output windows stay on the host machine. Remote
+  access can be turned off with `lanAccess=false` in `photo-judge.properties`, which
+  binds the server to this computer only and hides the address bar and QR button.
+
+### Changed
+- **Default port is now 80, with a settings file** — Photo Judge listens on port `80`
+  by default, so the control page is simply `http://127.0.0.1` (no port number to
+  remember). A new `photo-judge.properties` file is created next to the exe on first run
+  where the port can be changed (`port=…`) or handed to the app to choose automatically
+  (`autoPort=true` finds any free port). The file is plain text with comments; a leading
+  byte-order mark from editors like Notepad is tolerated. (`PHOTOJUDGE_PORT` still
+  overrides for development.)
+- **Output screens fill the window** — the judge-facing photo now scales up to the
+  largest size that fits the window while keeping its aspect ratio (letterboxed with
+  black bars), instead of being capped at the image's native size. Small photos no
+  longer appear undersized in the middle of the screen.
+
 ## [1.2.3.0] - 2026-06-11 — "Bryce Canyon"
 
 ### Added

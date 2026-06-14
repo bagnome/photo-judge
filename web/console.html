@@ -2,13 +2,14 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Photo Judge — Console</title>
 <style>
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
  header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
  .bar{padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #333}
  label{color:#9aa0a6;font-size:13px}
- select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
  button{cursor:pointer}
  button:hover{background:#363a42}
  button.primary{background:#2d6cdf;border-color:#2d6cdf}
@@ -27,6 +28,18 @@
  .monbox h3{margin:0 0 12px;font-size:15px;font-weight:600}
  .monbtn{display:block;width:100%;text-align:left;margin:6px 0;padding:10px 12px}
  .moncancel{color:#9aa0a6}
+ /* Selected session's description, shown between the action bar and the screens table. */
+ .sessdesc{display:none;padding:9px 16px;background:#202329;border-bottom:1px solid #333;color:#c9ccd1;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+ .sessdesc.show{display:block}
+ /* Create / edit session modal. */
+ #sessmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000}
+ #sessmodal.show{display:flex}
+ #sessmodal .card{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:20px;width:min(460px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.55)}
+ #sessmodal h3{margin:0 0 14px;font-size:16px}
+ #sessmodal .fld{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+ #sessmodal .fld label{font-size:13px;color:#9aa0a6}
+ #sessmodal textarea{font-size:14px;padding:8px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;width:100%;box-sizing:border-box;resize:vertical;min-height:64px;font-family:inherit}
+ #sessmodal .btns{display:flex;gap:10px;justify-content:flex-end;margin-top:4px}
  table{width:100%;border-collapse:collapse}
  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #2c2f35;font-size:14px;vertical-align:middle}
  th{color:#9aa0a6;font-weight:500}
@@ -38,6 +51,29 @@
  .sep{color:#444}
  #updatebanner{display:none;background:#7a5b16;color:#fff7e0;padding:10px 16px;font-size:14px;border-bottom:1px solid #b08a2e}
  #updatebanner.show{display:block}
+ /* Hide controls that only make sense on the host computer (opening a judge window
+    needs the Window Management API and a real second monitor) when on a touch phone. */
+ @media (hover:none) and (pointer:coarse){ .deskonly{display:none !important} }
+ /* Phone layout: stack the screen table into one card per screen with labelled rows. */
+ @media (max-width:760px){
+   .bar{gap:8px;padding:10px 12px}
+   select,input,button{font-size:16px;padding:9px 12px} /* 16px avoids iOS zoom-on-focus */
+   .bar .sep{display:none}
+   .bar label{width:100%;margin-top:2px}
+   thead{display:none}
+   table,tbody,tr,td{display:block;width:auto}
+   tr{background:#23262c;border:1px solid #3a3e45;border-radius:8px;margin:12px;padding:6px 12px 12px}
+   td{border-bottom:1px solid #2c2f35;padding:9px 0}
+   tr td:last-child{border-bottom:none}
+   td::before{content:attr(data-label);display:block;color:#9aa0a6;font-size:12px;margin-bottom:5px}
+   td[data-label="Screen"]{font-size:18px;font-weight:600;border-bottom:1px solid #2c2f35}
+   td[data-label="Screen"]::before{content:none}
+   td.status{font-size:16px}
+   td select{width:100%}
+   .grp{gap:8px}
+   .grp button{flex:1 1 auto;min-height:44px;min-width:84px}
+   tr td.muted{background:none;border:none}
+ }
 </style>
 </head>
 <body>
@@ -46,28 +82,31 @@
 <div class="bar">
   <label>Session</label>
   <select id="session"></select>
-  <button id="editsession">Edit date</button>
+  <button id="newbtn" class="primary">➕ New session</button>
+  <button id="editsession">Edit session</button>
   <button id="pdfbtn">⤓ Score sheet</button>
+  <button id="archivesession" style="display:none">🗄 Archive Session</button>
   <button id="delsession" class="danger">Delete</button>
-  <span class="sep">|</span>
-  <label>New</label>
-  <input type="date" id="newdate">
-  <button id="newbtn">Create session</button>
+  <button id="iobtn">⇄ Import / Export</button>
   <span class="sep">|</span>
   <button id="createscreen" class="primary">➕ Create Screen</button>
   <button id="panicblack">⬛ Black all</button>
-  <span class="sep">|</span>
-  <button id="openhelp">📖 Getting Started</button>
-  <button id="openadmin">▤ Upload / Reorder</button>
-  <button id="opencats">▦ Manage categories</button>
   <span class="spacer"></span>
   <button id="closeapp" class="danger">✕ Close App</button>
 </div>
+<div id="sessdesc" class="sessdesc"></div>
 <table>
  <thead><tr><th>Screen</th><th>Category</th><th>Orientation</th><th></th><th>Showing</th><th>Controls</th></tr></thead>
  <tbody id="rows"></tbody>
 </table>
 <div id="monpick"><div class="monbox" id="monbox"></div></div>
+<div id="sessmodal"><div class="card">
+  <h3 id="sessmodal-title">New session</h3>
+  <div class="fld"><label for="sm-date">Date</label><input type="date" id="sm-date"></div>
+  <div class="fld"><label for="sm-desc">Description (optional)</label>
+    <textarea id="sm-desc" maxlength="500" placeholder="e.g. April club competition — judged by Jane Smith"></textarea></div>
+  <div class="btns"><button id="sm-cancel">Cancel</button><button id="sm-save" class="primary">Create</button></div>
+</div></div>
 <div id="toasts"></div>
 
 <script>
@@ -120,6 +159,14 @@ function render(){
  const selSession = state.sessions.find(s => s.id === sel.value);
  const sessionCats = selSession ? (selSession.categories || []) : [];
 
+ // "Archive Session" is only offered once a session's date is in the past.
+ $('archivesession').style.display = (selSession && selSession.date < todayStr()) ? '' : 'none';
+
+ // Selected session's description strip (below the action bar).
+ const sd = $('sessdesc');
+ if(selSession && selSession.description){ sd.textContent = '📝  ' + selSession.description; sd.classList.add('show'); }
+ else { sd.textContent = ''; sd.classList.remove('show'); }
+
  // Screen rows
  const rows = $('rows'); rows.innerHTML = '';
  if(state.screens.length === 0){
@@ -129,32 +176,33 @@ function render(){
  state.screens.forEach(sc => {
    const tr = document.createElement('tr');
 
-   const tdN = document.createElement('td'); tdN.textContent = sc.name; tr.appendChild(tdN);
+   const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
 
-   const tdC = document.createElement('td');
+   const tdC = document.createElement('td'); tdC.dataset.label='Category';
    const cs = document.createElement('select');
    const blank = document.createElement('option'); blank.value=''; blank.textContent='—'; cs.appendChild(blank);
    sessionCats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; cs.appendChild(o); });
    cs.value = sc.category || ''; tdC.appendChild(cs); tr.appendChild(tdC);
 
-   const tdO = document.createElement('td');
+   const tdO = document.createElement('td'); tdO.dataset.label='Orientation';
    const os = document.createElement('select');
    ['Landscape','Portrait'].forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; os.appendChild(o); });
    os.value = sc.orientation || 'Landscape'; tdO.appendChild(os); tr.appendChild(tdO);
 
-   const tdL = document.createElement('td');
+   const tdL = document.createElement('td'); tdL.dataset.label='Load';
    tdL.appendChild(btn('Load', () => {
-     if(!currentSession()){ alert('Create or select a session first.'); return; }
-     if(!cs.value){ alert('Pick a category.'); return; }
+     if(!currentSession()){ pjAlert('Create or select a session first.'); return; }
+     if(!cs.value){ pjAlert('Pick a category.'); return; }
      post('/api/screen/load', {name:sc.name, sessionId:currentSession(), category:cs.value, orientation:os.value});
    }));
    tr.appendChild(tdL);
 
-   const tdS = document.createElement('td'); tdS.className='status'; tdS.innerHTML = statusText(sc); tr.appendChild(tdS);
+   const tdS = document.createElement('td'); tdS.className='status'; tdS.dataset.label='Showing'; tdS.innerHTML = statusText(sc); tr.appendChild(tdS);
 
-   const tdK = document.createElement('td');
+   const tdK = document.createElement('td'); tdK.dataset.label='Controls';
    const g = document.createElement('div'); g.className='grp';
-   g.appendChild(btn('⧉ Open window', () => openOutputWindow(sc.name)));
+   const ow = btn('⧉ Open window', () => openOutputWindow(sc.name)); ow.className='deskonly';
+   g.appendChild(ow);
    g.appendChild(btn('◀ Prev', () => cmd(sc.name,'prev')));
    g.appendChild(btn('Next ▶', () => cmd(sc.name,'next')));
    g.appendChild(btn(sc.blackout ? 'Reveal' : 'Black', () => cmd(sc.name,'blackout')));
@@ -167,32 +215,55 @@ function render(){
  });
 }
 
-$('newbtn').onclick = async () => {
- const d = $('newdate').value;
- if(!d){ alert('Pick a date for the session.'); return; }
- const r = await post('/api/session/create', {date:d});
- if(!r.ok){ alert('Create failed: '+(await r.text())); return; }
- const s = await r.json();
- pendingSelect = s.id;
- toast('Session #'+s.id+' ('+s.date+') created');
+// Create / edit session modal (date + description).
+let sessModalMode = 'new', sessModalId = null;
+function openSessionModal(mode, ss){
+ sessModalMode = mode; sessModalId = ss ? ss.id : null;
+ $('sessmodal-title').textContent = mode === 'edit' ? 'Edit session' : 'New session';
+ $('sm-save').textContent = mode === 'edit' ? 'Save' : 'Create';
+ $('sm-date').value = ss ? ss.date : todayStr();
+ $('sm-desc').value = ss ? (ss.description || '') : '';
+ $('sessmodal').classList.add('show');
+ setTimeout(() => $('sm-date').focus(), 0);
+}
+function closeSessionModal(){ $('sessmodal').classList.remove('show'); }
+$('sm-cancel').onclick = closeSessionModal;
+$('sessmodal').addEventListener('click', e => { if(e.target === $('sessmodal')) closeSessionModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && $('sessmodal').classList.contains('show')) closeSessionModal(); });
+
+$('sm-save').onclick = async () => {
+ const date = $('sm-date').value, description = $('sm-desc').value;
+ if(!date){ pjAlert('Pick a date for the session.'); return; }
+ if(sessModalMode === 'edit'){
+   const r = await post('/api/session/edit', {id:sessModalId, date, description});
+   if(!r.ok){ pjAlert('Edit failed: '+(await r.text())); return; }
+   pendingSelect = sessModalId;
+   toast('Session #'+sessModalId+' updated', 'edit');
+ } else {
+   const r = await post('/api/session/create', {date, description});
+   if(!r.ok){ pjAlert('Create failed: '+(await r.text())); return; }
+   const s = await r.json();
+   pendingSelect = s.id;
+   toast('Session #'+s.id+' ('+s.date+') created');
+ }
+ closeSessionModal();
 };
 
-$('editsession').onclick = async () => {
+$('newbtn').onclick = () => openSessionModal('new');
+$('editsession').onclick = () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
- const cur = (state.sessions.find(s => s.id === id) || {}).date || '';
- const d = prompt('New date for session #'+id+' (YYYY-MM-DD):', cur);
- if(!d) return;
- if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert('Please use YYYY-MM-DD format (e.g. 2026-06-09).'); return; }
- const r = await post('/api/session/edit', {id, date:d});
- if(!r.ok){ alert('Edit failed: '+(await r.text())); return; }
- pendingSelect = id;
- toast('Session #'+id+' date changed to '+d, 'edit');
+ if(!id){ pjAlert('No session selected.'); return; }
+ openSessionModal('edit', state.sessions.find(s => s.id === id));
 };
+
+// Import / Export wizard (built by portation.js); expose a hook so it can select an
+// imported session in the console dropdown ("Make active session").
+$('iobtn').onclick = () => { if(window.openPortationWizard) window.openPortationWizard(); };
+window.pjSelectSession = id => { pendingSelect = id; render(); };
 
 $('pdfbtn').onclick = () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const a = document.createElement('a');
  a.href = '/api/session/pdf?session=' + encodeURIComponent(id);
  a.download = '';
@@ -201,12 +272,36 @@ $('pdfbtn').onclick = () => {
 
 $('delsession').onclick = async () => {
  const id = currentSession();
- if(!id){ alert('No session selected.'); return; }
+ if(!id){ pjAlert('No session selected.'); return; }
  const ss = state.sessions.find(s => s.id === id) || {};
- if(!confirm('Delete session #'+id+' ('+(ss.date||'')+')?\n\nIts photos move to photos\\_deleted (recoverable on disk) and it disappears from the app.')) return;
+ if(!await pjConfirm('Delete session #'+id+' ('+(ss.date||'')+')?\n\nIts photos move to photos\\_deleted (recoverable on disk) and it disappears from the app.', {title:'Delete session', okLabel:'Delete', danger:true})) return;
  const r = await post('/api/session/delete', {id});
- if(!r.ok){ alert('Could not delete:\n\n'+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Could not delete:\n\n'+(await r.text())); return; }
  toast('Session #'+id+' deleted — recoverable in photos\\_deleted', 'del');
+};
+
+// today's date as YYYY-MM-DD in local time (for the "is this session in the past?" check).
+function todayStr(){
+ const d = new Date();
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+$('archivesession').onclick = async () => {
+ const id = currentSession();
+ if(!id){ pjAlert('No session selected.'); return; }
+ const ss = state.sessions.find(s => s.id === id) || {};
+ if(!await pjConfirm(
+   'Archive session #'+id+' ('+(ss.date||'')+')?\n\n'
+ + 'This saves the photo titles, photographers, scores, categories and dates to an '
+ + 'archive file you can view and download later on the Archived Sessions page — but it '
+ + 'PERMANENTLY DELETES the photo image files to save space.\n\n'
+ + 'Once archived, the session is read-only and cannot be changed. This cannot be undone.',
+   {title:'Archive session', okLabel:'Archive', danger:true}
+ )) return;
+ const r = await post('/api/session/archive', {id});
+ if(!r.ok){ pjAlert('Could not archive:\n\n'+(await r.text())); return; }
+ const j = await r.json();
+ toast('Session #'+id+' archived ('+(j.photoCount||0)+' photos) — view it on the Archived Sessions page', 'del');
 };
 
 function chooseMonitor(screens){
@@ -235,7 +330,7 @@ function chooseMonitor(screens){
 // sits on that monitor, a plain fullscreen in the output page lands there.
 async function openOutputWindow(name){
  const w = window.open('/output?screen='+encodeURIComponent(name), 'pjwin_'+name, 'width=1024,height=640');
- if(!w){ alert('Your browser blocked the pop-up window.\n\nAllow pop-ups for this site, then click “⧉ Open window” on the screen’s row to launch it.'); return; }
+ if(!w){ pjAlert('Your browser blocked the pop-up window.\n\nAllow pop-ups for this site, then click “⧉ Open window” on the screen’s row to launch it.', {title:'Pop-up blocked'}); return; }
  w.focus();
  if(!('getScreenDetails' in window)) return;                 // older browser: drag + F fallback
  let screens;
@@ -251,15 +346,15 @@ async function openOutputWindow(name){
 }
 
 $('createscreen').onclick = async () => {
- const name = prompt('Name this screen (e.g. "Landscape monitor"):');
+ const name = await pjPrompt('Name this screen (e.g. "Landscape monitor"):', '', {title:'Create screen', okLabel:'Create', placeholder:'Landscape monitor'});
  if(!name || !name.trim()) return;
  const r = await post('/api/screen/create', {name: name.trim()});
- if(!r.ok){ alert('Could not create screen: '+(await r.text())); return; }
+ if(!r.ok){ pjAlert('Could not create screen: '+(await r.text())); return; }
  toast('Screen “'+name.trim()+'” created — use ⧉ Open window on its row to launch it');
 };
 
-function deleteScreen(name){
- if(!confirm('Delete screen “'+name+'”?\n\nIf its output window is open it will go black. Screens are saved between launches, so this removes it for good.')) return;
+async function deleteScreen(name){
+ if(!await pjConfirm('Delete screen “'+name+'”?\n\nIf its output window is open it will go black. Screens are saved between launches, so this removes it for good.', {title:'Delete screen', okLabel:'Delete', danger:true})) return;
  post('/api/screen/delete', {name}).then(r => {
    if(r.ok) toast('Screen “'+name+'” deleted', 'del');
    else toast('Could not delete screen', 'del');
@@ -267,15 +362,13 @@ function deleteScreen(name){
 }
 
 $('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout) cmd(sc.name,'blackout'); }); };
-$('openhelp').onclick = () => window.open('/getting-started', '_blank');
-$('openadmin').onclick = () => window.open('/admin', '_blank');
-$('opencats').onclick = () => window.open('/categories', '_blank');
+
 // Re-render when the selected session changes so each screen's category menu
 // reflects that session's own active slate.
 $('session').addEventListener('change', render);
 
 $('closeapp').onclick = async () => {
- if(!confirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.')) return;
+ if(!await pjConfirm('Close Photo Judge?\n\nThis stops the app entirely — the output windows will go blank and the program exits. Use this when the session is finished.', {title:'Close Photo Judge', okLabel:'Close app', danger:true})) return;
  try { await post('/api/shutdown', {}); } catch(e){}
  if(es) es.close();
  document.body.innerHTML = '<div style="padding:48px;font-family:system-ui;color:#9aa0a6;font-size:16px">Photo Judge has been closed.<br><br>You can close this tab and the output windows now.</div>';
@@ -285,5 +378,8 @@ const es = new EventSource('/api/events?role=console');
 es.onmessage = e => { state = JSON.parse(e.data); render(); };
 render();
 </script>
+<script src="/modal.js"></script>
+<script src="/portation.js"></script>
+<script src="/nav.js"></script>
 </body>
 </html>

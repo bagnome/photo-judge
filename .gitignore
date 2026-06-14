@@ -5,8 +5,14 @@
 # Runtime data and user content, created/managed by the app at run time
 /photos/
 /logo/
+/archives/
+/_import_tmp/
+*.pjs
+*.pjss
 /screens.json
+/settings.json
 /applog.txt
+/photo-judge.properties
 
 # Image files — never commit test photos or logos, wherever they land
 *.jpg

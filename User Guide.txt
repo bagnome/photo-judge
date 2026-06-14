@@ -10,6 +10,10 @@ on black, with a title card announcing each category.
 
 Nothing to install. Everything lives next to the program file.
 
+Prefer to learn in the app? Open "How To" from the menu on the
+right of any page for illustrated, step-by-step guides covering
+the same topics as this document.
+
 
 ------------------------------------------------------------
  1. STARTING THE APP
@@ -24,12 +28,87 @@ Nothing to install. Everything lives next to the program file.
      * Leave the command window open while you use the app
        (you can minimize it). Closing it stops the app.
      * If the browser didn't open, or you closed the tab, just
-       go to:   http://127.0.0.1:8753
+       go to:   http://127.0.0.1
+       (If you changed the port - see below - add it, e.g.
+        http://127.0.0.1:8753 .)
 
 On first run the app creates these next to itself:
-     photos\          - where all photos are stored
-     logo\            - optional logo for the title cards
-     categories.txt   - seed for the first session's categories
+     photos\                  - where all photos are stored
+     logo\                    - optional logo for the title cards
+     archives\                - records of archived sessions (see #9)
+     categories.txt           - seed for the first session's categories
+     photo-judge.properties   - settings you can change (see below)
+
+CHANGING THE PORT  (optional)
+   By default the app listens on port 80, so the control page is at
+   http://127.0.0.1 . If something else on the computer already uses
+   port 80, open  photo-judge.properties  in Notepad and either:
+     * set a different number, e.g.   port=8753   (then use
+       http://127.0.0.1:8753 ), or
+     * set   autoPort=true   to let the app pick any free port for
+       you (the command window prints the address it chose).
+   Save the file and restart the app for changes to take effect.
+
+CONTROLLING IT FROM ANOTHER DEVICE ON THE NETWORK  (optional)
+   You can run the show from a second laptop, a phone, or a tablet
+   that is on the SAME network (same Wi-Fi or the same wired router)
+   as the computer running Photo Judge. The judges' monitors stay
+   plugged into the main computer; you just get a second control page.
+
+   This is on by default. To turn it off (so the app only answers on
+   the computer itself), open  photo-judge.properties  and set
+   lanAccess=false , then restart - the address bar and QR button
+   disappear.
+
+   WHERE TO FIND THE ADDRESS
+     At the top of the operator console there is a bar:
+        "Control from another device on this network: http://192.168.x.x"
+     * On the other device, open a web browser and type that address.
+     * Or click "Show QR code" and scan it with a phone/tablet camera
+       to open the control page instantly. (If the computer has more
+       than one network address, the QR window lets you pick which.)
+     If the bar does NOT appear, the computer has no usable network
+     connection (it's offline, or only has a loopback address).
+
+   ONE-TIME WINDOWS SETUP (so other devices are allowed to connect)
+     Windows blocks incoming connections until you allow the app:
+     1. The first time you start Photo Judge, Windows may pop up
+        "Allow photo-judge to communicate on these networks".
+        Tick  Private networks  and click  Allow access.
+     2. If you didn't see that prompt, or it still won't connect:
+        - Make sure the network is set to PRIVATE, not Public:
+          Settings -> Network & Internet -> (your Wi-Fi/Ethernet)
+          -> set "Network profile type" to  Private.
+        - Allow the app through the firewall:
+          Windows Security -> Firewall & network protection ->
+          "Allow an app through firewall" -> Change settings ->
+          "Allow another app..." -> Browse to  photo-judge.exe  ->
+          Add, and make sure its  Private  box is ticked.
+
+   GOOD TO KNOW
+     * Both devices must be on the same network. Guest Wi-Fi and many
+       hotel / conference networks block device-to-device traffic
+       ("client isolation"), so use your own router or hotspot.
+     * The address (192.168.x.x) can change if the computer reconnects
+       to the network; if a saved link stops working, re-check the bar
+       on the console for the current address.
+     * This is for control only - it does not add judges' monitors.
+       Open output windows still belong to the main computer.
+     * The pages are touch-friendly on a phone or tablet. On the
+       Upload / Reorder page, drag a photo by its "⠿ drag" grip to
+       reorder it (on a computer you can also just drag the photo).
+       "Open window" only appears on the main computer, since judges'
+       windows can't be opened from a phone.
+
+READING PHOTO METADATA  (optional)
+   If your photographers embed their name and the photo's title in the
+   image file, the app can read them automatically on upload. Open
+   photo-judge.properties and set  importMetadata=true , then restart.
+   From then on, an uploaded photo's embedded photographer (artist /
+   author) fills the photographer box, and its embedded title is used
+   as the photo's on-screen name. Missing values change nothing, and
+   you can still edit the photographer by hand. (Off by default - see
+   section 4 for how it appears on the Upload page.)
 
 
 ------------------------------------------------------------
@@ -52,14 +131,29 @@ SCREEN     - A display you present on (e.g. "Landscape monitor").
 So the flow is:  pick a Session  ->  add photos to its
 categories  ->  open your Screens  ->  present.
 
+GETTING AROUND - Every page has a menu down the RIGHT edge that
+             takes you between pages (Console, Upload / Reorder,
+             Manage categories, Scoring, Getting Started). It starts
+             as a slim strip of icons; click the menu button at its
+             top to expand it and see the page names (and the address
+             / QR code for connecting another device). On a phone the
+             menu is hidden behind a small menu button in the top-right
+             corner. When this guide says to "open" or "click" one of
+             those pages, that's where you find it.
+
 
 ------------------------------------------------------------
  3. TYPICAL RUN  —  STEP BY STEP
 ------------------------------------------------------------
 
 A) CREATE / PICK A SESSION  (do this first!)
-   On the control page, use the date box + "Create session",
-   or pick an existing one from the Session dropdown.
+   On the control page, click "➕ New session" to open a small
+   box: choose the date and (optionally) type a DESCRIPTION - a
+   short note to tell sessions apart, e.g. "April competition -
+   judged by Jane". Click "Create". Or pick an existing session
+   from the Session dropdown; "Edit session" changes its date and
+   description. The description shows under the toolbar, on the
+   Archived Sessions page, and on the printed score sheet.
 
 B) SET UP CATEGORIES  (optional - see section 7)
    Click "Manage categories" to activate/reorder/add this
@@ -107,6 +201,13 @@ F) PRESENT
 * PHOTOGRAPHER: type a name in the box under a photo to record
   who took it. It's saved automatically and is pre-filled into
   the score-sheet PDF.
+* FROM METADATA (optional): if you turn on  importMetadata=true  in
+  photo-judge.properties, each uploaded photo is checked for an
+  embedded photographer (artist/author) and title. A photographer is
+  filled into the box for you, and a title is used as the photo's
+  on-screen name (instead of the file's name). Anything missing is
+  left as-is, and you can still edit the photographer by hand. (Off by
+  default; see section 1.)
 * REORDER: drag a thumbnail to a new spot within its section.
   The number badge shows the display order. Saved instantly.
   (Photos can't be dragged between Landscape and Portrait —
@@ -150,7 +251,7 @@ Per screen row:
 
 Top of page:
    Black all     - instantly black every screen.
-   Close App     - stops the program when you're done (see #9).
+   Close App     - stops the program when you're done (see #11).
 
 The monitor not in use simply stays black on its own - there is
 nothing extra to switch off.
@@ -160,8 +261,8 @@ nothing extra to switch off.
  7. CATEGORIES  (editing the list)
 ------------------------------------------------------------
 
-Categories are managed PER SESSION, right in the app - click
-"Manage categories" (on the Console or the Upload page).
+Categories are managed PER SESSION, right in the app - open
+"Manage categories" from the menu on the right.
 
 * Pick a session at the top, then you'll see two lists:
     INACTIVE (left)  - categories not used this session
@@ -185,18 +286,182 @@ most recent session's categories, so your setup carries forward.
 
 
 ------------------------------------------------------------
- 8. LOGO  (optional)
+ 8. SCORING  ("Scoring" page)
 ------------------------------------------------------------
 
-To show a club logo above the category name on every title card,
-put one image file into the  logo\  folder, then start the app.
-A see-through (transparent) PNG looks best on the black card.
-No image in logo\  =  title cards show just the text.
-(Detected when the app starts, so restart after adding/changing.)
+A scorekeeper can record a score for each photo while the
+operator runs the show. Open "Scoring" from the menu on the
+right. To keep score on a SEPARATE device while someone else
+presents, open the app's address on that device instead (see
+the menu's address / QR code, or section 1).
+
+* FOLLOW A SCREEN: pick a screen at the top. The page shows
+  the photos from whatever that screen currently has loaded
+  (session / category / orientation).
+* FLIP INDEPENDENTLY: use Prev / Next (or the left/right arrow
+  keys) to move through the photos yourself - this does NOT
+  change what the judges see. You can score ahead of, or behind,
+  whatever the operator is presenting.
+* OPERATOR INDICATOR: a panel shows which photo the operator is
+  currently showing on that screen. When you're looking at the
+  same photo, it turns green ("You're viewing the operator's
+  current photo"). "Jump to operator's photo" snaps you to it.
+* ENTER A SCORE: type a score in the box and press Enter. It's
+  saved for that photo. Clear the box and press Enter to remove
+  it.
+* Scores show up as a green badge on the Upload / Reorder page
+  and are pre-filled into the Score column of the score-sheet
+  PDF (section 4 / the "Score sheet" button).
+
+PHYSICAL PRINTS (entries with no photo file)
+   Some nights you also judge actual printed photos that were never
+   uploaded. Switch to the "📋 Physical prints" button at the top of
+   the Scoring page to record those.
+     * Pick the Session and Category at the top.
+     * A small table appears with columns: Print title, Photographer,
+       and Score. Just type them in - there's no image to show.
+     * A fresh empty row appears automatically as soon as you start
+       filling the last one, so you can keep going down the list.
+     * Press Tab to move across the fields, and Enter to drop to the
+       next row. Each entry saves on its own as you go.
+     * The "x" at the end of a row removes that entry.
+   Physical prints belong to the session you picked, so they're kept
+   with it - they appear in the score-sheet PDF and, if you archive the
+   session, in the archived record too.
 
 
 ------------------------------------------------------------
- 9. STOPPING THE APP
+ 9. ARCHIVING SESSIONS  (saving records + freeing space)
+------------------------------------------------------------
+
+When a competition night is finished and you no longer need the
+actual photo files, you can ARCHIVE the session. This saves a
+permanent record of the session - the photo titles, photographers,
+scores, categories, orientations, the session date, and the date you
+archived it - to a file, and then DELETES the photo image files to
+free up disk space.
+
+HOW TO ARCHIVE
+   1. On the console, pick the session in the Session menu.
+   2. An  "🗄 Archive Session"  button appears next to it - but ONLY
+      for sessions whose date is in the past. (Today's or future
+      sessions can't be archived; finish the night first.)
+   3. Click it and confirm. The warning is important:
+        * the photo image files are PERMANENTLY DELETED (this is not
+          the recoverable "Delete" - the pictures are gone),
+        * the session becomes read-only and leaves the console,
+        * it cannot be undone.
+
+VIEWING ARCHIVED SESSIONS
+   Open  "Archived Sessions"  from the menu. Every archived session
+   is listed with its date, the date it was archived, its categories,
+   and how many photos it had.
+     * SEARCH by any combination of: date range, session ID,
+       photographer name, or photo title. (Searching a photographer
+       or title expands the matching entries and highlights the hits;
+       this covers physical prints too.)
+     * "Show details" lists that session's photos - and any physical
+       prints - with their title, photographer and score. Click any
+       column heading to sort the list by it (click again to reverse).
+     * "⤓ PDF" downloads a printable report of the session; "⤓ JSON"
+       saves the raw record (handy for a spreadsheet or your own files).
+
+GOOD TO KNOW
+   * Archives are stored next to the program in an  archives\  folder,
+     one  <id>.json  file per session.
+   * Session ID numbers are never reused, so an archived session's
+     number won't be handed to a future session.
+   * Archiving only removes that session's CURRENT photos. If you want
+     to keep the pictures themselves, copy them out of  photos\
+     before archiving.
+
+
+------------------------------------------------------------
+ IMPORT / EXPORT - MOVING SESSIONS BETWEEN COMPUTERS
+------------------------------------------------------------
+
+You can carry whole sessions - their photos and everything else -
+from one computer to another. Click  "⇄ Import / Export"  on the
+console to open the wizard. It uses two file types, which are just
+zip files with a Photo Judge extension:
+     .pjs   = one session
+     .pjss  = several sessions
+Both contain everything a session needs (the photos, titles,
+photographers, scores, physical prints, and - for archived nights -
+the archive record), so a single file is all you have to copy.
+
+EXPORTING
+   1. On the "Export" tab you'll see a list of every session, live
+      AND archived. Narrow it with the filters (active/archived,
+      photographer, photo title, date range) and click a column to
+      sort. Long lists are paged.
+   2. Click  "Add ->"  on each session you want to send; they collect
+      in the "Selected for export" box. (Or use a row's "⤓ .pjs" to
+      export just that one immediately.)
+   3. Click  "Export".  One session downloads as a  .pjs  file, several
+      as a  .pjss.  Copy that file to a USB stick, email, etc.
+
+IMPORTING
+   1. On the "Import" tab, choose (or drag in) one or more .pjs/.pjss
+      files. A table lists the sessions inside each one.
+   2. Tick which sessions to "Import" (all are ticked by default). If
+      you want one of them to become the selected session on the
+      console afterward, tick its "Make active" box (only one allowed).
+   3. Click  "Import".  Each imported session is given a NEW ID number
+      so it can't clash with sessions already on this computer; the
+      table then shows the new ID next to the old one.
+
+GOOD TO KNOW
+   * Importing never overwrites an existing session - you always get a
+     fresh copy with a new ID.
+   * The export list shows up to 50 sessions per page; change that with
+     "exportPageSize" in photo-judge.properties if you like.
+
+
+------------------------------------------------------------
+ 10. SETTINGS  ("Settings" page)
+------------------------------------------------------------
+
+Open "Settings" from the menu on the right to set app-wide options.
+Each one saves as soon as you change it.
+
+SCORING
+   * Lock the scorekeeper to the operator's photo - the Scoring page
+     follows whatever the operator is presenting and the scorekeeper
+     can't flip ahead on their own (the lock toggle there is forced on).
+
+PRESENTING
+   * Only one live screen at a time - revealing a screen automatically
+     blacks out all the others, so two monitors never show at once.
+
+TITLE CARD LOGO
+   To show a club logo above the category name on the judges' title
+   cards, click "Upload logo" and pick image file(s). They're kept in
+   a little gallery; click one to make it the Active logo (click it
+   again to use none), or the "x" to delete it. A see-through
+   (transparent) PNG looks best on the black card. Logos stay until
+   you delete them.
+
+PDF HEADER
+   The heading at the top of the score-sheet and archive PDFs - put
+   your club's name here, for example. Leave it blank to use
+   "Photo Judge". It's limited to a length that fits two lines.
+
+NETWORK
+   * Allow control from other devices (LAN) - see section 1. This is
+     also a switch here, but a "lanAccess=false" in
+     photo-judge.properties wins, and a change takes effect after you
+     restart the app.
+
+READING PHOTO METADATA
+   * Two switches - one for the photographer, one for the title - that
+     fill those in from an uploaded photo's embedded metadata (see
+     section 4). These only work when importMetadata=true in
+     photo-judge.properties; a "false" there greys them out.
+
+
+------------------------------------------------------------
+ 11. STOPPING THE APP
 ------------------------------------------------------------
 
 Click "Close App" on the control page (recommended), or close
@@ -206,7 +471,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 10. GOOD TO KNOW
+ 12. GOOD TO KNOW
 ------------------------------------------------------------
 
 * Loading a category shows the TITLE CARD first - press Next to
@@ -219,7 +484,7 @@ background. Closing just the browser tab does NOT stop it.
 
 
 ------------------------------------------------------------
- 11. TROUBLESHOOTING
+ 13. TROUBLESHOOTING
 ------------------------------------------------------------
 
 A window didn't open / was blocked
@@ -234,7 +499,8 @@ The display window isn't truly fullscreen
    Click anywhere on that window, or press the F key.
 
 My logo isn't showing
-   Make sure one image is in the logo\ folder, then restart.
+   Open the Settings page (section 10), upload a logo, and click it so
+   it's marked Active.
 
 The app won't start (security warning)
    More info -> Run anyway. It is an unrecognized program only
@@ -242,11 +508,32 @@ The app won't start (security warning)
 
 Nothing happens / can't reach the page
    Make sure the command window is still open, and visit
-   http://127.0.0.1:8753 in your browser.
+   http://127.0.0.1 in your browser (or http://127.0.0.1:PORT if
+   you set a custom "port" in photo-judge.properties).
+
+"could not start ... port" in the command window
+   Another program is using the port. Open photo-judge.properties,
+   change "port" to a free number (e.g. 8753) or set autoPort=true,
+   save, and restart.
+
+Another device on the network can't open the page
+   * Quick check: in a browser ON THE HOST computer, open the LAN
+     address shown on the bar (e.g. http://192.168.1.5 ). If even that
+     fails, the issue is the app/Windows, not the other device:
+       - make sure  lanAccess=true  in photo-judge.properties (the
+         default) and restart; if the address bar is missing entirely,
+         it's off or the computer has no network connection.
+   * If the host can open it but the other device can't:
+       - check both devices are on the SAME network (not guest Wi-Fi),
+       - type the address exactly as shown, including the port if one
+         is shown (e.g. http://192.168.1.5:8753 ),
+       - allow Photo Judge through Windows Firewall and set the network
+         to Private - see "CONTROLLING IT FROM ANOTHER DEVICE" in
+         section 1.
 
 
 ------------------------------------------------------------
- 12. MOVING THE APP TO ANOTHER COMPUTER
+ 14. MOVING THE APP TO ANOTHER COMPUTER
 ------------------------------------------------------------
 
 The app runs from any folder and rebuilds anything missing.
@@ -257,8 +544,12 @@ To bring your existing content, copy the exe AND keep these in
 the same folder with it:
      photos\          (all sessions, photos, AND each session's
                        category setup - the main data)
-     logo\            (your logo)
+     archives\        (records of any archived sessions)
+     logo\            (your logos)
      screens.json     (your saved screens)
+     settings.json    (your Settings-page choices)
+     photo-judge.properties  (only if you changed the port; the
+                              new computer makes its own otherwise)
 
 (categories.txt only seeds a brand-new first session, so you
 don't need to copy it once you have sessions.)
