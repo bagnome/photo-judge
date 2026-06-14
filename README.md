@@ -132,10 +132,11 @@ that workflow.
   and blank spaces for the photographer name and a score. Any photographer names and
   judge scores already recorded are pre-filled. Generated in-process with the standard
   library only — no PDF dependency.
-- **Getting Started guide** — an in-app, illustrated walkthrough (a **Getting Started**
-  button on the console) that takes a new operator from creating a session through to
-  presenting, with a screenshot for each step. Its images are embedded in the exe, so it
-  works offline on a copied build.
+- **How To page** — an in-app help page (the **How To** menu item) with a left-hand tab
+  rail of step-by-step guides: the illustrated **Getting started** walkthrough (a
+  screenshot for each step, embedded in the exe so it works offline) plus guides for score
+  keeping, importing/exporting, archiving, rotating a monitor for portrait photos, enabling
+  LAN access, and allowing the app through the Windows Firewall.
 - **LAN remote control** — the console shows the computer's LAN address so the show can
   be driven from a second laptop, phone, or tablet on the same network, and a **Show QR
   code** button renders a scannable code (a small standard-library-only QR encoder, no
@@ -148,7 +149,7 @@ that workflow.
   browsable on the **Archived Sessions** page (search by date range / session ID /
   photographer / title) and downloadable as JSON.
 - **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
-  Scoring, Getting Started) is responsive and touch-friendly, so it works from a phone or
+  Scoring, How To) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
   grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
   LAN remote control above.
@@ -297,8 +298,8 @@ new sessions — copy to the local drive for an event).
 | `web/categories.html` | Category manager (per-session) page |
 | `web/score.html` | Scoring page (follow a screen, record scores) |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
-| `web/getting-started.html` | Illustrated Getting Started walkthrough |
-| `getting-started-images/` | Screenshots for the Getting Started page (embedded into the exe) |
+| `web/how-to.html` | How To page — tabbed step-by-step guides (Getting started is the first tab) |
+| `getting-started-images/` | Screenshots for the How To guides (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
 | `photo-judge.properties` | Runtime settings (port / autoPort), seeded on first run |
 | `User Guide.txt` | End-user (operator) guide |

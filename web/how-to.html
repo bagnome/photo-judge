@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Judge — How To</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px;position:sticky;top:0;z-index:10}
+ .layout{display:flex;align-items:flex-start;max-width:1080px;margin:0 auto;gap:24px;padding:20px 16px 60px}
+ /* Left tab rail */
+ .rail{flex:none;width:236px;position:sticky;top:64px;display:flex;flex-direction:column;gap:4px}
+ .rail .tab{display:flex;align-items:center;gap:11px;text-align:left;padding:11px 13px;background:#23262c;
+   border:1px solid #2c2f35;border-left:3px solid transparent;border-radius:7px;color:#cfd2d6;font-size:14px;cursor:pointer}
+ .rail .tab:hover{background:#272b31;color:#fff}
+ .rail .tab.on{background:#1f2530;color:#fff;border-left-color:#2d6cdf}
+ .rail .tab .ic{flex:none;width:22px;text-align:center;font-size:17px}
+ .rail .tab .soon{margin-left:auto;font-size:10.5px;color:#ffe9b0;background:#5a4a1e;border-radius:9px;padding:1px 7px}
+ /* Right content pane */
+ .pane{flex:1 1 auto;min-width:0}
+ .pane h1{margin:0 0 6px;font-size:22px}
+ .intro{color:#c9ccd1;line-height:1.6;background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:16px 20px;margin:0 0 20px}
+ .intro b{color:#e8e8e8}
+ .banner{border-radius:8px;padding:13px 18px;margin:0 0 20px;line-height:1.55;font-size:14px}
+ .banner.soon{background:#3a3320;border:1px solid #b08a2e;color:#ffe9b0}
+ .banner.warn{background:#3a1f1f;border:1px solid #b04a4a;color:#ffd6d6}
+ .step{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:16px 20px;margin:0 0 16px}
+ .step .head{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+ .num{flex:none;width:28px;height:28px;border-radius:50%;background:#2d6cdf;color:#fff;font-weight:700;
+   display:flex;align-items:center;justify-content:center;font-size:14px}
+ .step h2{margin:0;font-size:16px}
+ .step .body{color:#c9ccd1;line-height:1.6;margin:0;padding-left:40px}
+ .step .body b{color:#e8e8e8}
+ .step .body code{background:#1b1d21;border:1px solid #3a3e45;border-radius:4px;padding:0 5px;font-size:12.5px}
+ .step .body kbd{background:#1b1d21;border:1px solid #3a3e45;border-bottom-width:2px;border-radius:4px;padding:0 6px;font-size:12px}
+ .shot{display:block;margin:12px 0 0 40px}
+ .shot img{max-width:100%;height:auto;border:1px solid #3a3e45;border-radius:6px;background:#000;display:block}
+ .shot .cap{color:#777;font-size:12px;margin-top:6px}
+ .note{color:#9aa0a6;font-size:13.5px;line-height:1.55;border-top:1px solid #2c2f35;padding-top:14px;margin-top:4px}
+ .note code{background:#1b1d21;border:1px solid #3a3e45;border-radius:4px;padding:0 5px;font-size:12.5px}
+ @media (max-width:820px){
+   .layout{flex-direction:column;gap:14px}
+   .rail{position:static;width:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:8px;padding-bottom:4px}
+   .rail .tab{flex:0 0 auto;border-left:none;border-bottom:3px solid transparent;padding:9px 12px}
+   .rail .tab.on{border-left:none;border-bottom-color:#2d6cdf}
+   .rail .tab .soon{display:none}
+   .step .body,.shot{padding-left:0;margin-left:0}
+ }
+</style>
+</head>
+<body>
+<header>Photo Judge — How To</header>
+<div class="layout">
+  <nav class="rail" id="rail"></nav>
+  <main class="pane" id="pane"></main>
+</div>
+
+<script>
+const IMG = '/getting-started-images/';
+const GUIDES = [
+ {
+  id:'getting-started', icon:'🚀', title:'Getting started',
+  intro:'Run a judging night from start to finish. Each step matches a button on the <b>Operator Console</b>. Click any screenshot to see it full size.',
+  steps:[
+   { title:'Create a session', img:'1-Select date and create the session.png',
+     body:'A <b>session</b> is one competition night — it holds all that evening’s photos. On the console, click <b>➕ New session</b>, pick the date, optionally type a short <b>description</b> to tell it apart later, and click <b>Create</b>.' },
+   { title:'Select your session', img:'2-Select the session after you create it.png',
+     body:'Choose the session you just made from the <b>Session</b> dropdown. Everything you do from here applies to the selected session, and its description shows just under the toolbar.' },
+   { title:'Open Manage categories', img:'3-1-Go to Manage Categories to configure compeition categories.png',
+     body:'Click <b>Manage categories</b> to set up this session’s judging categories. (A brand-new session starts with a copy of your last session’s categories, so you can often skip ahead.)' },
+   { title:'Set up the categories', img:'3-2-Activate, deactivate, add, delete, or reorder categories for selected session.png',
+     body:'Use the two panes to <b>activate</b> or <b>deactivate</b> categories, <b>add</b> new ones, <b>delete</b> unused ones, and the arrows to <b>reorder</b> the active list. This order is what shows in the menus and on the score sheet.' },
+   { title:'Open the Upload / Reorder page', img:'4-Go to order reorder page to add photos.png',
+     body:'Back on the console, click <b>Upload / Reorder</b> to start adding photos to the session.' },
+   { title:'Add your photos', img:'5-Add photos for selected session and category in session.png',
+     body:'Pick the session and a category, then drag photos in (<b>JPG/PNG</b>). Each one is filed as <b>Landscape</b> or <b>Portrait</b> automatically by its shape. Drag the thumbnails to set the order judges will see, and optionally type a <b>photographer</b> name under each photo.' },
+   { title:'Create your screens', img:'6-Create screens to view photos.png',
+     body:'A <b>screen</b> is a display you present on. Click <b>Create Screen</b> and name each one (e.g. “Landscape monitor”). Screens are remembered between launches.' },
+   { title:'Load a category and open the window', img:'7-Select category and orientation then load and open window to view photos and explain other buttons.png',
+     body:'On a screen’s row, pick a <b>category</b> + <b>orientation</b> and click <b>Load</b> (the display shows the title card), then <b>Open window</b> to launch the judge-facing window. The other buttons: <b>◀ Prev</b> / <b>Next ▶</b> step through photos, <b>Black</b> / <b>Reveal</b> hides or shows the current photo, and <b>★ Make live</b> shows this screen while blacking the rest.' },
+   { title:'Present', img:'8-You can then drag window to desired monitor and fullscreen it to start presentation.png',
+     body:'Drag the output window onto the correct monitor, then click it (or press <kbd>F</kbd>) to go fullscreen. It starts black — click <b>Next</b> to reveal the first photo, and step through at the judges’ pace.' },
+  ]
+ },
+ {
+  id:'scoring', icon:'🏆', title:'Score keeping',
+  intro:'Record a score for each photo while the operator runs the show — on the same computer, or on a second device over the network.',
+  steps:[
+   { title:'Open the Scoring page',
+     body:'From the menu on the right, open <b>🏆 Scoring</b>. To keep score on a separate device while someone else presents, open the app’s address on that device instead (see <b>Enable LAN access</b>).' },
+   { title:'Follow a screen',
+     body:'Pick a <b>screen</b> at the top. The page shows the photos from whatever that screen currently has loaded (session / category / orientation). A panel shows which photo the operator is presenting; when you’re viewing the same one it turns green, and <b>Jump to operator’s photo</b> snaps you to it.' },
+   { title:'Move at your own pace (optional)',
+     body:'Use <b>Prev</b> / <b>Next</b> (or the ← / → arrow keys) to move through the photos yourself — this does <b>not</b> change what the judges see, so you can score ahead of or behind the operator. (If <b>Lock the scorekeeper</b> is turned on in Settings, the page stays pinned to the operator’s photo.)' },
+   { title:'Enter a score',
+     body:'Type a score in the box and press <kbd>Enter</kbd> to save it for that photo; clear the box and press <kbd>Enter</kbd> to remove it. Scores show as a green badge on the Upload / Reorder page and are pre-filled into the score-sheet PDF.' },
+   { title:'Score physical prints',
+     body:'For printed entries with no uploaded photo, click <b>📋 Physical prints</b> at the top. Pick the session and category, then fill the table — <b>Print title</b>, <b>Photographer</b>, <b>Score</b>. A fresh row appears as you start the last one; <kbd>Tab</kbd> moves across fields and <kbd>Enter</kbd> drops to the next row. Each entry saves on its own; the <b>×</b> removes a row.' },
+   { title:'Print the score sheet',
+     body:'On the console, click <b>⤓ Score sheet</b> to download a printable PDF of the session — every category’s photos (and any physical prints) with the scores filled in.' },
+  ]
+ },
+ {
+  id:'importing-exporting', icon:'⇄', title:'Importing & exporting',
+  intro:'Move whole sessions — photos and all — between computers as portable files. Open the wizard with <b>⇄ Import / Export</b> on the console.',
+  steps:[
+   { title:'About the files',
+     body:'Sessions travel as <b>.pjs</b> (one session) or <b>.pjss</b> (several) files. Both are compressed bundles that include the photos, titles, photographers, scores, physical prints and — for archived nights — the archive record. Nothing is re-encoded, so photos keep their exact quality.' },
+   { title:'Export — pick sessions',
+     body:'On the <b>Export</b> tab you’ll see every session, live and archived. Narrow the list with the filters (active/archived, photographer, photo title, date range) and click a column heading to sort. Click <b>Add →</b> on each session you want to send — they collect in the <b>Selected for export</b> basket. (Or use a row’s <b>⤓ .pjs</b> to export just that one right away.)' },
+   { title:'Export — download',
+     body:'Click <b>Export</b>. One session downloads as a <b>.pjs</b>, several as a <b>.pjss</b>, with a progress bar for large bundles. Copy that file to a USB stick, cloud drive, or email.' },
+   { title:'Import — choose files',
+     body:'On the <b>Import</b> tab, choose (or drag in) one or more <b>.pjs</b> / <b>.pjss</b> files. A table lists the sessions inside each one.' },
+   { title:'Import — choose what to bring in',
+     body:'Tick the <b>Import</b> box for each session you want (all are ticked by default). To have one of them become the selected session on the console afterward, tick its <b>Make active</b> box (only one allowed).' },
+   { title:'Import — finish',
+     body:'Click <b>Import</b>. Each imported session is given a <b>new ID</b> so it can never clash with sessions already on this computer; the table then shows the new ID beside the old one. Use <b>Import more</b> to bring in another file, or <b>Close</b>.' },
+  ],
+  note:'The export list shows 50 sessions per page by default — change that with <code>exportPageSize</code> in <code>photo-judge.properties</code>.'
+ },
+ {
+  id:'archiving', icon:'🗄️', title:'Archiving sessions',
+  intro:'When a night is finished and you no longer need the actual photo files, archive the session to keep a permanent record and free up disk space.',
+  steps:[
+   { title:'What archiving does',
+     body:'It saves a permanent record of the session — photo titles, photographers, scores, categories, the date, and when it was archived — then <b>permanently deletes the photo image files</b> to reclaim space. The session becomes read-only and leaves the console. This cannot be undone.' },
+   { title:'Archive a session',
+     body:'On the console, pick the session in the <b>Session</b> menu. A <b>🗄 Archive Session</b> button appears next to it — but only for sessions whose date is in the <b>past</b>. Click it, read the confirmation carefully, then confirm.' },
+   { title:'Browse archived sessions',
+     body:'Open <b>🗄️ Archived Sessions</b> from the menu. Each archived session lists its date, description, categories and photo count. Search by date range, session ID, photographer or photo title; click <b>Show details</b> to see every photo (and physical print) with its score, and click a column heading to sort.' },
+   { title:'Download a record',
+     body:'On any archived session, <b>⤓ PDF</b> downloads a printable report and <b>⤓ JSON</b> saves the raw record. To keep the actual pictures, copy them out of the <code>photos\\</code> folder <i>before</i> archiving — or export the session first (see <b>Importing &amp; exporting</b>).' },
+  ]
+ },
+ {
+  id:'rotate-monitor', icon:'🔄', title:'Rotate a monitor for portrait photos',
+  intro:'Turn a monitor on its side so portrait photos fill the whole screen. This is a physical rotation plus a Windows display setting — Photo Judge then just shows the Portrait group on that monitor.',
+  steps:[
+   { title:'Physically rotate the monitor',
+     body:'Turn the monitor 90° into a portrait (tall) position. Many stands pivot; otherwise a VESA mount helps. Mind the cables so nothing is strained.' },
+   { title:'Tell Windows to rotate the picture',
+     body:'Right-click the desktop → <b>Display settings</b>. Click the monitor you rotated (use <b>Identify</b> if unsure), then set <b>Display orientation</b> to <b>Portrait</b> (or <b>Portrait (flipped)</b> if it’s upside-down) and click <b>Keep changes</b>. The Windows picture on that screen is now upright in portrait.' },
+   { title:'Open a Photo Judge window on it',
+     body:'In Photo Judge, create or use a <b>screen</b> for that monitor, click <b>⧉ Open window</b>, drag the window onto the rotated monitor, and click it (or press <kbd>F</kbd>) for fullscreen.' },
+   { title:'Show the Portrait group',
+     body:'On that screen’s row, choose the category, set orientation to <b>Portrait</b>, then <b>Load</b>. Portrait photos now fill the sideways monitor. (Landscape photos and the title card will look sideways there, so use this monitor for the Portrait group and a normal monitor for Landscape.)' },
+  ],
+  note:'Some graphics drivers also rotate with <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+arrow keys, but the Display settings method above is the reliable one.'
+ },
+ {
+  id:'lan-access', icon:'📶', title:'Enable LAN access',
+  intro:'Run the show — or keep score — from a second laptop, phone, or tablet on the same network. The judges’ monitors stay on the main computer; the other device just gets a control page.',
+  steps:[
+   { title:'Make sure LAN access is on',
+     body:'It’s on by default. Toggle it on the <b>⚙️ Settings</b> page (<b>Allow LAN connections</b>) or with <code>lanAccess</code> in <code>photo-judge.properties</code> — a <code>false</code> in the properties file always wins, and a change takes effect after you restart the app.' },
+   { title:'Find the address',
+     body:'Open the menu on the right of any page. When LAN access is on, it shows the computer’s web address and a <b>Show QR code</b> button. If the address doesn’t appear, the computer has no usable network connection.' },
+   { title:'Connect the other device',
+     body:'Put the other device on the <b>same</b> Wi-Fi or wired network as the main computer. Open its web browser and type the address shown, or scan the QR code with a phone/tablet camera to open it instantly.' },
+   { title:'If it won’t connect',
+     body:'Windows blocks incoming connections until you allow the app — see <b>Allow the app through Windows Firewall</b>. Also note that guest, hotel, and conference Wi-Fi often block device-to-device traffic, so use your own router or phone hotspot.' },
+  ],
+  note:'The address (e.g. 192.168.x.x) can change when the computer reconnects to the network; if a saved link stops working, re-check the menu for the current one.'
+ },
+ {
+  id:'firewall', icon:'🛡️', title:'Allow the app through Windows Firewall',
+  intro:'For other devices to reach Photo Judge, Windows must (1) treat the network as Private and (2) allow the app through the firewall.',
+  warn:'Only do this on a private network you trust — your home or club router, or your own phone hotspot. Don’t open the app up on public, guest, hotel, or conference Wi-Fi.',
+  steps:[
+   { title:'Set the network to Private',
+     body:'Open <b>Settings → Network &amp; Internet</b>, click your Wi-Fi or Ethernet connection, and set the <b>Network profile type</b> to <b>Private</b>. (Public networks are locked down and won’t allow connections.)' },
+   { title:'Allow the app when prompted',
+     body:'The first time you start Photo Judge, Windows may pop up “Allow photo-judge to communicate on these networks.” Tick <b>Private networks</b> and click <b>Allow access</b>.' },
+   { title:'Add it by hand if needed',
+     body:'If you didn’t see that prompt, open <b>Windows Security → Firewall &amp; network protection → Allow an app through firewall</b>. Click <b>Change settings</b>, then <b>Allow another app…</b>, browse to <code>photo-judge.exe</code>, add it, and make sure its <b>Private</b> box is ticked.' },
+   { title:'Try again',
+     body:'With the network Private and the app allowed, reopen the address from <b>Enable LAN access</b> on the other device. It should connect.' },
+  ]
+ },
+ {
+  id:'judging-mode', icon:'⚖️', title:'Judging mode', soon:true,
+  intro:'A future feature: let the judges use Photo Judge on their own device to submit scores directly, instead of a scorekeeper typing them in.',
+  comingSoon:'Coming soon — this isn’t available yet. The steps below describe the planned feature.',
+  steps:[
+   { title:'What it will do',
+     body:'Each judge will open the app on their phone, tablet, or laptop (over the same network) and enter a score for each photo as it’s shown. Scores will collect automatically into the session.' },
+   { title:'For now',
+     body:'Until this ships, use the <b>🏆 Scoring</b> page (see <b>Score keeping</b>): one scorekeeper records the judges’ scores, on the main computer or a second device over the network.' },
+  ]
+ },
+];
+
+const rail = document.getElementById('rail');
+const pane = document.getElementById('pane');
+
+GUIDES.forEach(g => {
+  const t = document.createElement('button');
+  t.className = 'tab'; t.dataset.id = g.id;
+  t.innerHTML = '<span class="ic">' + g.icon + '</span><span class="lbl"></span>' + (g.soon ? '<span class="soon">soon</span>' : '');
+  t.querySelector('.lbl').textContent = g.title;
+  t.onclick = () => show(g.id);
+  rail.appendChild(t);
+});
+
+function show(id){
+  const g = GUIDES.find(x => x.id === id) || GUIDES[0];
+  rail.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.id === g.id));
+  let html = '<h1></h1><div class="intro"></div>';
+  if(g.comingSoon) html += '<div class="banner soon"></div>';
+  if(g.warn) html += '<div class="banner warn"></div>';
+  pane.innerHTML = html;
+  pane.querySelector('h1').textContent = g.title;
+  pane.querySelector('.intro').innerHTML = g.intro;
+  if(g.comingSoon) pane.querySelector('.banner.soon').textContent = g.comingSoon;
+  if(g.warn) pane.querySelector('.banner.warn').innerHTML = '⚠️  ' + g.warn;
+
+  g.steps.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'step';
+    el.innerHTML =
+      '<div class="head"><div class="num">' + (i+1) + '</div><h2></h2></div>' +
+      '<div class="body"></div>' +
+      (s.img ? '<a class="shot" target="_blank"><img loading="lazy"><div class="cap">Click to enlarge</div></a>' : '');
+    el.querySelector('h2').textContent = s.title;
+    el.querySelector('.body').innerHTML = s.body;
+    if(s.img){
+      const url = IMG + encodeURIComponent(s.img);
+      el.querySelector('.shot').href = url;
+      const img = el.querySelector('img'); img.src = url; img.alt = s.title;
+    }
+    pane.appendChild(el);
+  });
+  if(g.note){ const n = document.createElement('div'); n.className = 'note'; n.innerHTML = g.note; pane.appendChild(n); }
+
+  if(location.hash.slice(1) !== g.id) history.replaceState(null, '', '#' + g.id);
+  pane.scrollIntoView ? window.scrollTo(0, 0) : null;
+}
+
+const start = GUIDES.find(g => g.id === location.hash.slice(1));
+show(start ? start.id : GUIDES[0].id);
+window.addEventListener('hashchange', () => { const g = GUIDES.find(x => x.id === location.hash.slice(1)); if(g) show(g.id); });
+</script>
+<script src="/modal.js"></script>
+<script src="/nav.js"></script>
+</body>
+</html>

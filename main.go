@@ -1873,7 +1873,9 @@ func main() {
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
-	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "getting-started.html") })
+	mux.HandleFunc("/how-to", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
+	// Old link target — the Getting Started walkthrough is now the first tab of How To.
+	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
 	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
 	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "settings.html") })

@@ -10,6 +10,10 @@ on black, with a title card announcing each category.
 
 Nothing to install. Everything lives next to the program file.
 
+Prefer to learn in the app? Open "How To" from the menu on the
+right of any page for illustrated, step-by-step guides covering
+the same topics as this document.
+
 
 ------------------------------------------------------------
  1. STARTING THE APP
