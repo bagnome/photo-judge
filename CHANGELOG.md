@@ -13,6 +13,8 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.3.13.0] - 2026-06-14 — "Crater Lake"
+
 ### Added
 - **How To page** — the **Getting Started** menu item is now a broader **How To** page: a
   left-hand tab rail of step-by-step guides. The illustrated Getting started walkthrough is
