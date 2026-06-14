@@ -63,6 +63,13 @@
   #pjio .drop:hover{border-color:#2d6cdf;color:#cfd2d6}
   #pjio .err{color:#e0a0a0;font-size:13px;margin-top:8px;white-space:pre-wrap}
   #pjio .newid{color:#7fd29a;font-variant-numeric:tabular-nums}
+  #pjio .prog{display:none;align-items:center;gap:12px;padding:11px 18px;border-top:1px solid #2c2f35}
+  #pjio .prog.show{display:flex}
+  #pjio .prog .bar{flex:1;height:8px;background:#2a2d33;border:1px solid #3a3e45;border-radius:5px;overflow:hidden}
+  #pjio .prog .fill{height:100%;width:0;background:#2d6cdf;border-radius:5px;transition:width .12s linear}
+  #pjio .prog.indet .fill{width:34%;animation:pjioslide 1.05s ease-in-out infinite}
+  @keyframes pjioslide{0%{margin-left:-34%}100%{margin-left:100%}}
+  #pjio .prog .lbl{font-size:13px;color:#cfd2d6;min-width:108px;text-align:right;font-variant-numeric:tabular-nums}
   @media (max-width:760px){ #pjio th,#pjio td{white-space:normal} #pjio .tablewrap{max-height:34vh} }`;
 
   var modal = null, els = {};
@@ -84,11 +91,13 @@
           '<button class="tab" data-tab="import">Import</button></div>' +
           '<button class="x" title="Close">✕</button></div>' +
         '<div class="body"></div>' +
+        '<div class="prog" id="pjio-prog"><div class="bar"><div class="fill"></div></div><span class="lbl"></span></div>' +
         '<div class="foot"></div>' +
       '</div></div>');
     document.body.appendChild(modal);
     els.body = modal.querySelector('.body');
     els.foot = modal.querySelector('.foot');
+    els.prog = modal.querySelector('#pjio-prog');
     modal.querySelector('.x').addEventListener('click', close);
     modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
     modal.querySelectorAll('.tab').forEach(function (t) {
@@ -99,14 +108,82 @@
 
   function close() { modal.classList.remove('show'); }
 
+  // ---- progress bar --------------------------------------------------------
+  // Returns a controller: label(text), set(frac) where frac is 0..1 for a
+  // determinate bar or null for an animated "indeterminate" bar, and done().
+  var busy = false;
+  function showProgress(initial) {
+    var p = els.prog, fill = p.querySelector('.fill'), lbl = p.querySelector('.lbl');
+    var text = initial || '';
+    busy = true;
+    p.classList.add('show', 'indet'); fill.style.width = ''; lbl.textContent = text;
+    return {
+      label: function (t) { text = t; if (p.classList.contains('indet')) lbl.textContent = text; },
+      set: function (frac) {
+        if (frac == null) { p.classList.add('indet'); fill.style.width = ''; lbl.textContent = text; }
+        else {
+          p.classList.remove('indet');
+          var pct = Math.max(0, Math.min(1, frac));
+          fill.style.width = (pct * 100).toFixed(0) + '%';
+          lbl.textContent = text + ' ' + Math.round(pct * 100) + '%';
+        }
+      },
+      done: function () { busy = false; p.classList.remove('show', 'indet'); fill.style.width = '0'; lbl.textContent = ''; }
+    };
+  }
+  function hideProgress() { busy = false; if (els.prog) els.prog.classList.remove('show', 'indet'); }
+
   function showTab(name) {
+    if (busy) return; // don't switch tabs mid-transfer
+    hideProgress();
     modal.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === name); });
     if (name === 'export') renderExport(); else renderImport();
   }
 
-  function download(url) {
-    var a = document.createElement('a'); a.href = url; a.download = '';
+  function filenameFromDisposition(cd) {
+    if (!cd) return '';
+    var m = /filename="?([^"]+?)"?(;|$)/.exec(cd);
+    return m ? m[1] : '';
+  }
+
+  // Download the given session IDs as a .pjs/.pjss, streaming the response so a
+  // progress bar can track it. The server builds the bundle first (shown as an
+  // indeterminate "Preparing…" phase), then the body streams in.
+  function exportIds(ids, fallbackName) {
+    if (busy || !ids.length) return;
+    var url = '/api/export?ids=' + ids.map(encodeURIComponent).join(',');
+    var prog = showProgress('Preparing export…');
+    fetch(url).then(function (resp) {
+      if (!resp.ok) throw new Error('export failed (' + resp.status + ')');
+      var total = +resp.headers.get('Content-Length') || 0;
+      var fname = filenameFromDisposition(resp.headers.get('Content-Disposition')) || fallbackName;
+      if (!resp.body || !resp.body.getReader) { // very old browser: just hand off
+        return resp.blob().then(function (b) { saveBlob(b, fname); });
+      }
+      var reader = resp.body.getReader(), chunks = [], received = 0;
+      prog.label('Exporting…'); prog.set(total ? 0 : null);
+      return (function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) { saveBlob(new Blob(chunks, { type: 'application/zip' }), fname); return; }
+          chunks.push(r.value); received += r.value.length;
+          if (total) prog.set(received / total);
+          return pump();
+        });
+      })();
+    }).then(function () {
+      prog.done();
+      if (window.toast) window.toast('Exported ' + ids.length + ' session' + (ids.length > 1 ? 's' : ''));
+    }).catch(function (e) {
+      prog.done();
+      if (window.pjAlert) window.pjAlert('Could not export: ' + (e.message || e), { title: 'Export failed' });
+    });
+  }
+
+  function saveBlob(blob, name) {
+    var a = document.createElement('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = name || 'sessions.pjss';
     document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 1500);
   }
 
   // ---- EXPORT --------------------------------------------------------------
@@ -203,7 +280,7 @@
       var add = mk('button', 'mini', basket.has(s.id) ? 'Added ✓' : 'Add →'); add.disabled = basket.has(s.id);
       add.onclick = function () { basket.set(s.id, s); add.textContent = 'Added ✓'; add.disabled = true; renderBasket(); };
       var exp = mk('button', 'mini', '⤓ .pjs'); exp.title = 'Export just this session';
-      exp.onclick = function () { download('/api/export?ids=' + encodeURIComponent(s.id)); };
+      exp.onclick = function () { exportIds([s.id], 'session-' + s.id + '.pjs'); };
       td.appendChild(add); td.appendChild(document.createTextNode(' ')); td.appendChild(exp);
       tr.appendChild(td);
       tb.appendChild(tr);
@@ -244,9 +321,7 @@
 
   function exportBasket() {
     if (!basket.size) return;
-    var ids = Array.from(basket.keys());
-    download('/api/export?ids=' + ids.map(encodeURIComponent).join(','));
-    if (window.toast) window.toast('Exported ' + ids.length + ' session' + (ids.length > 1 ? 's' : ''));
+    exportIds(Array.from(basket.keys()), 'photo-judge-sessions.pjss');
   }
 
   // ---- IMPORT --------------------------------------------------------------
@@ -276,21 +351,29 @@
     });
   }
 
+  // Upload the chosen bundle(s) with an XHR so the upload progress can be shown
+  // (fetch can't report request-upload progress), then read back the preview.
   function preview(files) {
+    if (busy) return;
     var fd = new FormData();
     for (var i = 0; i < files.length; i++) fd.append('files', files[i]);
     document.getElementById('pjio-importerr').textContent = '';
-    document.getElementById('pjio-importbox').innerHTML = '<p style="color:#9aa0a6">Reading…</p>';
-    fetch('/api/import/preview', { method: 'POST', body: fd }).then(function (r) {
-      if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
-      return r.json();
-    }).then(function (data) {
+    document.getElementById('pjio-importbox').innerHTML = '';
+    var prog = showProgress('Uploading…');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/import/preview');
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) prog.set(e.loaded / e.total); };
+    xhr.upload.onload = function () { prog.label('Reading…'); prog.set(null); };
+    xhr.onload = function () {
+      prog.done();
+      if (xhr.status !== 200) { document.getElementById('pjio-importerr').textContent = xhr.responseText || ('Upload failed (' + xhr.status + ')'); return; }
+      var data;
+      try { data = JSON.parse(xhr.responseText); } catch (e) { document.getElementById('pjio-importerr').textContent = 'Unexpected response from server.'; return; }
       importToken = data.token; importRows = data.sessions || []; importDone = false;
       renderPreview(data.errors || []);
-    }).catch(function (e) {
-      document.getElementById('pjio-importbox').innerHTML = '';
-      document.getElementById('pjio-importerr').textContent = String(e.message || e);
-    });
+    };
+    xhr.onerror = function () { prog.done(); document.getElementById('pjio-importerr').textContent = 'Upload failed — please try again.'; };
+    xhr.send(fd);
   }
 
   function renderPreview(errors) {
@@ -346,8 +429,9 @@
         if (act && act.checked) activeIdx = chosen.length - 1;
       }
     });
-    if (!sel.length) return;
+    if (!sel.length || busy) return;
     document.getElementById('pjio-commit').disabled = true;
+    var prog = showProgress('Importing…'); prog.set(null); // server-side work: indeterminate
     fetch('/api/import/commit', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: importToken, select: sel })
@@ -355,18 +439,31 @@
       if (!r.ok) return r.text().then(function (t) { throw new Error(t); });
       return r.json();
     }).then(function (data) {
+      prog.done();
       var map = data.imported || [];
       map.forEach(function (m, k) {
         var tr = chosen[k]; if (!tr) return;
         var cell = tr.querySelector('[data-new]'); if (cell) cell.textContent = '#' + m.newId;
       });
-      importDone = true; updateCommit();
+      importDone = true;
+      finishImport(map.length);
       if (activeIdx >= 0 && map[activeIdx] && window.pjSelectSession) window.pjSelectSession(map[activeIdx].newId);
       if (window.toast) window.toast('Imported ' + map.length + ' session' + (map.length > 1 ? 's' : ''));
     }).catch(function (e) {
+      prog.done();
       document.getElementById('pjio-importerr').textContent = String(e.message || e);
       updateCommit();
     });
+  }
+
+  // After a successful import, swap the footer's Cancel/Import for Import more/Close.
+  function finishImport(n) {
+    els.foot.innerHTML =
+      '<span class="note">Imported ' + n + ' session' + (n === 1 ? '' : 's') + ' — given fresh ID' + (n === 1 ? '' : 's') + '.</span>' +
+      '<button id="pjio-more">Import more</button>' +
+      '<button class="primary" id="pjio-close">Close</button>';
+    document.getElementById('pjio-more').onclick = function () { renderImport(); };
+    document.getElementById('pjio-close').onclick = close;
   }
 
   // ---- small DOM helpers ---------------------------------------------------
