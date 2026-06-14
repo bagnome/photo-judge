@@ -14,6 +14,12 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **How To page** — the **Getting Started** menu item is now a broader **How To** page: a
+  left-hand tab rail of step-by-step guides. The illustrated Getting started walkthrough is
+  the first tab, followed by guides for score keeping, importing/exporting, archiving,
+  rotating a monitor for portrait photos, enabling LAN access, and allowing the app through
+  the Windows Firewall — plus a placeholder for the planned judging mode. Tabs deep-link via
+  the URL hash (e.g. `/how-to#archiving`); the old `/getting-started` link still works.
 - **Session import / export** — a new **⇄ Import / Export** button on the console opens a
   wizard for moving whole sessions (photos and all) between computers. **Export** lists
   every session (live and archived) with filters (active/archived, photographer, photo
