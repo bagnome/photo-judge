@@ -32,7 +32,10 @@
  .grid{display:flex;flex-wrap:wrap;gap:10px;padding:0 0 6px}
  .tile{width:168px;background:#23262c;border:1px solid #3a3e45;border-radius:6px;overflow:hidden;cursor:grab;user-select:none;position:relative;box-sizing:border-box}
  .tile.dragging{opacity:.4}
- .tile img{width:100%;height:112px;object-fit:cover;display:block;background:#000}
+ .tile.dragover{outline:2px solid #2d6cdf;outline-offset:-2px}
+ /* -webkit-user-drag:none stops the browser's native image drag from hijacking the
+    tile reorder (otherwise grabbing the photo just pulls a ghost image around). */
+ .tile img{width:100%;height:112px;object-fit:cover;display:block;background:#000;-webkit-user-drag:none;user-select:none}
  .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
  .tile .score{position:absolute;top:84px;left:4px;background:#2e7d46;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px}
@@ -42,7 +45,9 @@
  .tile .pname{width:100%;box-sizing:border-box;font-size:11px;padding:4px 6px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:4px;cursor:text}
  .tile .pname:focus{border-color:#2d6cdf;outline:none}
  .tile .pname.set{border-color:#2e7d46}
- .tile .grip{position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;border-radius:10px;padding:1px 12px;font-size:13px;line-height:1.4;cursor:grab;touch-action:none;user-select:none}
+ /* The ⠿ grip is the touch drag handle — on a desktop you drag the tile body directly,
+    so it's hidden there and only shown on touch devices (see the media query below). */
+ .tile .grip{display:none;position:absolute;top:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.62);color:#fff;border-radius:10px;padding:1px 12px;font-size:13px;line-height:1.4;cursor:grab;touch-action:none;user-select:none}
  .tile.dragging .grip{cursor:grabbing}
  .empty{padding:4px 0 8px;color:#777;font-size:13px}
  #toasts{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:8px;z-index:1000}
@@ -59,8 +64,12 @@
    .tile{width:calc(50% - 6px)}
    .tile img{height:120px}
    .tile .del{width:30px;height:30px;font-size:18px}
-   .tile .grip{padding:4px 18px;font-size:16px}
    .tile .pname{font-size:15px;padding:7px 8px}
+ }
+ /* Touch devices: show the ⠿ grip (the only way to start a drag on touch, so swiping
+    elsewhere still scrolls the page). Desktop mice drag the tile body directly. */
+ @media (hover:none) and (pointer:coarse){
+   .tile .grip{display:block;padding:4px 18px;font-size:16px}
  }
 </style>
 </head>
@@ -193,15 +202,16 @@ function renderSection(orient){
  const c = ctx();
  data.files.forEach((fn, i) => {
    const t = document.createElement('div'); t.className = 'tile'; t.dataset.i = i; t.dataset.fn = fn;
+   t.draggable = !isTouch; // desktop reorders via native HTML5 drag-and-drop; touch uses the ⠿ grip
    const grip = document.createElement('div'); grip.className = 'grip'; grip.textContent = '⠿ drag';
-   const img = document.createElement('img'); img.loading = 'lazy';
+   const img = document.createElement('img'); img.loading = 'lazy'; img.draggable = false;
    img.src = '/api/photo?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+orient+'&file='+enc(fn);
    const badge = document.createElement('div'); badge.className = 'idx'; badge.textContent = i+1;
    const cap = document.createElement('div'); cap.className = 'fn'; cap.textContent = fn;
    const del = document.createElement('button'); del.className = 'del'; del.textContent = '×'; del.title = 'Remove this photo';
    del.onclick = (e) => { e.stopPropagation(); deletePhoto(orient, fn); };
    const nm = document.createElement('div'); nm.className = 'nm';
-   const nin = document.createElement('input'); nin.className = 'pname'; nin.type = 'text';
+   const nin = document.createElement('input'); nin.className = 'pname'; nin.type = 'text'; nin.draggable = false;
    nin.placeholder = 'Photographer'; nin.value = data.names[fn] || '';
    if(nin.value) nin.classList.add('set');
    nin.addEventListener('keydown', e => { if(e.key === 'Enter') nin.blur(); });
@@ -210,21 +220,42 @@ function renderSection(orient){
    t.append(grip, img, badge, cap, del, nm);
    const sc = data.scores[fn];
    if(sc){ const sb = document.createElement('div'); sb.className = 'score'; sb.textContent = '★ '+sc; sb.title = 'Judge score'; t.appendChild(sb); }
+   // Desktop: native HTML5 drag-and-drop — grab the tile, drop it on another to reorder.
+   t.addEventListener('dragstart', e => {
+     if(e.target.closest('input,button')){ e.preventDefault(); return; } // typing / delete, not reordering
+     drag = {orient, i}; t.classList.add('dragging');
+   });
+   t.addEventListener('dragend',  () => { t.classList.remove('dragging'); drag = null; });
+   t.addEventListener('dragover', e => { if(drag && drag.orient === orient){ e.preventDefault(); t.classList.add('dragover'); } });
+   t.addEventListener('dragleave',() => t.classList.remove('dragover'));
+   t.addEventListener('drop',     e => { e.preventDefault(); t.classList.remove('dragover'); if(drag && drag.orient === orient) moveItem(orient, drag.i, i); });
+   // Touch: the ⠿ grip drives a pointer-events drag (native DnD isn't available on touch).
    t.addEventListener('pointerdown', e => startTileDrag(e, orient, t));
    g.appendChild(t);
  });
 }
 
-// Reordering uses pointer events so it works with both a mouse and a touchscreen.
-// On a mouse you can grab anywhere on a tile; on touch you must use the ⠿ grip
-// (so swiping elsewhere still scrolls the page). Order is committed on release.
-let pdrag = null; // {orient, tile, pointerId, startX, startY, active}
+// Reordering: on desktop, tiles use native HTML5 drag-and-drop (grab a tile, drop it on
+// another to reorder) — robust and smooth with a mouse. On touch, native DnD isn't
+// available, so the ⠿ grip drives a pointer-events drag instead (and any other swipe
+// still scrolls the page). Both commit the new order to /api/order.
+const isTouch = window.matchMedia('(hover:none) and (pointer:coarse)').matches;
+let drag = null;  // native drag-and-drop state (desktop): {orient, i}
+let pdrag = null; // pointer-drag state (touch via the grip)
+
+// moveItem reorders within one section's array and saves (desktop native DnD drop).
+function moveItem(orient, from, to){
+ if(from == null || from === to) return;
+ const arr = sect[orient].files;
+ const m = arr.splice(from, 1)[0];
+ arr.splice(to, 0, m);
+ renderSection(orient);
+ saveOrder(orient);
+}
 
 function startTileDrag(e, orient, tile){
- if(e.target.closest('input,button,a,select,textarea')) return; // interacting with a control
- const onGrip = !!e.target.closest('.grip');
- if(e.pointerType === 'touch' && !onGrip) return;               // let touch scroll unless using the grip
- if(e.pointerType === 'mouse' && e.button !== 0) return;        // left button only
+ if(e.pointerType !== 'touch') return;        // desktop reorders via native HTML5 drag-and-drop
+ if(!e.target.closest('.grip')) return;       // touch must start from the ⠿ grip so other swipes scroll
  pdrag = {orient, tile, pointerId:e.pointerId, startX:e.clientX, startY:e.clientY, active:false};
  try { tile.setPointerCapture(e.pointerId); } catch(_){}
  tile.addEventListener('pointermove', onTileMove);
