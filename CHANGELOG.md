@@ -13,6 +13,15 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.3.13.2] - 2026-06-15 — "Crater Lake"
+
+### Fixed
+- **Reordering photos on desktop** — the Upload / Reorder page now uses native
+  drag-and-drop with a mouse: grab a photo anywhere (including on the image itself) and
+  drop it where you want. The previous touch-style drag was finicky on desktop and the
+  image would just pull a "ghost" around instead of moving the tile. Touch devices keep
+  the **⠿ grip** handle, which is now hidden on desktop (you don't need it there).
+
 ## [1.3.13.1] - 2026-06-15 — "Crater Lake"
 
 ### Fixed
