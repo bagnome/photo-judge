@@ -20,6 +20,8 @@ not yet released.
   on a screen no longer fails with a "Session is loaded on screen(s)…" error. The
   screen is unloaded (its output goes black) and the console selects the latest
   remaining session, or shows none if there are no other sessions.
+- **Archive confirmation color** — the toast shown after a session is archived is now
+  green (success) instead of red, which had looked like an error.
 
 ## [1.3.13.0] - 2026-06-14 — "Crater Lake"
 
