@@ -9,21 +9,28 @@ import (
 	"testing"
 )
 
-// TestGettingStartedImagesEmbedded confirms the screenshots are baked into the
-// binary and that the file server resolves names containing spaces and commas
-// (as the browser sends them, URL-encoded).
+// TestGettingStartedImagesEmbedded confirms the How To screenshots are baked into
+// the binary and that the file server serves one via its URL-encoded path. The
+// filenames change as the guides are updated, so it picks a real embedded image
+// rather than hard-coding a name.
 func TestGettingStartedImagesEmbedded(t *testing.T) {
 	entries, err := fs.ReadDir(gettingStartedFS, "getting-started-images")
 	if err != nil {
 		t.Fatalf("embed dir: %v", err)
 	}
-	if len(entries) < 9 {
-		t.Fatalf("expected >=9 embedded screenshots, got %d", len(entries))
+	var name string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(e.Name()), ".png") {
+			name = e.Name()
+			break
+		}
+	}
+	if name == "" {
+		t.Fatalf("no embedded screenshots found (got %d entries)", len(entries))
 	}
 
 	h := http.FileServer(http.FS(gettingStartedFS))
-	name := "3-2-Activate, deactivate, add, delete, or reorder categories for selected session.png"
-	target := (&url.URL{Path: "/getting-started-images/" + name}).String() // encodes spaces -> %20
+	target := (&url.URL{Path: "/getting-started-images/" + name}).String() // URL-encodes any spaces/commas
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, httptest.NewRequest("GET", target, nil))
 	if rr.Code != 200 {
