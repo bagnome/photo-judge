@@ -336,8 +336,9 @@ ahead of `main`.
   fix, or a small addition. A `patch/` branch off `main` bumps `main`'s **4th** digit
   (e.g. `1.2.3.0` → `1.2.3.1`); it counts patches to the **current** release, so it
   **resets to `0`** at the next release. `development` keeps its 4th digit at `0` (it
-  isn't a shipped release yet) — port the same fix into `development` as a `fix/` so it
-  doesn't regress at the next release.
+  isn't a shipped release yet) — port the same fix into `development` too, **keeping
+  `development`'s current version (no bump)**, since it's already counted as a patch on
+  the current release; this just stops it regressing at the next release.
 - **A release** is a `development` → `main` PR. `main` takes `development`'s
   MAJOR.RELEASE.FEATURES and its PATCH **resets to `0`** (a fresh release has no patches
   yet). `development` then rolls to the next RELEASE with FEATURES back to `0` (PATCH
@@ -361,7 +362,7 @@ main 1.1.0.0   development 1.2.0.0
 |--------|--------------|-------------|----------------|
 | `feature/*` | `development` | `development` | +1 **FEATURES** (3rd) |
 | `fix/*` | `development` | `development` | +1 **FEATURES** (3rd) — a dev-side fix is a change in the next release |
-| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main` (resets to `0` each release); also port the fix to `development` via a `fix/` |
+| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main` (resets to `0` each release); also port the fix into `development`, keeping its current version (no bump) |
 | `docs/*` | `development` | `development` | none |
 | `chore/*` | `development` | `development` | none |
 
@@ -377,8 +378,8 @@ on the operator console, and logged at startup. Release history is kept in
   it unchanged.
 - **Patch → `main`:** in a `patch/` PR off `main`, bump the **PATCH** (4th) digit of
   `main`'s `VERSION` (e.g. `1.2.3.0` → `1.2.3.1`). After it merges, tag `main` with the
-  patched version (and port the fix into `development` via a `fix/` so it doesn't
-  regress at the next release):
+  patched version (and port the fix into `development`, keeping its current version —
+  no bump — so it doesn't regress at the next release):
 
   ```sh
   git checkout main && git pull
