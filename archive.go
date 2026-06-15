@@ -121,11 +121,6 @@ func (s *server) handleSessionArchive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Only past sessions can be archived (this session's date is today or in the future).", 400)
 		return
 	}
-	if using := s.screensUsing(body.ID); len(using) > 0 {
-		s.mu.Unlock()
-		http.Error(w, "Session is loaded on screen(s): "+strings.Join(using, ", ")+". Load a different category there first.", 409)
-		return
-	}
 
 	arch := s.buildArchive(ss)
 	if err := os.MkdirAll(s.archivesDir(), 0o755); err != nil {
@@ -148,6 +143,17 @@ func (s *server) handleSessionArchive(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "archive saved but could not delete photos: "+err.Error(), 500)
 		return
 	}
+	// Unload any screen still showing this session — its photos are now gone, so the
+	// screen goes idle (black) rather than pointing at deleted files. The operator can
+	// load another category afterward.
+	var unloaded []string
+	for _, sc := range s.screens {
+		if sc.SessionID == ss.ID {
+			sc.SessionID, sc.Category, sc.Orientation = "", "", ""
+			sc.Files, sc.Count, sc.Position, sc.Blackout = nil, 0, 0, false
+			unloaded = append(unloaded, sc.Name)
+		}
+	}
 	var out []*Session
 	for _, x := range s.sessions {
 		if x.ID != ss.ID {
@@ -157,7 +163,10 @@ func (s *server) handleSessionArchive(w http.ResponseWriter, r *http.Request) {
 	s.sessions = out
 	s.mu.Unlock()
 
-	log.Printf("session %s archived (%d photos) to %s; photo files deleted", ss.ID, arch.PhotoCount, archPath)
+	for _, n := range unloaded {
+		s.pushScreen(n) // send the idle view to that screen's output window
+	}
+	log.Printf("session %s archived (%d photos) to %s; photo files deleted; unloaded %d screen(s)", ss.ID, arch.PhotoCount, archPath, len(unloaded))
 	s.pushConsole()
 	writeJSON(w, map[string]any{"sessionId": ss.ID, "photoCount": arch.PhotoCount})
 }

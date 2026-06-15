@@ -324,7 +324,7 @@ ahead of `main`.
 | **MAJOR** | a major overhaul / rewrite (rare) | almost never (`1.x.x.x` → `2.0.0.0`) |
 | **RELEASE** | which release this is; `development` sits one ahead of `main` | `development` is merged into `main` (a release): its number bubbles up and replaces main's |
 | **FEATURES** | how many changes are queued in the upcoming release | a `feature/` (or dev-side `fix/`) branch merges into `development`; **resets to `0`** at each release |
-| **PATCH** | lifetime patch count for the shipped release | a `patch/` branch merges into `main`; **never resets** |
+| **PATCH** | how many patches have shipped onto the **current** `main` release | a `patch/` branch merges into `main`; **resets to `0`** at each release |
 
 **The two lines, and how the numbers move:**
 
@@ -334,12 +334,14 @@ ahead of `main`.
 - **Patches go to the current release (`main`).** A *patch* is anything small enough
   to ship onto the already-released version without waiting for the next one — a bug
   fix, or a small addition. A `patch/` branch off `main` bumps `main`'s **4th** digit
-  (e.g. `1.1.0.0` → `1.1.0.1`), and `development`'s 4th digit is bumped to match. The
-  PATCH digit is a **lifetime counter** shared by both lines — it only ever climbs.
-- **A release** is a `development` → `main` PR. `development`'s number replaces
-  `main`'s (the RELEASE digit bumps on `main`, the FEATURES count comes along, and the
-  PATCH digit is already in sync). `development` then rolls to the next RELEASE with
-  FEATURES back to `0` and PATCH carried over.
+  (e.g. `1.2.3.0` → `1.2.3.1`); it counts patches to the **current** release, so it
+  **resets to `0`** at the next release. `development` keeps its 4th digit at `0` (it
+  isn't a shipped release yet) — port the same fix into `development` as a `fix/` so it
+  doesn't regress at the next release.
+- **A release** is a `development` → `main` PR. `main` takes `development`'s
+  MAJOR.RELEASE.FEATURES and its PATCH **resets to `0`** (a fresh release has no patches
+  yet). `development` then rolls to the next RELEASE with FEATURES back to `0` (PATCH
+  stays `0`).
 
 A worked timeline:
 
@@ -347,10 +349,10 @@ A worked timeline:
 main 1.1.0.0   development 1.2.0.0
   feature  → development 1.2.1.0
   feature  → development 1.2.2.0
-  patch    → main 1.1.0.1   development 1.2.2.1   (4th digit synced)
-  feature  → development 1.2.3.1
-  patch    → main 1.1.0.2   development 1.2.3.2
-  RELEASE  → main 1.2.3.2   development 1.3.0.2   (FEATURES reset, PATCH carries)
+  patch    → main 1.1.0.1                          (patch to the current release)
+  feature  → development 1.2.3.0
+  patch    → main 1.1.0.2
+  RELEASE  → main 1.2.3.0   development 1.3.0.0     (FEATURES & PATCH reset to 0)
 ```
 
 **Branch types:**
@@ -359,7 +361,7 @@ main 1.1.0.0   development 1.2.0.0
 |--------|--------------|-------------|----------------|
 | `feature/*` | `development` | `development` | +1 **FEATURES** (3rd) |
 | `fix/*` | `development` | `development` | +1 **FEATURES** (3rd) — a dev-side fix is a change in the next release |
-| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main`; bump `development`'s 4th to match |
+| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main` (resets to `0` each release); also port the fix to `development` via a `fix/` |
 | `docs/*` | `development` | `development` | none |
 | `chore/*` | `development` | `development` | none |
 
@@ -374,18 +376,19 @@ on the operator console, and logged at startup. Release history is kept in
   (3rd) digit in `VERSION` (e.g. `1.2.0.0` → `1.2.1.0`). `docs/` and `chore/` PRs leave
   it unchanged.
 - **Patch → `main`:** in a `patch/` PR off `main`, bump the **PATCH** (4th) digit of
-  `main`'s `VERSION` (e.g. `1.1.0.0` → `1.1.0.1`), then bump `development`'s 4th digit
-  to match. After it merges, tag `main` with the patched version:
+  `main`'s `VERSION` (e.g. `1.2.3.0` → `1.2.3.1`). After it merges, tag `main` with the
+  patched version (and port the fix into `development` via a `fix/` so it doesn't
+  regress at the next release):
 
   ```sh
   git checkout main && git pull
-  git tag -a v1.1.0.1 -m "Patch 1.1.0.1"
-  git push origin v1.1.0.1
+  git tag -a v1.2.3.1 -m "Patch 1.2.3.1"
+  git push origin v1.2.3.1
   ```
 
-- **`development` → `main` (release):** the release PR carries `development`'s number
-  onto `main`. After it merges, tag `main` and roll `development` to the next RELEASE
-  (`VERSION` → `1.<RELEASE+1>.0.<PATCH>`):
+- **`development` → `main` (release):** the release PR carries `development`'s
+  MAJOR.RELEASE.FEATURES onto `main` with PATCH reset to `0`. After it merges, tag
+  `main` and roll `development` to the next RELEASE (`VERSION` → `1.<RELEASE+1>.0.0`):
 
   ```sh
   git checkout main && git pull

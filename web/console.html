@@ -152,8 +152,11 @@ function render(){
  state.sessions.forEach(s => {
    const o = document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o);
  });
- if(pendingSelect && state.sessions.some(s=>s.id===pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
- else if(cur) sel.value = cur;
+ const ids = state.sessions.map(s=>s.id);
+ if(pendingSelect && ids.includes(pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
+ else if(cur && ids.includes(cur)){ sel.value = cur; }
+ else if(cur && ids.length){ sel.value = ids[ids.length-1]; } // prior session was archived/deleted — fall back to the latest remaining
+ // else: initial load (browser picks the first) or no sessions left (unselected)
 
  // Categories offered for loading = the selected session's active slate (per-session).
  const selSession = state.sessions.find(s => s.id === sel.value);
