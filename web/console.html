@@ -304,7 +304,7 @@ $('archivesession').onclick = async () => {
  const r = await post('/api/session/archive', {id});
  if(!r.ok){ pjAlert('Could not archive:\n\n'+(await r.text())); return; }
  const j = await r.json();
- toast('Session #'+id+' archived ('+(j.photoCount||0)+' photos) — view it on the Archived Sessions page', 'del');
+ toast('Session #'+id+' archived ('+(j.photoCount||0)+' photos) — view it on the Archived Sessions page');
 };
 
 function chooseMonitor(screens){
