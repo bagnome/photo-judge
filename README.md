@@ -107,7 +107,9 @@ that workflow.
   (`sunset.jpg` → `sunset (2).jpg`), other files skipped; drag thumbnails within a
   section to set display order (saved to `order.json`); remove a photo with an ×
   (recoverable soft-delete); and a per-photo text box to record the
-  **photographer's name** (saved to `names.json`).
+  **photographer's name** (saved to `names.json`). A **🔀 Randomize order** button shuffles
+  each orientation's display order, and a **Random order on upload** toggle scatters newly
+  uploaded photos into random positions — both useful for unbiased judging.
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
   appear before you choose one). Auto-placed on a chosen monitor via the Window

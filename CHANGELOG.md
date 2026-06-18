@@ -14,6 +14,10 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Randomize photo order** — on the Upload / Reorder page, a **🔀 Randomize order now**
+  button shuffles each orientation's display order for the selected category (handy for
+  unbiased judging), and a **Random order on upload** toggle drops newly-uploaded photos into
+  random positions instead of appending them to the end. The toggle is remembered per browser.
 - **Member entries** — competitors can add their own photos at the last minute from their
   phones, under operator control. Each output screen now has a **type**, switched from a
   dropdown on its row in the console: **Slideshow** (the normal display) or **Entry QR**.
