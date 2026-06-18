@@ -13,6 +13,38 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **Member entries** — competitors can add their own photos at the last minute from their
+  phones, under operator control. Each output screen now has a **type**, switched from a
+  dropdown on its row in the console: **Slideshow** (the normal display) or **Entry QR**.
+  An Entry-QR screen shows competitors how to join the host's Wi-Fi (network name +
+  password, auto-detected or set on the Settings page, with a scannable join code) and a
+  QR/URL to the new entry page. There a competitor enters their first and last name
+  (required), then uploads JPG/PNG photos into a chosen category with a title. Entries are
+  locked to the session selected when the form is opened and stop when the operator clicks
+  **Close Entry Form**. Submissions wait in a new **Review entries** queue (`/review`),
+  where the operator approves each — sorting it into the right category/orientation folder
+  to reorder normally — or rejects it. Per-competitor and per-category entry limits
+  (each optionally **Unlimited**) are set on the Settings page; a pending entry counts
+  toward a limit and rejecting it frees the slot. Member entries can be turned off entirely
+  with a Settings master switch, and the review step itself can be turned off (a Settings
+  toggle) so submissions are added straight into the session.
+  - A competitor sees their submitted photos as thumbnails on the entry page with a live
+    status (**Awaiting review** / **Accepted** / **Rejected**); a rejected photo stays
+    visible, outlined in red, and can be edited, re-uploaded, or removed (until it's
+    accepted) — all updating live without a refresh.
+  - Limits count **every photo by a photographer's name across the whole session**,
+    including photos an operator added directly, so the same name can't exceed a limit by
+    submitting from another device/browser.
+  - A submitted **JPEG carries its title and photographer in its EXIF metadata**
+    (ImageDescription / Artist), so the file is self-describing.
+
+### Changed
+- **The app now opens to a public landing page at the root URL** (club logo, plus a link
+  to the entry form and the session date when entries are open) instead of the operator
+  console. The console moved to **`/console`** — which is where launching the exe now
+  opens — and competitor-facing pages never link back to it.
+
 ## [1.3.13.2] - 2026-06-15 — "Crater Lake"
 
 ### Fixed

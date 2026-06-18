@@ -47,6 +47,9 @@
  .live{color:#4caf50;font-weight:600}
  .blk{color:#e0726b;font-weight:600}
  .muted{color:#777}
+ .badge{display:inline-block;margin-left:7px;min-width:18px;padding:0 6px;border-radius:9px;background:#e0726b;color:#fff;font-size:12px;font-weight:700;line-height:18px;text-align:center}
+ .entryon{color:#4caf50;font-weight:600}
+ .entryoff{color:#9aa0a6}
  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
  .sep{color:#444}
  #updatebanner{display:none;background:#7a5b16;color:#fff7e0;padding:10px 16px;font-size:14px;border-bottom:1px solid #b08a2e}
@@ -91,12 +94,13 @@
   <span class="sep">|</span>
   <button id="createscreen" class="primary">➕ Create Screen</button>
   <button id="panicblack">⬛ Black all</button>
+  <button id="reviewbtn">🛂 Review entries<span id="pendbadge" class="badge" style="display:none"></span></button>
   <span class="spacer"></span>
   <button id="closeapp" class="danger">✕ Close App</button>
 </div>
 <div id="sessdesc" class="sessdesc"></div>
 <table>
- <thead><tr><th>Screen</th><th>Category</th><th>Orientation</th><th></th><th>Showing</th><th>Controls</th></tr></thead>
+ <thead><tr><th>Screen</th><th>Type</th><th>Category</th><th>Orientation</th><th></th><th>Showing</th><th>Controls</th></tr></thead>
  <tbody id="rows"></tbody>
 </table>
 <div id="monpick"><div class="monbox" id="monbox"></div></div>
@@ -170,16 +174,68 @@ function render(){
  if(selSession && selSession.description){ sd.textContent = '📝  ' + selSession.description; sd.classList.add('show'); }
  else { sd.textContent = ''; sd.classList.remove('show'); }
 
+ // Review-entries badge (pending count across the locked entry session).
+ const pb = $('pendbadge');
+ if(state.pendingCount > 0){ pb.textContent = state.pendingCount; pb.style.display=''; }
+ else pb.style.display='none';
+
  // Screen rows
  const rows = $('rows'); rows.innerHTML = '';
  if(state.screens.length === 0){
-   rows.innerHTML = '<tr><td colspan="6" class="muted">No screens yet — click “Create Screen”, name it, then use “⧉ Open window” on its row to launch the display.</td></tr>';
+   rows.innerHTML = '<tr><td colspan="7" class="muted">No screens yet — click “Create Screen”, name it, then use “⧉ Open window” on its row to launch the display.</td></tr>';
    return;
  }
+ const entrySess = state.sessions.find(s => s.id === state.entrySessionId);
  state.screens.forEach(sc => {
    const tr = document.createElement('tr');
+   const isEntry = sc.type === 'entry';
 
    const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
+
+   // Type dropdown (Entry QR disabled when the feature is turned off in Settings)
+   const entriesOn = !!(state.settings && state.settings.entriesEnabled);
+   const tdT = document.createElement('td'); tdT.dataset.label='Type';
+   const ts = document.createElement('select');
+   [['slideshow','Slideshow'],['entry','Entry QR']].forEach(([v,l]) => {
+     const o=document.createElement('option'); o.value=v; o.textContent=l;
+     if(v==='entry' && !entriesOn && !isEntry) o.disabled = true;
+     ts.appendChild(o);
+   });
+   ts.value = isEntry ? 'entry' : 'slideshow';
+   ts.onchange = () => setScreenType(sc.name, ts.value);
+   tdT.appendChild(ts); tr.appendChild(tdT);
+
+   if(isEntry){
+     // Entry-QR row: no category/orientation/load; show where entries land + open/close.
+     const tdInfo = document.createElement('td'); tdInfo.dataset.label='Entries'; tdInfo.colSpan = 3;
+     if(entrySess) tdInfo.innerHTML = 'Entries → Session #'+entrySess.id+' <span class="muted">('+entrySess.date+')</span>';
+     else tdInfo.innerHTML = '<span class="muted">No session locked</span>';
+     tr.appendChild(tdInfo);
+
+     const tdS = document.createElement('td'); tdS.className='status'; tdS.dataset.label='Showing';
+     tdS.innerHTML = state.entryOpen
+       ? '<span class="entryon">OPEN</span> · '+(state.pendingCount||0)+' received'
+       : '<span class="entryoff">closed</span>';
+     tr.appendChild(tdS);
+
+     const tdK = document.createElement('td'); tdK.dataset.label='Controls';
+     const g = document.createElement('div'); g.className='grp';
+     const ow = btn('⧉ Open window', () => openOutputWindow(sc.name)); ow.className='deskonly'; g.appendChild(ow);
+     if(state.entryOpen){
+       const cb = btn('Close Entry Form', () => post('/api/entry/close', {})); cb.className='danger'; g.appendChild(cb);
+     } else {
+       const ob = btn('Open Entry Form', () => {
+         const sid = state.entrySessionId || currentSession();
+         if(!sid){ pjAlert('Select a session first.'); return; }
+         post('/api/entry/open', {sessionId:sid});
+       }); ob.className='primary'; g.appendChild(ob);
+     }
+     g.appendChild(btn('🛂 Review', () => location.href='/review'));
+     const dsb = btn('🗑', () => deleteScreen(sc.name)); dsb.className='danger'; dsb.title='Delete this screen'; g.appendChild(dsb);
+     tdK.appendChild(g); tr.appendChild(tdK);
+     rows.appendChild(tr);
+     return;
+   }
 
    const tdC = document.createElement('td'); tdC.dataset.label='Category';
    const cs = document.createElement('select');
@@ -215,6 +271,17 @@ function render(){
    tdK.appendChild(g); tr.appendChild(tdK);
 
    rows.appendChild(tr);
+ });
+}
+
+function setScreenType(name, type){
+ if(type === 'entry' && !state.entryOpen && !currentSession()){
+   pjAlert('Select a session first — entries will be locked to it.');
+   render(); // revert the dropdown
+   return;
+ }
+ post('/api/screen/type', {name, type, sessionId: currentSession()}).then(r => {
+   if(!r.ok) r.text().then(t => pjAlert('Could not change type: '+t));
  });
 }
 
@@ -364,7 +431,8 @@ async function deleteScreen(name){
  });
 }
 
-$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout) cmd(sc.name,'blackout'); }); };
+$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout && sc.type !== 'entry') cmd(sc.name,'blackout'); }); };
+$('reviewbtn').onclick = () => location.href = '/review';
 
 // Re-render when the selected session changes so each screen's category menu
 // reflects that session's own active slate.
