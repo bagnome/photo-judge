@@ -25,8 +25,14 @@
  .sw input:checked + .sl{background:#2d6cdf}
  .sw input:checked + .sl::before{transform:translateX(20px);background:#fff}
  .sw input:disabled + .sl{opacity:.45;cursor:not-allowed}
- input[type=text]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
- input[type=text]:focus{border-color:#2d6cdf;outline:none}
+ input[type=text],input[type=password]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
+ input[type=text]:focus,input[type=password]:focus,input[type=number]:focus{border-color:#2d6cdf;outline:none}
+ input[type=number]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:90px}
+ input:disabled{opacity:.45}
+ .num{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+ .num .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#b9bec6}
+ .fldlbl{font-size:13px;color:#b9bec6;margin:0 0 6px}
+ .pwrow{display:flex;gap:8px}.pwrow input{flex:1}
  .counter{color:#777;font-size:12px;margin-top:5px}
  button{font-size:14px;padding:8px 12px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;cursor:pointer}
  button:hover{background:#363a42}
@@ -120,6 +126,57 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Member entries</h2>
+    <div class="sub">Let competitors submit their own photos from the Entry-QR screen. Limits count every photo by a photographer's name for the session (including ones an operator added), so the same name can't go over by using another device. Leave a box as "Unlimited" to allow any number.</div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Enable member entries</div>
+        <div class="d">Master switch. When off, screens can't be set to Entry QR and the entry form is closed.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="entriesEnabled"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Require approval before adding entries</div>
+        <div class="d">On: submissions wait in the Review queue for you to approve. Off: each photo is added straight into the session.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="entryRequireApproval"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Total entries per competitor</div>
+        <div class="d">The most photos one competitor can submit across all categories.</div>
+      </div>
+      <div class="num">
+        <input type="number" id="maxPer" min="1" step="1">
+        <label class="chk"><input type="checkbox" id="unlimPer"> Unlimited</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Entries per category (per competitor)</div>
+        <div class="d">The most a competitor can submit into any single category.</div>
+      </div>
+      <div class="num">
+        <input type="number" id="maxCat" min="1" step="1">
+        <label class="chk"><input type="checkbox" id="unlimCat"> Unlimited</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Wi-Fi for entries</h2>
+    <div class="sub">Shown on the Entry-QR screen so competitors can join the network before scanning. Leave blank to use the host computer's current Wi-Fi (auto-detected). The password appears on that screen, so only fill this in for a network you're happy to share.</div>
+    <div class="fldlbl">Network name (SSID)</div>
+    <input type="text" id="wifiSSID" maxlength="64" autocomplete="off" placeholder="Auto-detect">
+    <div class="fldlbl" style="margin-top:12px">Password</div>
+    <div class="pwrow">
+      <input type="password" id="wifiPassword" maxlength="64" autocomplete="off" placeholder="Auto-detect">
+      <button type="button" id="wifiShow">Show</button>
+    </div>
+  </div>
+
 </div>
 <div id="toasts"></div>
 
@@ -128,7 +185,7 @@ const $ = id => document.getElementById(id);
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const enc = encodeURIComponent;
-const TOGGLES = ['lockScorekeeper','singleLiveScreen','lanAccess','importPhotographer','importTitle'];
+const TOGGLES = ['lockScorekeeper','singleLiveScreen','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
 let state = null; // last GET response
 
 function toast(msg, kind){
@@ -148,7 +205,13 @@ function collect(){
    pdfHeader: $('pdfHeader').value,
    lanAccess: $('lanAccess').checked,
    importPhotographer: $('importPhotographer').checked,
-   importTitle: $('importTitle').checked
+   importTitle: $('importTitle').checked,
+   entriesEnabled: $('entriesEnabled').checked,
+   entryRequireApproval: $('entryRequireApproval').checked,
+   maxEntriesPerCompetitor: $('unlimPer').checked ? 0 : (parseInt($('maxPer').value,10) || 0),
+   maxEntriesPerCategory: $('unlimCat').checked ? 0 : (parseInt($('maxCat').value,10) || 0),
+   wifiSSID: $('wifiSSID').value,
+   wifiPassword: $('wifiPassword').value
  };
 }
 
@@ -168,8 +231,20 @@ function apply(st){
  $('lanAccess').checked = s.lanAccess;
  $('importPhotographer').checked = s.importPhotographer;
  $('importTitle').checked = s.importTitle;
+ $('entriesEnabled').checked = s.entriesEnabled;
+ $('entryRequireApproval').checked = s.entryRequireApproval;
  if(document.activeElement !== $('pdfHeader')){ $('pdfHeader').value = s.pdfHeader || ''; }
  $('pdfcount').textContent = ($('pdfHeader').value || '').length;
+
+ // Member-entry limits: 0 = unlimited (the checkbox), otherwise the number.
+ applyLimit('maxPer', 'unlimPer', s.maxEntriesPerCompetitor);
+ applyLimit('maxCat', 'unlimCat', s.maxEntriesPerCategory);
+ if(document.activeElement !== $('wifiSSID')){ $('wifiSSID').value = s.wifiSSID || ''; }
+ if(document.activeElement !== $('wifiPassword')){ $('wifiPassword').value = s.wifiPassword || ''; }
+ $('wifiSSID').placeholder = st.detectedWifiSSID ? (st.detectedWifiSSID + '  (detected)') : 'Auto-detect';
+ $('wifiPassword').placeholder = st.detectedWifiSSID
+   ? (st.detectedWifiPassword ? (st.detectedWifiPassword + '  (detected)') : '(open network — no password)')
+   : 'Auto-detect';
 
  // properties-file gates: a false there forces the matching setting off.
  const lanForced = !st.propsLanAccess;
@@ -187,6 +262,20 @@ function apply(st){
    : 'When a photo has the matching info embedded, fill it in automatically on upload.';
 
  renderLogos(st);
+}
+
+function applyLimit(numId, chkId, val){
+ const unlimited = !(val > 0);
+ if(document.activeElement !== $(numId)){ $(numId).value = unlimited ? '' : val; }
+ $(chkId).checked = unlimited;
+ $(numId).disabled = unlimited;
+}
+
+function onUnlim(numId, chkId){
+ const num = $(numId);
+ if($(chkId).checked){ num.disabled = true; }
+ else { num.disabled = false; if(!num.value || parseInt(num.value,10) < 1) num.value = 1; num.focus(); }
+ save();
 }
 
 function renderLogos(st){
@@ -234,6 +323,16 @@ $('logofile').onchange = async () => {
 TOGGLES.forEach(id => $(id).addEventListener('change', save));
 $('pdfHeader').addEventListener('input', () => { $('pdfcount').textContent = $('pdfHeader').value.length; });
 $('pdfHeader').addEventListener('change', save);
+
+// Member-entry limits + Wi-Fi
+['maxPer','maxCat','wifiSSID','wifiPassword'].forEach(id => $(id).addEventListener('change', save));
+$('unlimPer').addEventListener('change', () => onUnlim('maxPer','unlimPer'));
+$('unlimCat').addEventListener('change', () => onUnlim('maxCat','unlimCat'));
+$('wifiShow').onclick = () => {
+ const p = $('wifiPassword');
+ if(p.type === 'password'){ p.type = 'text'; $('wifiShow').textContent = 'Hide'; }
+ else { p.type = 'password'; $('wifiShow').textContent = 'Show'; }
+};
 
 async function load(){
  try { const r = await fetch('/api/settings'); apply(await r.json()); }

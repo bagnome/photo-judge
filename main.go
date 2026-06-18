@@ -90,6 +90,7 @@ type Session struct {
 // 1..Count = photo n, Count+1 = end black. Blackout is an independent overlay.
 type Screen struct {
 	Name        string `json:"name"`
+	Type        string `json:"type"` // "slideshow" (default/"") | "entry" — shows the member-entry QR
 	SessionID   string `json:"sessionId"`
 	Category    string `json:"category"`
 	Orientation string `json:"orientation"`
@@ -103,13 +104,20 @@ type Screen struct {
 
 // View is what an output window should render right now.
 type View struct {
-	Mode        string `json:"mode"` // idle | black | title | photo
+	Mode        string `json:"mode"` // idle | black | title | photo | entry
 	Category    string `json:"category"`
 	Orientation string `json:"orientation"`
 	PhotoURL    string `json:"photoUrl"`
 	LogoURL     string `json:"logoUrl,omitempty"` // set on title views when a logo exists
 	Position    int    `json:"position"`
 	Count       int    `json:"count"`
+	// Entry-QR screens (Mode == "entry") carry the details the output window needs to
+	// render the join-Wi-Fi + scan-to-enter instructions. Omitted for normal modes.
+	EntryURL     string `json:"entryUrl,omitempty"`     // page competitors open (empty = LAN access off)
+	EntryOpen    bool   `json:"entryOpen,omitempty"`    // false = "entries are closed" banner
+	WifiSSID     string `json:"wifiSSID,omitempty"`     // network name to join (if known)
+	WifiPassword string `json:"wifiPassword,omitempty"` // network password (if known)
+	WifiQR       string `json:"wifiQR,omitempty"`       // WIFI: join string for a scannable QR
 }
 
 // ---- SSE hub --------------------------------------------------------------
@@ -118,13 +126,16 @@ type hub struct {
 	mu       sync.Mutex
 	consoles map[chan []byte]bool
 	outputs  map[string]map[chan []byte]bool
+	entries  map[chan []byte]bool // landing + member-entry pages (role=entry)
 }
 
 func newHub() *hub {
-	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}}
+	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}, entries: map[chan []byte]bool{}}
 }
 func (h *hub) addConsole(ch chan []byte)    { h.mu.Lock(); h.consoles[ch] = true; h.mu.Unlock() }
 func (h *hub) removeConsole(ch chan []byte) { h.mu.Lock(); delete(h.consoles, ch); h.mu.Unlock() }
+func (h *hub) addEntry(ch chan []byte)      { h.mu.Lock(); h.entries[ch] = true; h.mu.Unlock() }
+func (h *hub) removeEntry(ch chan []byte)   { h.mu.Lock(); delete(h.entries, ch); h.mu.Unlock() }
 func (h *hub) addOutput(name string, ch chan []byte) {
 	h.mu.Lock()
 	if h.outputs[name] == nil {
@@ -154,6 +165,16 @@ func (h *hub) sendOutput(name string, data []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.outputs[name] {
+		select {
+		case ch <- data:
+		default:
+		}
+	}
+}
+func (h *hub) sendEntries(data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.entries {
 		select {
 		case ch <- data:
 		default:
@@ -195,6 +216,17 @@ type server struct {
 	// exportPageSize is the default page size for the export picker's session list,
 	// from photo-judge.properties (exportPageSize). Set once at startup.
 	exportPageSize int
+
+	// Member-entry state (guarded by mu). When entryOpen is true, competitors may
+	// submit photos to entrySessionID — the session locked in when the form was opened.
+	entryOpen      bool
+	entrySessionID string
+
+	// detectedWifiSSID/Password are the host's current Wi-Fi, best-effort detected at
+	// startup (netsh). Used as a fallback when the operator leaves the Settings Wi-Fi
+	// fields blank, and surfaced as placeholders on the Settings page.
+	detectedWifiSSID     string
+	detectedWifiPassword string
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -256,6 +288,9 @@ func applyOrder(dir string, files []string) []string {
 
 // buildView assumes s.mu is held. No disk IO (Count is precomputed at load).
 func (s *server) buildView(sc *Screen) View {
+	if sc.Type == "entry" {
+		return s.entryView()
+	}
 	if sc.Category == "" {
 		return View{Mode: "idle"}
 	}
@@ -305,13 +340,17 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version      string     `json:"version"`
-		NewerVersion string     `json:"newerVersion,omitempty"`
-		Sessions     []*Session `json:"sessions"`
-		Categories   []string   `json:"categories"`
-		Screens      []*Screen  `json:"screens"`
-		Settings     Settings   `json:"settings"`
-	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings}
+		Version        string     `json:"version"`
+		NewerVersion   string     `json:"newerVersion,omitempty"`
+		Sessions       []*Session `json:"sessions"`
+		Categories     []string   `json:"categories"`
+		Screens        []*Screen  `json:"screens"`
+		Settings       Settings   `json:"settings"`
+		EntryOpen      bool       `json:"entryOpen"`
+		EntrySessionID string     `json:"entrySessionId,omitempty"`
+		PendingCount   int        `json:"pendingCount"`
+	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
+		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID)}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -1601,6 +1640,12 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		s.h.addConsole(ch)
 		defer s.h.removeConsole(ch)
 		ch <- s.consoleSnapshot()
+	} else if role == "entry" {
+		// Landing + member-entry pages: get the entry-form state, refreshed whenever
+		// the operator opens/closes it or the locked session's details change.
+		s.h.addEntry(ch)
+		defer s.h.removeEntry(ch)
+		ch <- s.entryStateJSON()
 	} else {
 		name := r.URL.Query().Get("screen")
 		s.h.addOutput(name, ch)
@@ -1860,16 +1905,22 @@ func main() {
 	s.refreshLogo() // resolve the active logo (settings + logo\ contents)
 	s.loadScreens()
 	s.sweepImportTmp() // clear any leftover import staging from a previous run
+	s.detectWifi()     // best-effort host Wi-Fi (name/password) for entry instructions
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
+	// Root is the PUBLIC landing page (club logo + entry direction). The operator
+	// console lives at /console so competitors who reach the app never land on it.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		serveAsset(w, sub, "console.html")
+		serveAsset(w, sub, "landing.html")
 	})
+	mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "console.html") })
+	mux.HandleFunc("/entry", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "entry.html") })
+	mux.HandleFunc("/review", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "review.html") })
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
@@ -1910,6 +1961,18 @@ func main() {
 	mux.HandleFunc("/api/screen/delete", s.handleScreenDelete)
 	mux.HandleFunc("/api/screen/load", s.handleScreenLoad)
 	mux.HandleFunc("/api/screen/cmd", s.handleScreenCmd)
+	mux.HandleFunc("/api/screen/type", s.handleScreenType)
+	mux.HandleFunc("/api/entry/state", s.handleEntryState)
+	mux.HandleFunc("/api/entry/open", s.handleEntryOpen)
+	mux.HandleFunc("/api/entry/close", s.handleEntryClose)
+	mux.HandleFunc("/api/entry/submit", s.handleEntrySubmit)
+	mux.HandleFunc("/api/entry/mine", s.handleEntryMine)
+	mux.HandleFunc("/api/entry/edit", s.handleEntryEdit)
+	mux.HandleFunc("/api/entry/remove", s.handleEntryRemove)
+	mux.HandleFunc("/api/entry/pending", s.handleEntryPending)
+	mux.HandleFunc("/api/entry/photo", s.handleEntryPhoto)
+	mux.HandleFunc("/api/entry/approve", s.handleEntryApprove)
+	mux.HandleFunc("/api/entry/reject", s.handleEntryReject)
 	mux.HandleFunc("/api/photo", s.handlePhoto)
 	mux.HandleFunc("/api/photos", s.handlePhotosList)
 	mux.HandleFunc("/api/logo", s.handleLogo)
@@ -1952,7 +2015,7 @@ func main() {
 	}
 	addr := host + ":" + port
 	loopAddr := "127.0.0.1:" + port // how a second launch / the local browser reaches us
-	reqURL := "http://" + loopAddr + "/"
+	reqURL := "http://" + loopAddr + "/console"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
@@ -1981,7 +2044,7 @@ func main() {
 	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
 		s.port = strconv.Itoa(tcp.Port)
 	}
-	u := "http://127.0.0.1:" + s.port + "/"
+	u := "http://127.0.0.1:" + s.port + "/console"
 
 	srv := &http.Server{Handler: mux}
 	go func() {

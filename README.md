@@ -142,6 +142,23 @@ that workflow.
   code** button renders a scannable code (a small standard-library-only QR encoder, no
   third-party dependency) to open the control page on a phone instantly. The judges'
   output windows stay on the host machine.
+- **Member entries** — let competitors add their own photos at the last minute from their
+  phones. Switch any output screen's **type** (a dropdown on its console row) to **Entry QR**:
+  the screen then shows how to join the host's Wi-Fi (name + password — auto-detected or set
+  on the Settings page — and a scannable join code) and a QR/URL to the **entry page**. A
+  competitor enters their first and last name, then uploads JPG/PNG photos into a chosen
+  category with a title. Entries lock to the session selected when the form is opened and
+  stop on **Close Entry Form**. Submissions wait in the **Review entries** queue (`/review`)
+  for the operator to **approve** (sorting each into the right category/orientation to
+  reorder normally) or **reject**. A competitor sees their submissions as thumbnails with a
+  live status (Awaiting review / Accepted / **Rejected**, the latter outlined red) and can
+  edit, re-upload, or remove any not-yet-accepted entry. A submitted JPEG gets its title and
+  photographer written into its EXIF. Optional per-competitor and per-category limits — which
+  count every photo by a photographer's name for the session (so the same name can't bypass
+  them from another device), a master on/off switch, and a toggle to skip review and add
+  submissions straight into the session, are all set on the Settings page. The app's public **landing page** (the root URL) shows the club logo and,
+  when entries are open, points competitors to the form and the session date — while the
+  operator console (now at **`/console`**, where the exe opens) stays off the public surface.
 - **Session archiving** — when a competition night is over, archive its session: the
   photo metadata (titles, photographers, scores, categories, orientations, dates) is saved
   to `archives\<id>.json` and the **photo image files are permanently deleted** to reclaim
@@ -155,9 +172,10 @@ that workflow.
   LAN remote control above.
 - **Settings page** — one place for app-wide options: lock the scorekeeper to the
   operator, allow only one live screen at a time, a logo library (upload/choose/delete the
-  title-card logo), a custom PDF header, LAN access, and per-field photo-metadata import.
-  Saved to `settings.json`; the LAN and metadata toggles are gated by `photo-judge.properties`
-  (a `false` there wins).
+  title-card logo), a custom PDF header, LAN access, per-field photo-metadata import,
+  member-entry limits (per competitor and per category), and the Wi-Fi name/password shown on
+  the Entry-QR screen. Saved to `settings.json`; the LAN and metadata toggles are gated by
+  `photo-judge.properties` (a `false` there wins).
 - **Consistent in-app dialogs** — confirmations, prompts, and messages use the app's own
   dark modals (matching the QR-code dialog) instead of the browser's plain pop-ups, with a
   red action button for destructive choices; **Enter** confirms and **Esc** cancels.
@@ -293,7 +311,12 @@ new sessions — copy to the local drive for an event).
 | `web/modal.js` | Shared in-app dialogs (alert/confirm/prompt replacements) for every page |
 | `portation.go` | Session import/export — `.pjs`/`.pjss` zip bundles, preview & commit |
 | `web/portation.js` | The console's Import / Export wizard (export picker + import preview) |
-| `web/output.html` | Judge-facing output window (black-by-default display) |
+| `entries.go` | Member entries — entry form state, submit/review queue, limits, Wi-Fi detection |
+| `exifwrite.go` | Writes a submitted JPEG's title/photographer into its EXIF (round-trips with `metadata.go`) |
+| `web/landing.html` | Public landing page (root URL) — logo + entry direction |
+| `web/entry.html` | Competitor entry page (name + upload, no console links) |
+| `web/review.html` | Operator review queue for pending member entries |
+| `web/output.html` | Judge-facing output window (black-by-default display; Entry-QR mode) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Category manager (per-session) page |
 | `web/score.html` | Scoring page (follow a screen, record scores) |
