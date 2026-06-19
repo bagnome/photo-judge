@@ -125,7 +125,8 @@ that workflow.
   live indicator of which photo the operator is on, a highlight when both are on the
   same photo, and a **Jump to operator's photo** shortcut. Scores are saved per photo
   and surface as a badge on the Upload / Reorder grid and pre-filled in the score-sheet
-  PDF. A separate **Physical prints** mode records printed entries that have no image
+  PDF. A photo reaching the session's **win threshold** also gets a **🏆 winner** badge on
+  the grid and the Scoring page. A separate **Physical prints** mode records printed entries that have no image
   file — a spreadsheet-style table of title / photographer / score per category that
   auto-extends as you type (Tab between fields, Enter for the next row).
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
@@ -175,9 +176,17 @@ that workflow.
   charts visualise it: a custom **overlaid** chart (a faint per-session total bar with that
   session's categories drawn side by side in front), a **stacked** per-session chart, a
   **category totals** chart, and a **photographer-per-session** chart (one cluster per
-  session, one bar per photographer, stacked by category). Standard-library only — no
-  charting library.
-- **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
+  session, one bar per photographer, stacked by category). Entries include **physical
+  prints** as well as digital photos, with a **Show** filter (Both / Digital / Physical). A
+  **Winners** tab covers entries that reached their session's threshold (same kind of cards,
+  tables, and charts), and a **Compare** tab puts digital vs physical side by side.
+  Standard-library only — no charting library.
+- **Session Management** — a per-session settings page (in the operator nav) with the
+  session's **date & description**, its **scoring** settings (win threshold + total points,
+  default 11 of 15), and the per-session **category** manager. It opens to the session
+  selected on the console without changing that selection, and is built to gain more
+  per-session settings over time.
+- **Mobile-friendly** — every control page (console, Upload/Reorder, Session Management,
   Scoring, How To) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
   grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
@@ -271,9 +280,10 @@ suggesting you close and reopen Photo Judge to update.
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
-2. **Set up categories** *(optional)* — *Manage categories* → activate/deactivate,
-   reorder, or add this session's categories. A new session already inherits the last
-   one's setup, so you can usually skip this.
+2. **Set up the session** *(optional)* — *Session Management* → adjust this session's
+   date/description, its scoring (win threshold + total points), and its categories
+   (activate/deactivate, reorder, add). A new session already inherits the last one's
+   setup, so you can usually skip this.
 3. **Upload photos** — *Upload / Reorder* page → choose session and category →
    drag images in (each is auto-filed as Landscape or Portrait by its shape) → drag
    thumbnails within a section to set the order.
@@ -286,7 +296,7 @@ suggesting you close and reopen Photo Judge to update.
 
 > The default categories (seeded into the first session) are: Pictorial, Wildlife,
 > Altered Reality, Portraiture, Macro, "Landscapes, Cityscapes, and Travel", Black and
-> White. After that, manage each session's categories in **Manage categories** (no
+> White. After that, manage each session's categories in **Session Management** (no
 > restart needed); `categories.txt` only seeds the very first session.
 
 A full end-user walkthrough (for the operator who runs the show, not the developer)
@@ -330,7 +340,7 @@ new sessions — copy to the local drive for an event).
 | `web/review.html` | Operator review queue for pending member entries |
 | `web/output.html` | Judge-facing output window (black-by-default display; Entry-QR mode) |
 | `web/admin.html` | Upload / reorder page |
-| `web/categories.html` | Category manager (per-session) page |
+| `web/categories.html` | Session Management page (per-session settings + category manager; served at `/session`) |
 | `web/score.html` | Scoring page (follow a screen, record scores) |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
 | `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |

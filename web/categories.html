@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Photo Judge — Categories</title>
+<title>Photo Judge — Session Management</title>
 <style>
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
  header{background:#111;padding:10px 16px;font-weight:600;font-size:15px;display:flex;gap:14px;align-items:center}
@@ -16,7 +16,19 @@
  button:disabled{opacity:.4;cursor:not-allowed}
  button.danger{background:#a83232;border-color:#a83232}
  button.danger:hover:not(:disabled){background:#c23b3b}
+ button.primary{background:#2d6cdf;border-color:#2d6cdf}
+ button.primary:hover{background:#3b78e6}
  .note{color:#8a9099;font-size:13px;max-width:520px}
+ #settings{display:none;padding:14px 16px 0}
+ #settings.show{display:flex}
+ #settings{gap:14px;flex-wrap:wrap}
+ .scard{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:14px 16px;flex:1 1 320px;max-width:480px;box-sizing:border-box}
+ .scard h3{margin:0 0 8px;font-size:14px}
+ .frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
+ .frow label{min-width:92px}
+ .scard textarea{font-family:inherit;font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;flex:1 1 200px;box-sizing:border-box;resize:vertical;min-height:46px}
+ .num-in{width:84px}
+ .hint{color:#8a9099;font-size:12.5px;line-height:1.45;margin:2px 0 4px}
  #guide{display:none;margin:16px;padding:22px 26px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:660px;line-height:1.55}
  #guide.show{display:block}
  #guide h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
@@ -55,13 +67,32 @@
 </style>
 </head>
 <body>
-<header>Photo Judge — Categories</header>
+<header>Photo Judge — Session Management</header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
-  <span class="note">Categories are per session. The <b>Active</b> order sets the console dropdowns and the score-sheet PDF. A new session inherits the latest session's setup.</span>
+  <span class="note">Per-session settings. Opens to the session selected on the console; changing it here won't move the console. A new session inherits the latest session's setup.</span>
 </div>
 
 <div id="guide"></div>
+
+<div id="settings">
+  <div class="scard">
+    <h3>Session details</h3>
+    <div class="frow"><label for="sm-date">Date</label><input type="date" id="sm-date"></div>
+    <div class="frow" style="align-items:flex-start"><label for="sm-desc">Description</label><textarea id="sm-desc" placeholder="Optional note so you can tell sessions apart"></textarea></div>
+    <div class="frow"><button id="saveDetails" class="primary">Save details</button></div>
+  </div>
+  <div class="scard">
+    <h3>Scoring</h3>
+    <div class="frow">
+      <label for="sm-thr">Win threshold</label><input type="number" step="0.1" min="0" id="sm-thr" class="num-in" placeholder="11">
+      <label for="sm-pts" style="min-width:auto">out of</label><input type="number" step="0.1" min="0" id="sm-pts" class="num-in" placeholder="15">
+      <span style="color:#9aa0a6">points</span>
+    </div>
+    <div class="hint">A photo scoring <b>at or above</b> the win threshold is a “winner”, eligible for the annual competition. Leave the threshold blank for no winners. (e.g. 11 of 15.)</div>
+    <div class="frow"><button id="saveScoring" class="primary">Save scoring</button></div>
+  </div>
+</div>
 
 <div id="manager">
   <div class="addrow">
@@ -99,8 +130,10 @@ let sessions = [];
 let detail = {active:[], inactive:[], used:[]};
 let selActive = null, selInactive = null;
 let loadedFor = null;            // session id whose detail is currently shown
+let seededFromConsole = false;   // have we defaulted to the console's selected session yet?
 
 const sid = () => $('session').value;
+const curSessionObj = () => sessions.find(s => s.id === sid());
 
 function toast(msg, kind){
  const t=document.createElement('div'); t.className='toast'+(kind?' '+kind:''); t.textContent=msg;
@@ -114,6 +147,12 @@ function applyState(st){
  sel.innerHTML='';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o); });
  if(cur && sessions.some(s=>s.id===cur)) sel.value=cur;
+ // Open to the session the console currently has selected — but only once, then leave
+ // the choice to the user (and never push our selection back to the console).
+ if(!seededFromConsole && st.selectedSessionId && sessions.some(s=>s.id===st.selectedSessionId)){
+   sel.value = st.selectedSessionId;
+   seededFromConsole = true;
+ }
  updateView();
  const cs = sid();
  if(cs && cs !== loadedFor) loadDetail();        // first session / selection arrived via SSE
@@ -121,29 +160,52 @@ function applyState(st){
 }
 
 function updateView(){
- const guide=$('guide'), mgr=$('manager');
+ const guide=$('guide'), mgr=$('manager'), settings=$('settings');
+ const hide = () => { mgr.classList.remove('show'); settings.classList.remove('show'); };
  if(sessions.length === 0){
-   mgr.classList.remove('show');
+   hide();
    guide.innerHTML = '<h2>Create a session first</h2>'
-     + 'Categories are managed <span class="k">per session</span>. Create a session on the '
-     + '<a href="/" style="color:#7fa9f0">Console</a> (or the Upload page), then come back here to set it up.';
+     + 'Sessions are managed <span class="k">one at a time</span>. Create a session on the '
+     + '<a href="/console" style="color:#7fa9f0">Console</a> (or the Upload page), then come back here to set it up.';
    guide.classList.add('show');
    return;
  }
  if(!sid()){
-   mgr.classList.remove('show');
-   guide.innerHTML = '<h2>Select a session</h2>Pick a session from the menu above to manage its categories.';
+   hide();
+   guide.innerHTML = '<h2>Select a session</h2>Pick a session from the menu above to manage its settings and categories.';
    guide.classList.add('show');
    return;
  }
  guide.classList.remove('show');
+ settings.classList.add('show');
  mgr.classList.add('show');
+}
+
+// Fill the per-session setting fields from the selected session object.
+function fillSettings(){
+ const ss = curSessionObj(); if(!ss) return;
+ $('sm-date').value = ss.date || '';
+ $('sm-desc').value = ss.description || '';
+ $('sm-thr').value = (ss.winThreshold == null) ? '' : ss.winThreshold;
+ $('sm-pts').value = (ss.maxPoints == null) ? '' : ss.maxPoints;
+}
+
+// Save all per-session settings at once (both cards post the full set, so neither
+// clobbers the other's fields).
+async function saveSettings(){
+ const id = sid(); if(!id) return;
+ const body = {id, date:$('sm-date').value, description:$('sm-desc').value.trim(),
+   winThreshold:$('sm-thr').value.trim(), maxPoints:$('sm-pts').value.trim()};
+ const r = await post('/api/session/settings', body);
+ if(!r.ok){ toast((await r.text())||'Could not save settings', 'del'); return; }
+ toast('Session settings saved');
 }
 
 async function loadDetail(){
  if(!sid()){ loadedFor=null; updateView(); return; }
  loadedFor = sid();
  selActive = selInactive = null;
+ fillSettings();
  const r = await fetch('/api/session/categories?session='+enc(sid()));
  if(!r.ok){ toast('Could not load categories: '+(await r.text()), 'del'); return; }
  detail = await r.json();
@@ -225,6 +287,8 @@ $('actUp').onclick = () => moveSel(-1);
 $('actDown').onclick = () => moveSel(1);
 
 $('session').addEventListener('change', loadDetail);
+$('saveDetails').onclick = saveSettings;
+$('saveScoring').onclick = saveSettings;
 
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));

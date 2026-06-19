@@ -14,6 +14,29 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Per-session scoring settings + "winning" photos.** Each session now has a **win
+  threshold** and a **total points** (defaults **11 of 15**); a photo scoring at or above
+  the threshold is a **winner** (eligible for the club's separate annual competition). A
+  blank threshold means that session has no winners. New sessions inherit the latest
+  session's settings. Winners surface everywhere:
+  - **Statistics** gains a **Winners** tab (alongside **Entries**): winner summary cards
+    (winning entries, win rate, winning photographers), and winners **by photographer**, **by
+    category**, and **per session** (tables + charts). Archived sessions are included via the
+    threshold saved at archive time. Tabs are deep-linkable (`/stats?tab=winners`).
+  - **Digital + physical, and a Compare tab.** Statistics now counts **physical prints** as
+    entries alongside digital photos, with a **Show** filter (Both / Digital / Physical) on the
+    Entries and Winners views, and a third **Compare** tab (`/stats?tab=compare`) putting digital
+    vs physical side by side (summary cards, grouped per-category and per-session bar charts, and
+    a win-rate table).
+  - A **🏆 badge** marks winning photos on the **Upload / Reorder** grid and the **Scoring**
+    page (which also shows the score is out of the session's total points).
+  - The **archive** records each session's threshold, flags winning photos (and prints) with
+    a 🏆, and shows a winners count per archived session.
+- **Session Management page** — the old **Manage categories** page (now at `/session`) becomes
+  the home for per-session settings: a **Session details** card (date + description), a
+  **Scoring** card (win threshold + total points), and the existing category manager. It opens
+  to the session currently selected on the console **without** changing the console's selection,
+  and is built so future per-session settings (e.g. judge scoring) drop in as new cards.
 - **Statistics page** (`/stats`, in the operator nav) — entry counts across your
   competition history, **including archived sessions** (their counts come from the saved
   archive metadata, since the image files are deleted on archive). An entry is any photo in

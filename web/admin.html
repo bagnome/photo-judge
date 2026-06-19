@@ -43,6 +43,7 @@
  .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
  .tile .score{position:absolute;top:84px;left:4px;background:#2e7d46;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px}
+ .tile .win{position:absolute;top:84px;right:4px;background:#b8860b;color:#fff;font-size:12px;line-height:1.3;padding:1px 6px;border-radius:10px}
  .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
  .tile .del:hover{background:#a83232}
  .tile .nm{padding:0 7px 7px}
@@ -122,6 +123,7 @@ const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'applicat
 const ORIENTS = ['Landscape','Portrait'];
 let sessions = [], pendingSession = null;
 let sect = { Landscape:{files:[],names:{},scores:{}}, Portrait:{files:[],names:{},scores:{}} };
+let winThr = null;  // this session's win threshold (null = no winners); from /api/photos
 
 function toast(msg, kind){
  const t = document.createElement('div');
@@ -200,6 +202,7 @@ async function refreshGrid(){
    const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
    const j = await r.json();
    sect[o] = {files: j.files || [], names: j.names || {}, scores: j.scores || {}};
+   winThr = (typeof j.winThreshold === 'number') ? j.winThreshold : null;
  }));
  renderAll();
 }
@@ -232,6 +235,9 @@ function renderSection(orient){
    t.append(grip, img, badge, cap, del, nm);
    const sc = data.scores[fn];
    if(sc){ const sb = document.createElement('div'); sb.className = 'score'; sb.textContent = '★ '+sc; sb.title = 'Judge score'; t.appendChild(sb); }
+   if(winThr != null && sc != null && sc !== '' && parseFloat(sc) >= winThr){
+     const wb = document.createElement('div'); wb.className = 'win'; wb.textContent = '🏆'; wb.title = 'Winner — meets the '+winThr+'-point threshold'; t.appendChild(wb);
+   }
    // Desktop: native HTML5 drag-and-drop — grab the tile, drop it on another to reorder.
    t.addEventListener('dragstart', e => {
      if(e.target.closest('input,button')){ e.preventDefault(); return; } // typing / delete, not reordering

@@ -84,7 +84,31 @@ type Session struct {
 	// alphabetically in the manager). Omitted from older session.json files, which
 	// load as an empty set.
 	InactiveCategories []string `json:"inactiveCategories,omitempty"`
+	// WinThreshold is the score at/above which a photo is a "winner" (eligible for the
+	// annual competition). nil = unset → this session has no winners. MaxPoints is the
+	// total a photo is scored out of (e.g. 11 of 15). Both are per-session settings,
+	// pointers so "unset" is distinct from 0. New sessions default to 11 / 15.
+	WinThreshold *float64 `json:"winThreshold,omitempty"`
+	MaxPoints    *float64 `json:"maxPoints,omitempty"`
 }
+
+// isWinner reports whether a photo's score (a free-text string) reaches this session's
+// win threshold. Only numeric scores can win, and only when a threshold is set.
+func (ss *Session) isWinner(score string) bool {
+	return ss != nil && scoreWins(ss.WinThreshold, score)
+}
+
+// scoreWins reports whether score (free text) reaches threshold. nil threshold or a
+// non-numeric score never wins. Shared by live sessions and archived ones.
+func scoreWins(threshold *float64, score string) bool {
+	if threshold == nil {
+		return false
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(score), 64)
+	return err == nil && v >= *threshold
+}
+
+func floatPtr(v float64) *float64 { return &v }
 
 // Screen is the live state of one output window. Position: 0 = title card,
 // 1..Count = photo n, Count+1 = end black. Blackout is an independent overlay.
@@ -217,6 +241,10 @@ type server struct {
 	// from photo-judge.properties (exportPageSize). Set once at startup.
 	exportPageSize int
 
+	// selectedSessionID is the session the operator console currently has selected.
+	// Tracked server-side so the Session Management page can open to it (guarded by mu).
+	selectedSessionID string
+
 	// Member-entry state (guarded by mu). When entryOpen is true, competitors may
 	// submit photos to entrySessionID — the session locked in when the form was opened.
 	entryOpen      bool
@@ -340,17 +368,18 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version        string     `json:"version"`
-		NewerVersion   string     `json:"newerVersion,omitempty"`
-		Sessions       []*Session `json:"sessions"`
-		Categories     []string   `json:"categories"`
-		Screens        []*Screen  `json:"screens"`
-		Settings       Settings   `json:"settings"`
-		EntryOpen      bool       `json:"entryOpen"`
-		EntrySessionID string     `json:"entrySessionId,omitempty"`
-		PendingCount   int        `json:"pendingCount"`
+		Version           string     `json:"version"`
+		NewerVersion      string     `json:"newerVersion,omitempty"`
+		Sessions          []*Session `json:"sessions"`
+		Categories        []string   `json:"categories"`
+		Screens           []*Screen  `json:"screens"`
+		Settings          Settings   `json:"settings"`
+		EntryOpen         bool       `json:"entryOpen"`
+		EntrySessionID    string     `json:"entrySessionId,omitempty"`
+		PendingCount      int        `json:"pendingCount"`
+		SelectedSessionID string     `json:"selectedSessionId,omitempty"`
 	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
-		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID)}
+		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -470,13 +499,17 @@ func (s *server) createSession(date, description string) (*Session, error) {
 	// order and the inactive set — so the operator's setup carries forward. The very
 	// first session falls back to the categories.txt / built-in default seed.
 	var active, inactive []string
+	// Scoring settings carry forward from the latest session; the very first session
+	// falls back to the club's usual 11-of-15 default.
+	win, max := floatPtr(11), floatPtr(15)
 	if latest := s.latestSession(); latest != nil {
 		active = append([]string{}, latest.Categories...)
 		inactive = append([]string{}, latest.InactiveCategories...)
+		win, max = latest.WinThreshold, latest.MaxPoints
 	} else {
 		active = append([]string{}, s.categories...)
 	}
-	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive}
+	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -598,6 +631,82 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 	log.Printf("session %s edited (date %s)", body.ID, body.Date)
 	s.pushConsole()
 	writeJSON(w, ss)
+}
+
+// handleSessionSettings updates a session's per-session settings from the Session
+// Management page: date, description, and the scoring fields (win threshold + total
+// points). Threshold/points come in as strings; blank clears them (nil → no winners).
+func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct{ ID, Date, Description, WinThreshold, MaxPoints string }
+	if decode(r, &body) != nil || !safeName(body.ID) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	if !validDate(body.Date) {
+		http.Error(w, "date must be YYYY-MM-DD", 400)
+		return
+	}
+	win, err := parseOptFloat(body.WinThreshold)
+	if err != nil {
+		http.Error(w, "win threshold must be a number", 400)
+		return
+	}
+	max, err := parseOptFloat(body.MaxPoints)
+	if err != nil {
+		http.Error(w, "total points must be a number", 400)
+		return
+	}
+	s.mu.Lock()
+	ss := s.sessionByID(body.ID)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "no such session", 404)
+		return
+	}
+	ss.Date = body.Date
+	ss.Description = strings.TrimSpace(body.Description)
+	ss.WinThreshold = win
+	ss.MaxPoints = max
+	b, _ := json.MarshalIndent(ss, "", "  ")
+	werr := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
+	sort.Slice(s.sessions, func(i, j int) bool { return s.sessions[i].Date < s.sessions[j].Date })
+	s.mu.Unlock()
+	if werr != nil {
+		http.Error(w, werr.Error(), 500)
+		return
+	}
+	log.Printf("session %s settings saved (threshold=%v points=%v)", body.ID, body.WinThreshold, body.MaxPoints)
+	s.pushConsole()
+	writeJSON(w, ss)
+}
+
+// handleConsoleSession records which session the operator console currently has
+// selected, so the Session Management page can open to it (without the reverse —
+// that page never changes the console's selection).
+func (s *server) handleConsoleSession(w http.ResponseWriter, r *http.Request) {
+	var body struct{ SessionID string }
+	if decode(r, &body) != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	s.selectedSessionID = body.SessionID
+	s.mu.Unlock()
+	s.pushConsole()
+	w.WriteHeader(204)
+}
+
+// parseOptFloat parses an optional numeric field: blank → nil, otherwise a *float64.
+func parseOptFloat(s string) (*float64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 // ---- per-session category management --------------------------------------
@@ -1132,7 +1241,13 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := s.photosDir(sid, cat, orient)
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir)})
+	s.mu.Lock()
+	var win, max *float64
+	if ss := s.sessionByID(sid); ss != nil {
+		win, max = ss.WinThreshold, ss.MaxPoints
+	}
+	s.mu.Unlock()
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir), "winThreshold": win, "maxPoints": max})
 }
 
 // handlePhotoName sets (or clears, when name is empty) the photographer associated
@@ -1924,6 +2039,7 @@ func main() {
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/how-to", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
 	// Old link target — the Getting Started walkthrough is now the first tab of How To.
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
@@ -1939,6 +2055,8 @@ func main() {
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
+	mux.HandleFunc("/api/session/settings", s.handleSessionSettings)
+	mux.HandleFunc("/api/console/session", s.handleConsoleSession)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
 	mux.HandleFunc("/api/session/archive", s.handleSessionArchive)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)

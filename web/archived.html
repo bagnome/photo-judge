@@ -124,12 +124,17 @@ async function search(){
    const phys = a.physicalPrints || [];
    const both = photos.length && phys.length;
 
+   // A photo/print is a "winner" if its score reaches the threshold saved at archive time.
+   const isWin = sc => a.winThreshold != null && sc != null && sc !== '' && !isNaN(parseFloat(sc)) && parseFloat(sc) >= a.winThreshold;
+   let photoWinners = 0;
    const photoRows = photos.map(ph => {
      const hit = (photog && (ph.photographer||'').toLowerCase().includes(photog)) ||
                  (title  && (ph.title||'').toLowerCase().includes(title));
+     const w = isWin(ph.score); if(w) photoWinners++;
      return '<tr class="'+(hit?'hit':'')+'">'
        + '<td>'+esc(ph.category)+'</td><td>'+esc(ph.orientation)+'</td>'
-       + '<td>'+esc(ph.title)+'</td><td>'+esc(ph.photographer)+'</td><td class="sc">'+esc(ph.score)+'</td></tr>';
+       + '<td>'+esc(ph.title)+'</td><td>'+esc(ph.photographer)+'</td>'
+       + '<td class="sc">'+esc(ph.score)+(w?' 🏆':'')+'</td></tr>';
    }).join('');
    const photoTable = photos.length ? (
        (both ? '<div class="subhead">Photos</div>' : '')
@@ -142,7 +147,7 @@ async function search(){
                  (title  && (p.title||'').toLowerCase().includes(title));
      return '<tr class="'+(hit?'hit':'')+'">'
        + '<td>'+esc(p.category)+'</td><td>'+esc(p.title)+'</td>'
-       + '<td>'+esc(p.photographer)+'</td><td class="sc">'+esc(p.score)+'</td></tr>';
+       + '<td>'+esc(p.photographer)+'</td><td class="sc">'+esc(p.score)+(isWin(p.score)?' 🏆':'')+'</td></tr>';
    }).join('');
    const physTable = phys.length ? (
        '<div class="subhead">Physical prints</div>'
@@ -153,6 +158,7 @@ async function search(){
    const detail = '<div class="photos" id="ph'+idx+'"'+(expandFilter?'':' hidden')+'>' + photoTable + physTable + '</div>';
    let count = (a.photoCount||0) + ' photo'+((a.photoCount===1)?'':'s');
    if(phys.length) count += '  ·  ' + phys.length + ' physical print' + (phys.length===1?'':'s');
+   if(a.winThreshold != null) count += '  ·  🏆 ' + photoWinners + ' winner' + (photoWinners===1?'':'s');
    out.push(
      '<div class="card">'
    + '<div class="chead">'

@@ -8,6 +8,10 @@
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
  header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
  .intro{color:#8a9099;font-size:13px;padding:10px 16px 0;line-height:1.5}
+ .tabs{display:flex;gap:6px;padding:10px 16px 0}
+ .tabs button{font-size:14px;font-weight:600;padding:8px 18px;background:#23262c;color:#c9ccd1;border:1px solid #3a3e45;border-radius:6px;cursor:pointer}
+ .tabs button:hover{background:#2a2e35}
+ .tabs button.active{background:#2d6cdf;border-color:#2d6cdf;color:#fff}
  .bar{padding:12px 16px;display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap;border-bottom:1px solid #333}
  .f{display:flex;flex-direction:column;gap:4px}
  .f label{color:#9aa0a6;font-size:12px}
@@ -16,6 +20,7 @@
  button:hover{background:#363a42}
  .presets{display:flex;gap:6px;flex-wrap:wrap}
  .presets button.active{background:#2d6cdf;border-color:#2d6cdf}
+ #mediumfilter.hide{display:none}
  #content{padding:14px 16px 48px}
  .empty{color:#777;font-size:14px;padding:28px 0}
  .rangelabel{color:#9aa0a6;font-size:13px;margin:0 0 12px}
@@ -56,10 +61,15 @@
 </head>
 <body>
 <header>Photo Judge — Statistics</header>
-<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any photo in a session — operator-uploaded or member-submitted. Pick a time frame to see totals, a per-session and per-category breakdown, and who entered the most.</div>
+<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any <b>photo</b> or <b>physical print</b> in a session. Switch to <b>Winners</b> for entries that reached their session's points threshold, or <b>Compare</b> for digital vs physical. The time frame and the Show filter apply to the Entries and Winners views.</div>
+<div class="tabs">
+  <button data-tab="entries" class="active">Entries</button>
+  <button data-tab="winners">🏆 Winners</button>
+  <button data-tab="compare">⚖ Compare</button>
+</div>
 <div class="bar">
   <div class="f"><label>Quick range</label>
-    <div class="presets">
+    <div class="presets" id="rangepresets">
       <button data-preset="all">All time</button>
       <button data-preset="ytd">This year</button>
       <button data-preset="12m">Last 12 months</button>
@@ -68,6 +78,13 @@
   <div class="f"><label>From</label><input type="date" id="from"></div>
   <div class="f"><label>To</label><input type="date" id="to"></div>
   <button id="apply">Apply</button>
+  <div class="f" id="mediumfilter"><label>Show</label>
+    <div class="presets">
+      <button data-medium="both" class="active">Both</button>
+      <button data-medium="digital">Digital</button>
+      <button data-medium="physical">Physical</button>
+    </div>
+  </div>
 </div>
 <div id="content"><div class="empty">Loading…</div></div>
 
@@ -85,6 +102,9 @@ let CATS = [];
 const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
 const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
 const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const winCatVal = (s, c) => { const e = (s.winnersByCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const GOLD = '#c9a23b', DIGITAL_C = '#2d6cdf', PHYSICAL_C = '#e0683b';
+let activeTab = 'entries', activeMedium = 'both', lastData = null;
 
 function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
 
@@ -257,29 +277,31 @@ function sessionTable(sess){
    + heads.join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody>' + foot + '</table></div></div>';
 }
 
-function categoryTable(byCat, grand){
+function categoryTable(byCat, grand, noun){
  if(!byCat.length) return '';
+ noun = noun || 'Entries';
  const rows = byCat.map(c => {
    const pct = grand ? (100 * c.count / grand) : 0;
    return `<tr><td><span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)}</td>`
      + `<td class="n">${c.count}</td><td class="n">${pct.toFixed(1)}%</td></tr>`;
  });
- return '<div class="tablewrap"><h3>Entries by category</h3><div class="tcard"><table>'
-   + '<thead><tr><th>Category</th><th class="n">Entries</th><th class="n">Share</th></tr></thead>'
+ return '<div class="tablewrap"><h3>' + noun + ' by category</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Category</th><th class="n">' + noun + '</th><th class="n">Share</th></tr></thead>'
    + '<tbody>' + rows.join('') + '</tbody>'
    + `<tfoot><tr><td>Total</td><td class="n">${grand}</td><td class="n">100%</td></tr></tfoot>`
    + '</table></div></div>';
 }
 
-function photographerTable(byPh){
+function photographerTable(byPh, noun){
  if(!byPh.length) return '';
+ noun = noun || 'Entries';
  const rows = byPh.map(p => {
    const breakdown = (p.byCategory || []).map(c =>
      `<span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)} ${c.count}`).join('&nbsp;&nbsp; ') || '<span class="muted">–</span>';
    return `<tr><td>${esc(p.name)}</td><td class="n">${p.count}</td><td>${breakdown}</td></tr>`;
  });
- return '<div class="tablewrap"><h3>Entries by photographer</h3><div class="tcard"><table>'
-   + '<thead><tr><th>Photographer</th><th class="n">Entries</th><th>By category</th></tr></thead>'
+ return '<div class="tablewrap"><h3>' + noun + ' by photographer</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Photographer</th><th class="n">' + noun + '</th><th>By category</th></tr></thead>'
    + '<tbody>' + rows.join('') + '</tbody></table></div></div>';
 }
 
@@ -293,12 +315,22 @@ function rangeLabel(d){
 function render(d){
  CATS = d.categories || [];
  // Flag any date shared by 2+ sessions so labels can disambiguate with the session id.
+ // Use the complete session list (compare covers both media) when available.
+ const allSess = (d.compare && d.compare.bySession && d.compare.bySession.length) ? d.compare.bySession : (d.bySession || []);
  const dateCounts = {};
- (d.bySession || []).forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
+ allSess.forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
  DUP_DATES = new Set(Object.keys(dateCounts).filter(k => dateCounts[k] > 1));
+ if(activeTab === 'compare') renderCompare(d);
+ else if(activeTab === 'winners') renderWinners(d);
+ else renderEntries(d);
+}
+
+const mediumNote = d => d.medium === 'digital' ? ' · digital only' : d.medium === 'physical' ? ' · physical prints only' : '';
+
+function renderEntries(d){
  const t = d.totals || {};
  if(!t.entries){
-   $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>'
+   $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>'
      + '<div class="empty">No entries in this time frame. Add photos to a session, or widen the range.</div>';
    return;
  }
@@ -308,7 +340,7 @@ function render(d){
  ].map(([l,n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
  const out = [];
- out.push('<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>');
+ out.push('<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>');
  out.push('<div class="cards">' + cards + '</div>');
  out.push(legend());
  out.push('<div class="chart"><h3>Total &amp; category entries per session</h3>'
@@ -329,25 +361,181 @@ function render(d){
  $('content').innerHTML = out.join('');
 }
 
+// A plain vertical bar chart over a list of {label, count}, one colour.
+function chartValueBars(items, fill){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 50;
+ const groupW = 92, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...items.map(i => i.count)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const bw = Math.min(groupW - 22, 50), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   g += rect(x0, yOf(it.count), bw, base - yOf(it.count), fill, null, `${it.label}: ${it.count}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, it.label, '', `${it.label}: ${it.count}`);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Winners per session, stacked by category (only sessions that had winners).
+function chartWinnersPerSession(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
+ const groupW = 84, plotW = rows.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...rows.map(s => s.winners)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ rows.forEach((s, i) => {
+   const bw = Math.min(groupW - 16, 48), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   let acc = 0;
+   CATS.forEach(c => {
+     const v = winCatVal(s, c);
+     if(v <= 0) return;
+     g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
+     acc += v;
+   });
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function winnerSessionTable(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const heads = ['<th>Session</th>', '<th class="n">Winners</th>'].concat(CATS.map(c =>
+   `<th class="n"><span class="sw-inline" style="background:${colorFor(c)}"></span>${esc(c)}</th>`));
+ const body = rows.map(s => {
+   const cells = CATS.map(c => { const v = winCatVal(s, c); return `<td class="n">${v || '<span class="muted">–</span>'}</td>`; });
+   const idTag = DUP_DATES.has(s.date) ? ` <span class="muted">#${esc(s.id)}</span>` : '';
+   return `<tr><td>${esc(s.date)}${idTag}</td><td class="n">${s.winners}</td>${cells.join('')}</tr>`;
+ });
+ return '<div class="tablewrap"><h3>Winners by session</h3><div class="tcard"><table><thead><tr>'
+   + heads.join('') + '</tr></thead><tbody>' + body.join('') + '</tbody></table></div></div>';
+}
+
+function renderWinners(d){
+ const t = d.totals || {};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d)
+   + ' · a winner is an entry scoring at or above its session\'s threshold</div>';
+ if(!t.winners){
+   $('content').innerHTML = head + '<div class="empty">No winning entries in this time frame. '
+     + 'Winners need a session <b>win threshold</b> (set on Session Management) and scores that reach it.</div>';
+   return;
+ }
+ const winRate = t.entries ? Math.round(1000 * t.winners / t.entries) / 10 : 0;
+ const cards = [
+   ['Winning entries', t.winners], ['Win rate', winRate + '%'],
+   ['Winning photographers', t.winningPhotographers], ['Sessions', t.sessions],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+ const out = [head, '<div class="cards">' + cards + '</div>', legend()];
+ out.push('<div class="chart"><h3>Winners by photographer</h3>'
+   + '<div class="desc">Who has photos eligible for the annual competition.</div>'
+   + chartValueBars((d.winnersByPhotographer || []).map(p => ({label: p.name, count: p.count})), GOLD) + '</div>');
+ out.push('<div class="chart"><h3>Winners by category</h3>'
+   + '<div class="desc">Winning photos per category across the time frame.</div>'
+   + chartCategories(d.winnersByCategory) + '</div>');
+ out.push('<div class="chart"><h3>Winners per session</h3>'
+   + '<div class="desc">Each bar is a session; segments are its winning photos by category.</div>'
+   + chartWinnersPerSession(d.bySession) + '</div>');
+ out.push(photographerTable(d.winnersByPhotographer, 'Winners'));
+ out.push(categoryTable(d.winnersByCategory, t.winners, 'Winners'));
+ out.push(winnerSessionTable(d.bySession));
+ $('content').innerHTML = out.join('');
+}
+
+// Two bars per group (digital vs physical) — used by the Compare tab.
+function chartTwoSeries(items, labelFn, aFn, bFn){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 46;
+ const groupW = 88, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(1, ...items.map(i => Math.max(aFn(i), bFn(i)))));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const gx = padL + i * groupW, bw = 26, gap = 6, totalW = bw * 2 + gap, x0 = gx + (groupW - totalW) / 2;
+   g += rect(x0, yOf(aFn(it)), bw, base - yOf(aFn(it)), DIGITAL_C, null, `${labelFn(it)} · digital: ${aFn(it)}`);
+   g += rect(x0 + bw + gap, yOf(bFn(it)), bw, base - yOf(bFn(it)), PHYSICAL_C, null, `${labelFn(it)} · physical: ${bFn(it)}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, labelFn(it), '', null);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function mediumLegend(){
+ return '<div class="legend">'
+   + `<span class="li"><span class="sw" style="background:${DIGITAL_C}"></span>Digital photos</span>`
+   + `<span class="li"><span class="sw" style="background:${PHYSICAL_C}"></span>Physical prints</span></div>`;
+}
+
+function compareTable(dig, phy){
+ const total = dig.entries + phy.entries, totWin = dig.winners + phy.winners;
+ const rate = (w, e) => e ? (Math.round(1000 * w / e) / 10).toFixed(1) + '%' : '–';
+ const share = e => total ? (100 * e / total).toFixed(1) + '%' : '–';
+ const row = (name, col, m) => `<tr><td><span class="sw-inline" style="background:${col}"></span>${name}</td>`
+   + `<td class="n">${m.entries}</td><td class="n">${share(m.entries)}</td><td class="n">${m.winners}</td><td class="n">${rate(m.winners, m.entries)}</td></tr>`;
+ return '<div class="tablewrap"><h3>Digital vs physical</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Medium</th><th class="n">Entries</th><th class="n">Share</th><th class="n">Winners</th><th class="n">Win rate</th></tr></thead><tbody>'
+   + row('Digital photos', DIGITAL_C, dig) + row('Physical prints', PHYSICAL_C, phy)
+   + '</tbody><tfoot><tr><td>Total</td><td class="n">' + total + '</td><td class="n">100%</td>'
+   + '<td class="n">' + totWin + '</td><td class="n">' + rate(totWin, total) + '</td></tr></tfoot></table></div></div>';
+}
+
+function renderCompare(d){
+ const c = d.compare || {};
+ const dig = c.digital || {entries:0, winners:0}, phy = c.physical || {entries:0, winners:0};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + ' · digital photos vs physical prints</div>';
+ if(!(dig.entries + phy.entries)){
+   $('content').innerHTML = head + '<div class="empty">No entries in this time frame.</div>';
+   return;
+ }
+ const cards = [
+   ['Digital entries', dig.entries], ['Physical entries', phy.entries],
+   ['Digital winners', dig.winners], ['Physical winners', phy.winners],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+ const out = [head, '<div class="cards">' + cards + '</div>', mediumLegend()];
+ out.push('<div class="chart"><h3>Entries by category — digital vs physical</h3>'
+   + '<div class="desc">Two bars per category: digital photos and physical prints.</div>'
+   + chartTwoSeries(c.byCategory || [], it => it.category, it => it.digital, it => it.physical) + '</div>');
+ out.push('<div class="chart"><h3>Entries per session — digital vs physical</h3>'
+   + '<div class="desc">Two bars per session, in date order.</div>'
+   + chartTwoSeries(c.bySession || [], it => sessLabel(it), it => it.digital, it => it.physical) + '</div>');
+ out.push(compareTable(dig, phy));
+ $('content').innerHTML = out.join('');
+}
+
 async function load(){
  const p = new URLSearchParams();
  if($('from').value) p.set('from', $('from').value);
  if($('to').value)   p.set('to', $('to').value);
+ if(activeMedium !== 'both') p.set('medium', activeMedium);
  $('content').innerHTML = '<div class="empty">Loading…</div>';
  try {
    const r = await fetch('/api/stats?' + p.toString());
    if(!r.ok) throw new Error(await r.text());
-   render(await r.json());
+   lastData = await r.json();
+   render(lastData);
  } catch(e){
    $('content').innerHTML = '<div class="empty">Could not load statistics. ' + esc(e.message || '') + '</div>';
  }
 }
 
+// The medium filter only applies to Entries/Winners; Compare always shows both.
+function syncMediumVisibility(){ $('mediumfilter').classList.toggle('hide', activeTab === 'compare'); }
+
+// Switch tabs without refetching — the cached payload has all three views' data.
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+ activeTab = b.dataset.tab;
+ document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+ syncMediumVisibility();
+ if(lastData) render(lastData);
+});
+
 function setActive(preset){
- document.querySelectorAll('.presets button').forEach(b =>
+ document.querySelectorAll('#rangepresets button').forEach(b =>
    b.classList.toggle('active', b.dataset.preset === preset));
 }
-document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
+document.querySelectorAll('#rangepresets button').forEach(b => b.onclick = () => {
  const today = new Date();
  if(b.dataset.preset === 'all'){ $('from').value = ''; $('to').value = ''; }
  else if(b.dataset.preset === 'ytd'){
@@ -364,6 +552,20 @@ document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
 $('apply').onclick = () => { setActive(''); load(); };
 ['from','to'].forEach(id => $(id).addEventListener('change', () => setActive('')));
 
+// Medium filter (Both / Digital / Physical) — refetches with ?medium=.
+document.querySelectorAll('#mediumfilter button').forEach(b => b.onclick = () => {
+ activeMedium = b.dataset.medium;
+ document.querySelectorAll('#mediumfilter button').forEach(x => x.classList.toggle('active', x === b));
+ load();
+});
+
+// Optional ?tab=winners|compare deep-link (also lets the tab be bookmarked).
+const wantTab = new URLSearchParams(location.search).get('tab');
+if(wantTab === 'winners' || wantTab === 'compare'){
+ activeTab = wantTab;
+ document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
+}
+syncMediumVisibility();
 setActive('all');
 load();
 </script>
