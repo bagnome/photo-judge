@@ -31,8 +31,10 @@
 !getting-started-images/
 !getting-started-images/**
 
-# Local dev helpers (not part of the app): CDP screenshot harness + go test tmp dir
+# Local dev helpers (not part of the app): CDP screenshot harness, mock servers,
+# go test tmp dir
 /cdp-shot.js
+/mock-*.js
 /.gotmp/
 
 # OS / editor cruft

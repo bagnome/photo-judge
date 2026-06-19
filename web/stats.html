@@ -33,9 +33,10 @@
  .chart-svg{display:block}
  .chart-svg .grid{stroke:#33373e;stroke-width:1}
  .chart-svg .yl{fill:#8a9099;font-size:11px;text-anchor:end;font-family:system-ui}
- .chart-svg .xl{fill:#aeb4bb;font-size:11px;text-anchor:end;font-family:system-ui}
- .chart-svg .xs{font-size:10px}
- .chart-svg .xc{text-anchor:middle;fill:#cdd2da;font-size:11.5px;font-weight:600}
+ .chart-svg .xlab{font:11px/1.15 system-ui,Segoe UI,sans-serif;color:#b8bec6;text-align:center;
+   overflow-wrap:break-word;box-sizing:border-box;padding:2px 1px 0;height:100%}
+ .chart-svg .xlab.sm{font-size:10px;line-height:1.1}
+ .chart-svg .xlab.dt{color:#cdd2da;font-weight:600}
  .chart-svg rect{transition:opacity .1s}
  .tablewrap{margin:0 0 18px}
  .tablewrap h3{font-size:14px;font-weight:600;margin:0 0 8px}
@@ -84,7 +85,6 @@ let CATS = [];
 const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
 const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
 const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
-const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 
 function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
 
@@ -116,21 +116,28 @@ function rect(x, y, w, h, fill, opacity, title){
       + (opacity != null ? ` opacity="${opacity}"` : '') + ` rx="2">`
       + (title ? `<title>${esc(title)}</title>` : '') + `</rect>`;
 }
-function xlabel(cx, text, full){
- const {padT, plotH} = GEO, y = padT + plotH + 14;
- return `<text x="${cx.toFixed(1)}" y="${y}" class="xl" transform="rotate(38 ${cx.toFixed(1)} ${y})">`
-      + esc(text) + (full ? `<title>${esc(full)}</title>` : '') + `</text>`;
+// A horizontal, centered x-axis label that wraps long text (categories, photographer
+// names) — drawn below the baseline via foreignObject so it never overlaps the bars.
+function labelBox(cx, top, width, height, text, cls, full){
+ const w = Math.max(width, 28), x = cx - w / 2;
+ return `<foreignObject x="${x.toFixed(1)}" y="${top}" width="${w.toFixed(1)}" height="${height}">`
+      + `<div xmlns="http://www.w3.org/1999/xhtml" class="xlab${cls ? ' ' + cls : ''}"`
+      + (full ? ` title="${esc(full)}"` : '') + `>${esc(text)}</div></foreignObject>`;
 }
 function wrapSvg(W, H, inner){
  return `<div class="scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="chart-svg">${inner}</svg></div>`;
 }
-const shortDate = d => (d || '').slice(5); // MM-DD
+
+// Dates shared by more than one session in the current result get the session id
+// appended so the per-session bars/rows stay distinguishable.
+let DUP_DATES = new Set();
+const sessLabel = s => DUP_DATES.has(s.date) ? s.date + ' · #' + s.id : s.date;
 
 // Chart 1 — custom overlaid: a faint full-height bar = session total, with the
 // session's category counts drawn as side-by-side bars in front of it.
 function chartOverlaid(sess){
  if(!sess.length) return '';
- const {padL, padR, padT, padB, plotH} = GEO;
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
  const groupW = 96, plotW = sess.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
  const nm = niceCeil(Math.max(...sess.map(s => s.total)));
  const yOf = v => padT + plotH - (v / nm) * plotH;
@@ -145,7 +152,7 @@ function chartOverlaid(sess){
      const v = catVal(s, c);
      g += rect(x0 + j*bw + 1, yOf(v), Math.max(bw - 2, 1.5), base - yOf(v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
    });
-   g += xlabel(gx + groupW/2, shortDate(s.date), s.date + (s.description ? ' · ' + s.description : ''));
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
  });
  return wrapSvg(W, H, g);
 }
@@ -153,10 +160,11 @@ function chartOverlaid(sess){
 // Chart 2 — stacked: one bar per session, category segments stacked to the total.
 function chartStacked(sess){
  if(!sess.length) return '';
- const {padL, padR, padT, padB, plotH} = GEO;
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
  const groupW = 84, plotW = sess.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
  const nm = niceCeil(Math.max(...sess.map(s => s.total)));
  const yOf = v => padT + plotH - (v / nm) * plotH;
+ const base = padT + plotH;
  let g = axisSvg(plotW, nm);
  sess.forEach((s, i) => {
    const bw = Math.min(groupW - 16, 48), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
@@ -167,7 +175,7 @@ function chartStacked(sess){
      g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
      acc += v;
    });
-   g += xlabel(gx + groupW/2, shortDate(s.date), s.date + (s.description ? ' · ' + s.description : ''));
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
  });
  return wrapSvg(W, H, g);
 }
@@ -175,7 +183,7 @@ function chartStacked(sess){
 // Chart 3 — category totals across the whole range.
 function chartCategories(byCat){
  if(!byCat.length) return '';
- const {padL, padR, padT, padB, plotH} = GEO;
+ const {padL, padR, padT, plotH} = GEO, padB = 50;
  const groupW = 104, plotW = byCat.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
  const nm = niceCeil(Math.max(...byCat.map(c => c.count)));
  const yOf = v => padT + plotH - (v / nm) * plotH;
@@ -184,7 +192,7 @@ function chartCategories(byCat){
  byCat.forEach((c, i) => {
    const bw = Math.min(groupW - 22, 58), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
    g += rect(x0, yOf(c.count), bw, base - yOf(c.count), colorFor(c.category), null, `${c.category}: ${c.count}`);
-   g += xlabel(gx + groupW/2, c.category, `${c.category}: ${c.count}`);
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, c.category, '', `${c.category}: ${c.count}`);
  });
  return wrapSvg(W, H, g);
 }
@@ -196,7 +204,8 @@ function chartPhotographerStacks(sess){
  const rows = sess.filter(s => (s.byPhotographer || []).length);
  if(!rows.length) return '';
  const {padL, padR, padT, plotH} = GEO;
- const padB = 98, bw = 18, innerGap = 6, clusterGap = 30, base = padT + plotH;
+ const bw = 38, innerGap = 8, clusterGap = 34, base = padT + plotH;
+ const nameH = 46, dateH = 30, padB = 6 + nameH + dateH + 6; // names wrap, then the date below
  let maxv = 1;
  rows.forEach(s => s.byPhotographer.forEach(p => { if(p.count > maxv) maxv = p.count; }));
  const nm = niceCeil(maxv);
@@ -218,11 +227,9 @@ function chartPhotographerStacks(sess){
        g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(cat), null, `${c.s.date} · ${p.name} · ${cat}: ${v}`);
        acc += v;
      });
-     const cx = x0 + bw / 2, ly = base + 13;
-     g += `<text x="${cx.toFixed(1)}" y="${ly}" class="xl xs" transform="rotate(40 ${cx.toFixed(1)} ${ly})">`
-        + esc(trunc(p.name, 12)) + `<title>${esc(p.name)} · ${p.count}</title></text>`;
+     g += labelBox(x0 + bw / 2, base + 4, bw + innerGap, nameH, p.name, 'sm', `${p.name} · ${p.count}`);
    });
-   g += `<text x="${(c.x + c.w / 2).toFixed(1)}" y="${base + padB - 8}" class="xl xc">${esc(c.s.date)}</text>`;
+   g += labelBox(c.x + c.w / 2, base + 4 + nameH, c.w + clusterGap - 6, dateH, sessLabel(c.s), 'dt', c.s.description);
  });
  return wrapSvg(W, H, g);
 }
@@ -238,7 +245,8 @@ function sessionTable(sess){
  const heads = ['<th>Session</th>', '<th class="n">Total</th>'].concat(CATS.map(c =>
    `<th class="n"><span class="sw-inline" style="background:${colorFor(c)}"></span>${esc(c)}</th>`));
  const rows = sess.map(s => {
-   const label = esc(s.date) + (s.description ? ` <span class="muted">· ${esc(s.description)}</span>` : '');
+   const idTag = DUP_DATES.has(s.date) ? ` <span class="muted">#${esc(s.id)}</span>` : '';
+   const label = esc(s.date) + idTag + (s.description ? ` <span class="muted">· ${esc(s.description)}</span>` : '');
    const cells = CATS.map(c => { const v = catVal(s, c); return `<td class="n">${v || '<span class="muted">–</span>'}</td>`; });
    return `<tr><td>${label}</td><td class="n">${s.total}</td>${cells.join('')}</tr>`;
  });
@@ -284,6 +292,10 @@ function rangeLabel(d){
 
 function render(d){
  CATS = d.categories || [];
+ // Flag any date shared by 2+ sessions so labels can disambiguate with the session id.
+ const dateCounts = {};
+ (d.bySession || []).forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
+ DUP_DATES = new Set(Object.keys(dateCounts).filter(k => dateCounts[k] > 1));
  const t = d.totals || {};
  if(!t.entries){
    $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>'
