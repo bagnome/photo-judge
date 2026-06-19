@@ -58,6 +58,20 @@ func statsFixture(t *testing.T, s *server) (catA, catB string) {
 	return catA, catB
 }
 
+// seedArchive writes an archived-session JSON file (its photos are metadata only, as
+// after a real archive deletes the image files) so computeStats can fold it in.
+func seedArchive(t *testing.T, s *server, id, date string, photos []ArchivedPhoto) {
+	t.Helper()
+	if err := os.MkdirAll(s.archivesDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := ArchivedSession{SessionID: id, Date: date, Categories: []string{}, PhotoCount: len(photos), Photos: photos}
+	b, _ := json.Marshal(a)
+	if err := os.WriteFile(filepath.Join(s.archivesDir(), id+".json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestStatsAllTime(t *testing.T) {
 	s := newTestServer(t)
 	catA, catB := statsFixture(t, s)
@@ -86,6 +100,12 @@ func TestStatsAllTime(t *testing.T) {
 	}
 	if res.BySession[0].Total != 3 {
 		t.Fatalf("session1 total = %d want 3", res.BySession[0].Total)
+	}
+	// Per-session photographer breakdown (drives the clustered chart): session 1 has
+	// Alice (2: one each in catA/catB) ahead of Bob (1).
+	s1ph := res.BySession[0].ByPhotographer
+	if len(s1ph) != 2 || s1ph[0].Name != "Alice Smith" || s1ph[0].Count != 2 || s1ph[1].Name != "Bob Jones" {
+		t.Fatalf("session1 byPhotographer = %+v", s1ph)
 	}
 	// byPhotographer: Alice(5) first, Unattributed last.
 	if res.ByPhotographer[0].Name != "Alice Smith" || res.ByPhotographer[0].Count != 5 {
@@ -156,4 +176,50 @@ func TestStatsBadDate(t *testing.T) {
 	if rr.Code != 400 {
 		t.Fatalf("bad from date: status %d want 400", rr.Code)
 	}
+}
+
+func TestStatsIncludesArchives(t *testing.T) {
+	s := newTestServer(t)
+	statsFixture(t, s) // 9 live entries across 2025-2026
+
+	// An archived 2024 session (image files long deleted; only metadata remains).
+	seedArchive(t, s, "900", "2024-04-01", []ArchivedPhoto{
+		{Category: "Pictorial", Orientation: "Landscape", Title: "A", Photographer: "Alice Smith"},
+		{Category: "Pictorial", Orientation: "Portrait", Title: "B", Photographer: "Zoe New"},
+		{Category: "Wildlife", Orientation: "Landscape", Title: "C", Photographer: ""},
+	})
+
+	s.mu.Lock()
+	all := s.computeStats("", "")
+	s.mu.Unlock()
+
+	// Archived 3 entries fold into the all-time totals (9 + 3 = 12, 4 sessions).
+	if all.Totals.Entries != 12 || all.Totals.Sessions != 4 {
+		t.Fatalf("with archive: entries=%d sessions=%d want 12/4", all.Totals.Entries, all.Totals.Sessions)
+	}
+	// Zoe only appears in the archive, so she must be a counted photographer.
+	if !containsPhotographer(all.ByPhotographer, "Zoe New") {
+		t.Fatalf("archived photographer Zoe New missing: %+v", all.ByPhotographer)
+	}
+	// The archived session is chronologically first (2024).
+	if all.BySession[0].Date != "2024-04-01" {
+		t.Fatalf("first session date = %q want 2024-04-01", all.BySession[0].Date)
+	}
+
+	// A range that excludes the archive year leaves the live total untouched.
+	s.mu.Lock()
+	since2025 := s.computeStats("2025-01-01", "")
+	s.mu.Unlock()
+	if since2025.Totals.Entries != 9 {
+		t.Fatalf("since 2025 entries = %d want 9 (archive excluded)", since2025.Totals.Entries)
+	}
+}
+
+func containsPhotographer(list []photographerStat, name string) bool {
+	for _, p := range list {
+		if p.Name == name {
+			return true
+		}
+	}
+	return false
 }

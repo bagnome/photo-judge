@@ -34,6 +34,8 @@
  .chart-svg .grid{stroke:#33373e;stroke-width:1}
  .chart-svg .yl{fill:#8a9099;font-size:11px;text-anchor:end;font-family:system-ui}
  .chart-svg .xl{fill:#aeb4bb;font-size:11px;text-anchor:end;font-family:system-ui}
+ .chart-svg .xs{font-size:10px}
+ .chart-svg .xc{text-anchor:middle;fill:#cdd2da;font-size:11.5px;font-weight:600}
  .chart-svg rect{transition:opacity .1s}
  .tablewrap{margin:0 0 18px}
  .tablewrap h3{font-size:14px;font-weight:600;margin:0 0 8px}
@@ -53,7 +55,7 @@
 </head>
 <body>
 <header>Photo Judge — Statistics</header>
-<div class="intro">Entry counts across your competition history. An entry is any photo in a session — operator-uploaded or member-submitted. Pick a time frame to see totals, a per-session and per-category breakdown, and who entered the most.</div>
+<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any photo in a session — operator-uploaded or member-submitted. Pick a time frame to see totals, a per-session and per-category breakdown, and who entered the most.</div>
 <div class="bar">
   <div class="f"><label>Quick range</label>
     <div class="presets">
@@ -81,6 +83,8 @@ const PALETTE = ['#2d6cdf','#e0683b','#33b07a','#c9a23b','#9b59b6','#e05b8a',
 let CATS = [];
 const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
 const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const trunc = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 
 function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
 
@@ -185,6 +189,44 @@ function chartCategories(byCat){
  return wrapSvg(W, H, g);
 }
 
+// Chart 4 — photographer clusters: one cluster per session, one bar per photographer
+// within it, each bar stacked by category. Shows who entered the most each session and
+// their category mix. Photographer labelled under each bar; session date under the cluster.
+function chartPhotographerStacks(sess){
+ const rows = sess.filter(s => (s.byPhotographer || []).length);
+ if(!rows.length) return '';
+ const {padL, padR, padT, plotH} = GEO;
+ const padB = 98, bw = 18, innerGap = 6, clusterGap = 30, base = padT + plotH;
+ let maxv = 1;
+ rows.forEach(s => s.byPhotographer.forEach(p => { if(p.count > maxv) maxv = p.count; }));
+ const nm = niceCeil(maxv);
+ const yOf = v => padT + plotH - (v / nm) * plotH;
+ let cursor = padL;
+ const clusters = rows.map(s => {
+   const n = s.byPhotographer.length, w = n * bw + (n - 1) * innerGap;
+   const c = { s, x: cursor, w }; cursor += w + clusterGap; return c;
+ });
+ const plotW = Math.max(cursor - clusterGap - padL, 1), W = padL + plotW + padR, H = padT + plotH + padB;
+ let g = axisSvg(plotW, nm);
+ clusters.forEach(c => {
+   c.s.byPhotographer.forEach((p, j) => {
+     const x0 = c.x + j * (bw + innerGap);
+     let acc = 0;
+     CATS.forEach(cat => {
+       const v = phCatVal(p, cat);
+       if(v <= 0) return;
+       g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(cat), null, `${c.s.date} · ${p.name} · ${cat}: ${v}`);
+       acc += v;
+     });
+     const cx = x0 + bw / 2, ly = base + 13;
+     g += `<text x="${cx.toFixed(1)}" y="${ly}" class="xl xs" transform="rotate(40 ${cx.toFixed(1)} ${ly})">`
+        + esc(trunc(p.name, 12)) + `<title>${esc(p.name)} · ${p.count}</title></text>`;
+   });
+   g += `<text x="${(c.x + c.w / 2).toFixed(1)}" y="${base + padB - 8}" class="xl xc">${esc(c.s.date)}</text>`;
+ });
+ return wrapSvg(W, H, g);
+}
+
 function legend(){
  if(!CATS.length) return '';
  return '<div class="legend">' + CATS.map(c =>
@@ -266,6 +308,9 @@ function render(d){
  out.push('<div class="chart"><h3>Entries by category</h3>'
    + '<div class="desc">Totals across the whole time frame.</div>'
    + chartCategories(d.byCategory) + '</div>');
+ out.push('<div class="chart"><h3>Entries by photographer per session</h3>'
+   + '<div class="desc">Each cluster is a session; each bar a photographer, stacked by category.</div>'
+   + chartPhotographerStacks(d.bySession) + '</div>');
  out.push(sessionTable(d.bySession));
  out.push(categoryTable(d.byCategory, t.entries));
  out.push(photographerTable(d.byPhotographer));

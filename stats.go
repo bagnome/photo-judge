@@ -25,11 +25,12 @@ type catCount struct {
 }
 
 type sessionStat struct {
-	ID          string     `json:"id"`
-	Date        string     `json:"date"`
-	Description string     `json:"description,omitempty"`
-	Total       int        `json:"total"`
-	ByCategory  []catCount `json:"byCategory"`
+	ID             string             `json:"id"`
+	Date           string             `json:"date"`
+	Description    string             `json:"description,omitempty"`
+	Total          int                `json:"total"`
+	ByCategory     []catCount         `json:"byCategory"`
+	ByPhotographer []photographerStat `json:"byPhotographer"` // this session's photographers (count desc, Unattributed last)
 }
 
 type photographerStat struct {
@@ -82,9 +83,87 @@ type phAgg struct {
 	byCat   map[string]int
 }
 
-// computeStats walks every session whose Date falls within [from,to] (inclusive;
-// blank bound = open) and tallies entries by category, by session, and by
-// photographer. Assumes s.mu is held.
+// photoRec is one counted entry: which category it's in and who shot it.
+type photoRec struct {
+	category     string
+	photographer string
+}
+
+// rawSession is a date-placed session (live or archived) reduced to its photos, so
+// live and archived sessions aggregate through exactly the same code path.
+type rawSession struct {
+	id, date, desc string
+	photos         []photoRec
+}
+
+func inRange(date, from, to string) bool {
+	if from != "" && date < from {
+		return false
+	}
+	if to != "" && date > to {
+		return false
+	}
+	return true
+}
+
+// upsertPhoto records one photo against a photographer aggregate map.
+func upsertPhoto(m map[string]*phAgg, photographer, cat string) {
+	disp := strings.TrimSpace(photographer)
+	key := normalizeNameKey(disp)
+	if key == "" {
+		key, disp = unattributedKey, unattributedLabel
+	}
+	p := m[key]
+	if p == nil {
+		p = &phAgg{display: disp, byCat: map[string]int{}}
+		m[key] = p
+	}
+	p.total++
+	p.byCat[cat]++
+}
+
+// sortPhotographers turns a photographer aggregate map into a stable list: most
+// entries first, ties by name, Unattributed always last. Each photographer's
+// byCategory is likewise ordered by count then name.
+func sortPhotographers(m map[string]*phAgg) []photographerStat {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		ki, kj := keys[i], keys[j]
+		ui, uj := ki == unattributedKey, kj == unattributedKey
+		if ui != uj {
+			return uj // unattributed sinks to the bottom
+		}
+		pi, pj := m[ki], m[kj]
+		if pi.total != pj.total {
+			return pi.total > pj.total
+		}
+		return pi.display < pj.display
+	})
+	out := make([]photographerStat, 0, len(keys))
+	for _, k := range keys {
+		p := m[k]
+		cc := make([]catCount, 0, len(p.byCat))
+		for cat, n := range p.byCat {
+			cc = append(cc, catCount{Category: cat, Count: n})
+		}
+		sort.Slice(cc, func(i, j int) bool {
+			if cc[i].Count != cc[j].Count {
+				return cc[i].Count > cc[j].Count
+			}
+			return cc[i].Category < cc[j].Category
+		})
+		out = append(out, photographerStat{Name: p.display, Count: p.total, ByCategory: cc})
+	}
+	return out
+}
+
+// computeStats tallies entries by category, by session, and by photographer across
+// every session — live AND archived — whose Date falls within [from,to] (inclusive;
+// blank bound = open). Archived sessions have no image files left on disk, so their
+// counts come from the saved archive metadata. Assumes s.mu is held.
 func (s *server) computeStats(from, to string) statsResult {
 	res := statsResult{
 		From:           from,
@@ -95,21 +174,15 @@ func (s *server) computeStats(from, to string) statsResult {
 		ByPhotographer: []photographerStat{},
 	}
 
-	catTotals := map[string]int{}
-	photographers := map[string]*phAgg{}
-
-	// s.sessions is kept sorted by Date ascending, so BySession comes out chronological.
+	// Reduce every in-range session (live + archived) to its photos.
+	var raw []rawSession
 	for _, ss := range s.sessions {
-		if from != "" && ss.Date < from {
+		if !inRange(ss.Date, from, to) {
 			continue
 		}
-		if to != "" && ss.Date > to {
-			continue
-		}
+		rs := rawSession{id: ss.ID, date: ss.Date, desc: ss.Description}
 		// Photos can live under active OR previously-deactivated categories.
 		cats := append(append([]string{}, ss.Categories...), ss.InactiveCategories...)
-		sessTotal := 0
-		sessCat := map[string]int{}
 		for _, cat := range cats {
 			for _, orient := range []string{"Landscape", "Portrait"} {
 				files := s.photoFiles(ss.ID, cat, orient)
@@ -118,36 +191,60 @@ func (s *server) computeStats(from, to string) statsResult {
 				}
 				names := loadNames(s.photosDir(ss.ID, cat, orient))
 				for _, f := range files {
-					sessTotal++
-					sessCat[cat]++
-					catTotals[cat]++
-
-					disp := strings.TrimSpace(names[f])
-					key := normalizeNameKey(disp)
-					if key == "" {
-						key, disp = unattributedKey, unattributedLabel
-					}
-					p := photographers[key]
-					if p == nil {
-						p = &phAgg{display: disp, byCat: map[string]int{}}
-						photographers[key] = p
-					}
-					p.total++
-					p.byCat[cat]++
+					rs.photos = append(rs.photos, photoRec{category: cat, photographer: names[f]})
 				}
 			}
 		}
-		if sessTotal == 0 {
+		raw = append(raw, rs)
+	}
+	for _, a := range s.loadArchives() {
+		if !inRange(a.Date, from, to) {
+			continue
+		}
+		rs := rawSession{id: a.SessionID, date: a.Date, desc: a.Description}
+		for _, p := range a.Photos {
+			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer})
+		}
+		raw = append(raw, rs)
+	}
+	// Chronological, ties by ID, so BySession reads left-to-right by date.
+	sort.Slice(raw, func(i, j int) bool {
+		if raw[i].date != raw[j].date {
+			return raw[i].date < raw[j].date
+		}
+		return raw[i].id < raw[j].id
+	})
+
+	catTotals := map[string]int{}
+	photographers := map[string]*phAgg{}
+
+	for _, rs := range raw {
+		if len(rs.photos) == 0 {
 			continue // skip empty sessions so the charts stay meaningful
 		}
-		sc := sessionStat{ID: ss.ID, Date: ss.Date, Description: ss.Description, Total: sessTotal}
-		for _, cat := range cats { // session's own category order
-			if sessCat[cat] > 0 {
-				sc.ByCategory = append(sc.ByCategory, catCount{Category: cat, Count: sessCat[cat]})
-			}
+		sessCat := map[string]int{}
+		sessPh := map[string]*phAgg{}
+		for _, pr := range rs.photos {
+			catTotals[pr.category]++
+			sessCat[pr.category]++
+			upsertPhoto(photographers, pr.photographer, pr.category)
+			upsertPhoto(sessPh, pr.photographer, pr.category)
 		}
+		sc := sessionStat{ID: rs.id, Date: rs.date, Description: rs.desc, Total: len(rs.photos)}
+		// Session category breakdown, ordered by count then name (charts/table look up
+		// by name, so this order is just for tidiness).
+		for cat, n := range sessCat {
+			sc.ByCategory = append(sc.ByCategory, catCount{Category: cat, Count: n})
+		}
+		sort.Slice(sc.ByCategory, func(i, j int) bool {
+			if sc.ByCategory[i].Count != sc.ByCategory[j].Count {
+				return sc.ByCategory[i].Count > sc.ByCategory[j].Count
+			}
+			return sc.ByCategory[i].Category < sc.ByCategory[j].Category
+		})
+		sc.ByPhotographer = sortPhotographers(sessPh)
 		res.BySession = append(res.BySession, sc)
-		res.Totals.Entries += sessTotal
+		res.Totals.Entries += len(rs.photos)
 		res.Totals.Sessions++
 	}
 
@@ -170,38 +267,12 @@ func (s *server) computeStats(from, to string) statsResult {
 	}
 	res.Totals.Categories = len(catOrder)
 
-	// Photographers: most entries first, Unattributed always last.
-	keys := make([]string, 0, len(photographers))
-	named := 0
+	res.ByPhotographer = sortPhotographers(photographers)
 	for k := range photographers {
-		keys = append(keys, k)
 		if k != unattributedKey {
-			named++
+			res.Totals.Photographers++
 		}
 	}
-	sort.Slice(keys, func(i, j int) bool {
-		ki, kj := keys[i], keys[j]
-		ui, uj := ki == unattributedKey, kj == unattributedKey
-		if ui != uj {
-			return uj // unattributed sinks to the bottom
-		}
-		pi, pj := photographers[ki], photographers[kj]
-		if pi.total != pj.total {
-			return pi.total > pj.total
-		}
-		return pi.display < pj.display
-	})
-	for _, k := range keys {
-		p := photographers[k]
-		ps := photographerStat{Name: p.display, Count: p.total}
-		for _, cat := range catOrder { // global category order
-			if p.byCat[cat] > 0 {
-				ps.ByCategory = append(ps.ByCategory, catCount{Category: cat, Count: p.byCat[cat]})
-			}
-		}
-		res.ByPhotographer = append(res.ByPhotographer, ps)
-	}
-	res.Totals.Photographers = named
 
 	return res
 }
