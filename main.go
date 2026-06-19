@@ -90,6 +90,33 @@ type Session struct {
 	// pointers so "unset" is distinct from 0. New sessions default to 11 / 15.
 	WinThreshold *float64 `json:"winThreshold,omitempty"`
 	MaxPoints    *float64 `json:"maxPoints,omitempty"`
+	// Solo operator mode: one person drives the slideshow from the Scoring page. These
+	// say which screen presents each orientation and which orientation a category shows
+	// first. SoloFirst is "Landscape" (default) or "Portrait". Per session, omitempty.
+	SoloEnabled         bool   `json:"soloEnabled,omitempty"`
+	SoloLandscapeScreen string `json:"soloLandscapeScreen,omitempty"`
+	SoloPortraitScreen  string `json:"soloPortraitScreen,omitempty"`
+	SoloFirst           string `json:"soloFirst,omitempty"`
+	// SoloEnd is what happens after the last category: "" = show "complete" and wait,
+	// "loop" = restart from the first category, "close" = black the monitors and end.
+	SoloEnd string `json:"soloEnd,omitempty"`
+}
+
+// soloScreenFor returns the screen assigned to present the given orientation.
+func (ss *Session) soloScreenFor(orient string) string {
+	if orient == "Portrait" {
+		return ss.SoloPortraitScreen
+	}
+	return ss.SoloLandscapeScreen
+}
+
+// soloOrientations returns the two orientations in presentation order (the configured
+// first, then the other).
+func (ss *Session) soloOrientations() []string {
+	if ss.SoloFirst == "Portrait" {
+		return []string{"Portrait", "Landscape"}
+	}
+	return []string{"Landscape", "Portrait"}
 }
 
 // isWinner reports whether a photo's score (a free-text string) reaches this session's
@@ -245,6 +272,10 @@ type server struct {
 	// Tracked server-side so the Session Management page can open to it (guarded by mu).
 	selectedSessionID string
 
+	// solo is the active solo-operator presentation run (nil = not running), driving the
+	// configured screens through each category's orientations. Guarded by mu. See solo.go.
+	solo *soloRun
+
 	// Member-entry state (guarded by mu). When entryOpen is true, competitors may
 	// submit photos to entrySessionID — the session locked in when the form was opened.
 	entryOpen      bool
@@ -378,8 +409,9 @@ func (s *server) consoleSnapshot() []byte {
 		EntrySessionID    string     `json:"entrySessionId,omitempty"`
 		PendingCount      int        `json:"pendingCount"`
 		SelectedSessionID string     `json:"selectedSessionId,omitempty"`
+		Solo              *soloView  `json:"solo,omitempty"`
 	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
-		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID}
+		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID, s.soloViewLocked()}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -502,14 +534,17 @@ func (s *server) createSession(date, description string) (*Session, error) {
 	// Scoring settings carry forward from the latest session; the very first session
 	// falls back to the club's usual 11-of-15 default.
 	win, max := floatPtr(11), floatPtr(15)
+	var solo Session // carries the solo fields forward from the latest session
 	if latest := s.latestSession(); latest != nil {
 		active = append([]string{}, latest.Categories...)
 		inactive = append([]string{}, latest.InactiveCategories...)
 		win, max = latest.WinThreshold, latest.MaxPoints
+		solo = Session{SoloEnabled: latest.SoloEnabled, SoloLandscapeScreen: latest.SoloLandscapeScreen, SoloPortraitScreen: latest.SoloPortraitScreen, SoloFirst: latest.SoloFirst, SoloEnd: latest.SoloEnd}
 	} else {
 		active = append([]string{}, s.categories...)
 	}
-	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max}
+	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max,
+		SoloEnabled: solo.SoloEnabled, SoloLandscapeScreen: solo.SoloLandscapeScreen, SoloPortraitScreen: solo.SoloPortraitScreen, SoloFirst: solo.SoloFirst, SoloEnd: solo.SoloEnd}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -637,7 +672,11 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 // Management page: date, description, and the scoring fields (win threshold + total
 // points). Threshold/points come in as strings; blank clears them (nil → no winners).
 func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
-	var body struct{ ID, Date, Description, WinThreshold, MaxPoints string }
+	var body struct {
+		ID, Date, Description, WinThreshold, MaxPoints              string
+		SoloEnabled                                                 bool
+		SoloLandscapeScreen, SoloPortraitScreen, SoloFirst, SoloEnd string
+	}
 	if decode(r, &body) != nil || !safeName(body.ID) {
 		http.Error(w, "bad request", 400)
 		return
@@ -667,6 +706,19 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 	ss.Description = strings.TrimSpace(body.Description)
 	ss.WinThreshold = win
 	ss.MaxPoints = max
+	ss.SoloEnabled = body.SoloEnabled
+	ss.SoloLandscapeScreen = strings.TrimSpace(body.SoloLandscapeScreen)
+	ss.SoloPortraitScreen = strings.TrimSpace(body.SoloPortraitScreen)
+	if body.SoloFirst == "Portrait" {
+		ss.SoloFirst = "Portrait"
+	} else {
+		ss.SoloFirst = "Landscape"
+	}
+	if body.SoloEnd == "loop" || body.SoloEnd == "close" {
+		ss.SoloEnd = body.SoloEnd
+	} else {
+		ss.SoloEnd = ""
+	}
 	b, _ := json.MarshalIndent(ss, "", "  ")
 	werr := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
 	sort.Slice(s.sessions, func(i, j int) bool { return s.sessions[i].Date < s.sessions[j].Date })
@@ -1123,16 +1175,22 @@ func (s *server) handleScreenLoad(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such screen", 404)
 		return
 	}
-	files := s.photoFiles(body.SessionID, body.Category, body.Orientation)
-	sc.SessionID, sc.Category, sc.Orientation = body.SessionID, body.Category, body.Orientation
-	sc.Files = files
-	sc.Count = len(files)
-	sc.Position = 0 // selecting a category resets to the start (title card)
-	sc.Blackout = false
+	s.loadScreenLocked(sc, body.SessionID, body.Category, body.Orientation)
 	s.mu.Unlock()
 	s.pushScreen(body.Name)
 	s.pushConsole()
 	w.WriteHeader(204)
+}
+
+// loadScreenLocked points a screen at a category/orientation: captures the ordered
+// file list and resets to the title card (Position 0), un-blacked. Assumes s.mu held.
+// Shared by the console's Load and the solo controller.
+func (s *server) loadScreenLocked(sc *Screen, sid, cat, orient string) {
+	sc.SessionID, sc.Category, sc.Orientation = sid, cat, orient
+	sc.Files = s.photoFiles(sid, cat, orient)
+	sc.Count = len(sc.Files)
+	sc.Position = 0 // selecting a category resets to the start (title card)
+	sc.Blackout = false
 }
 
 func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
@@ -2082,6 +2140,10 @@ func main() {
 	mux.HandleFunc("/api/screen/load", s.handleScreenLoad)
 	mux.HandleFunc("/api/screen/cmd", s.handleScreenCmd)
 	mux.HandleFunc("/api/screen/type", s.handleScreenType)
+	mux.HandleFunc("/api/solo/start", s.handleSoloStart)
+	mux.HandleFunc("/api/solo/advance", s.handleSoloAdvance)
+	mux.HandleFunc("/api/solo/back", s.handleSoloBack)
+	mux.HandleFunc("/api/solo/stop", s.handleSoloStop)
 	mux.HandleFunc("/api/entry/state", s.handleEntryState)
 	mux.HandleFunc("/api/entry/open", s.handleEntryOpen)
 	mux.HandleFunc("/api/entry/close", s.handleEntryClose)

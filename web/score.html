@@ -27,6 +27,19 @@
  #stage{background:#000;border:1px solid #333;border-radius:8px;height:62vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
  #stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
  #stage .none{color:#555;font-size:14px}
+ #stage .card-msg{color:#cfd2d6;text-align:center;font-family:system-ui;padding:20px}
+ #stage .card-msg .cat{font-size:34px;font-weight:700;line-height:1.1}
+ #stage .card-msg .ori{font-size:15px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.22em;margin-top:10px}
+ #stage .card-msg .sub{font-size:14px;color:#8a9099;margin-top:14px}
+ #solobar{padding:11px 16px;gap:12px;align-items:center;flex-wrap:wrap;background:#1f2530;border-bottom:1px solid #2d6cdf}
+ #solobar button{font-size:15px;padding:9px 16px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer}
+ #solobar button:hover{background:#363a42}
+ #solobar button.primary{background:#2d6cdf;border-color:#2d6cdf;font-size:16px;padding:10px 24px;font-weight:600}
+ #solobar button.primary:hover{background:#3b78e6}
+ #solobar button.stop{background:#a83232;border-color:#a83232}
+ #solobar .muted{color:#8a9099;font-size:12.5px}
+ body.solo #op, body.solo #lockrow, body.solo #gotoop, body.solo #prev, body.solo #next{display:none}
+ body.solo #screenctrls label, body.solo #screen{display:none}
  #nav{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
  #counter{font-variant-numeric:tabular-nums;color:#cdd;font-size:15px;min-width:120px;text-align:center}
  #lockrow{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:14px;color:#cdd;cursor:pointer;user-select:none}
@@ -102,6 +115,14 @@
     <label>Category</label><select id="pcategory"></select>
   </span>
 </div>
+<div id="solobar" style="display:none">
+  <span id="soloinfo" class="slate"></span>
+  <span class="sep">|</span>
+  <button id="soloBack">◀ Back</button>
+  <button id="soloAdvance" class="primary">Advance ▶</button>
+  <button id="soloStop" class="stop">■ Stop</button>
+  <span id="soloHint" class="muted">Solo mode — you're driving the screens. → / Space advances, ← goes back.</span>
+</div>
 
 <div id="empty"></div>
 
@@ -159,6 +180,8 @@ let idx = 0;               // 1-based judge cursor into files (0 = nothing)
 let shownFn = null;        // filename currently rendered in the score box
 
 let mode = 'screen';       // 'screen' = follow a screen · 'physical' = print table
+let solo = null;           // st.solo — when active, this page drives the show
+const soloActive = () => !!(solo && solo.active);
 let sessions = [];         // from the console stream (for physical mode)
 let physAll = [];          // all physical prints for the selected session
 let psid = '', pcat = '';  // selected session id / category for physical mode
@@ -182,6 +205,20 @@ function curScreen(){ return screens.find(s => s.name === curName) || null; }
 function applyState(st){
  screens = st.screens || [];
  sessions = st.sessions || [];
+ solo = st.solo || null;
+ // Solo operator mode takes over: this page drives the live screen. Force on-screen
+ // mode, follow the active screen, and show the Advance/Back/Stop bar.
+ const soloOn = soloActive();
+ document.body.classList.toggle('solo', soloOn);
+ $('solobar').style.display = soloOn ? 'flex' : 'none';
+ if(soloOn){
+   if(mode !== 'screen'){
+     mode = 'screen';
+     $('modescreen').classList.add('active'); $('modephysical').classList.remove('active');
+     $('screenctrls').style.display = ''; $('physctrls').style.display = 'none'; $('physical').classList.remove('show');
+   }
+   curName = solo.screen;
+ }
  // The "lock scorekeeper to the operator" setting forces the lock on (and disables
  // the toggle); otherwise the scorekeeper controls it.
  const forceLock = !!(st.settings && st.settings.lockScorekeeper);
@@ -249,7 +286,59 @@ function maybeFollow(){
  if(sc && !sc.blackout && sc.position >= 1 && sc.position <= files.length) idx = sc.position;
 }
 
+// clearScore resets the photo/score panel to an inert state (title/end cards have no
+// photo to score). pnLabel labels the "Photo" field (e.g. "Title card", "End").
+function clearScore(pnLabel){
+ $('pn').textContent = pnLabel; $('pn').className = 'val muted';
+ $('ph').textContent = '—'; $('ph').className = 'val muted';
+ const sIn = $('score'); sIn.value = ''; sIn.classList.remove('set'); sIn.disabled = true;
+ winInfo(null); shownFn = null;
+}
+
+// renderSolo mirrors the active screen on the score page: the title card, each photo
+// (with the score box), or the end card — exactly what the audience monitor shows.
+function renderSolo(){
+ const sc = curScreen();
+ const stage = $('stage');
+ if(solo.finished){
+   $('soloinfo').innerHTML = '✓ Presentation complete';
+   stage.innerHTML = '<div class="card-msg"><div class="cat">All done</div><div class="sub">Every category has been shown. Press <b>Stop</b> to finish.</div></div>';
+   $('counter').textContent = 'Done'; clearScore('—'); renderOp(); return;
+ }
+ $('soloinfo').innerHTML = 'Solo · <b>' + esc(solo.category || '') + '</b> · ' + esc(solo.orientation || '')
+   + ' · segment ' + (solo.index + 1) + ' / ' + solo.total;
+ if(!sc || !sc.category){ stage.innerHTML = '<div class="none">Loading…</div>'; $('counter').textContent=''; clearScore('—'); return; }
+ const pos = sc.position, count = sc.count;
+ if(pos <= 0){
+   stage.innerHTML = '<div class="card-msg"><div class="cat">' + esc(sc.category) + '</div><div class="ori">' + esc(sc.orientation) + '</div><div class="sub">Title card</div></div>';
+   $('counter').textContent = 'Title'; clearScore('Title card'); renderOp(); return;
+ }
+ if(pos > count){
+   stage.innerHTML = '<div class="card-msg"><div class="cat">End of category</div><div class="sub">' + esc(sc.category) + ' — ' + esc(sc.orientation) + '</div></div>';
+   $('counter').textContent = 'End'; clearScore('End of category'); renderOp(); return;
+ }
+ // On a photo — show it and enable scoring (idx tracks the live position so saveScore targets it).
+ idx = pos;
+ const fn = files[pos - 1];
+ if(fn == null){ stage.innerHTML = '<div class="none">…</div>'; return; }
+ stage.innerHTML = '';
+ const img = document.createElement('img');
+ img.src = '/api/photo?session='+enc(sc.sessionId)+'&category='+enc(sc.category)+'&orientation='+enc(sc.orientation)+'&file='+enc(fn);
+ stage.appendChild(img);
+ $('counter').textContent = pos + ' / ' + count;
+ $('pn').textContent = stripExt(fn); $('pn').className = 'val';
+ const pn = names[fn] || '';
+ $('ph').textContent = pn || '—'; $('ph').className = 'val' + (pn ? '' : ' muted');
+ const sIn = $('score');
+ if(fn !== shownFn || document.activeElement !== sIn){
+   sIn.value = scores[fn] || ''; sIn.classList.toggle('set', !!scores[fn]);
+ }
+ sIn.disabled = false;
+ winInfo(fn); shownFn = fn; renderOp();
+}
+
 function render(){
+ if(soloActive()){ renderSolo(); return; }
  const sc = curScreen();
  maybeFollow();
  const locked = $('lock').checked;
@@ -359,10 +448,32 @@ $('score').addEventListener('change', saveScore);
 document.addEventListener('keydown', e => {
  if(mode !== 'screen') return;                  // physical mode has its own table keys
  if(e.target === $('score')) return;            // typing a score, not navigating
+ if(soloActive()){                              // solo: arrows/space drive the live screen
+   if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); soloCmd('advance'); }
+   else if(e.key === 'ArrowLeft'){ e.preventDefault(); soloCmd('back'); }
+   return;
+ }
  if($('lock').checked) return;                  // locked to the operator — manual nav is off
  if(e.key === 'ArrowLeft') go(idx-1);
  else if(e.key === 'ArrowRight') go(idx+1);
 });
+
+// Solo controls drive the server-side presentation; the console push echoes back and
+// re-renders this page (and the output monitors) in lockstep.
+async function soloCmd(action){
+ const r = await post('/api/solo/' + action, {});
+ if(!r.ok){ toast('Could not ' + action + ': ' + (await r.text()), 'del'); return; }
+ if(action === 'advance'){
+   try {
+     const j = await r.json();
+     if(j.event === 'loop') toast('↻ Looped back to the start');
+     else if(j.event === 'close') toast('■ Presentation ended');
+   } catch(e){}
+ }
+}
+$('soloAdvance').onclick = () => soloCmd('advance');
+$('soloBack').onclick = () => soloCmd('back');
+$('soloStop').onclick = () => soloCmd('stop');
 
 // ---- physical prints --------------------------------------------------------
 // A spreadsheet-style table of printed entries that have no image file. Stored per

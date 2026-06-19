@@ -129,6 +129,16 @@ that workflow.
   the grid and the Scoring page. A separate **Physical prints** mode records printed entries that have no image
   file — a spreadsheet-style table of title / photographer / score per category that
   auto-extends as you type (Tab between fields, Enter for the next row).
+- **Solo operator mode** — for nights with only one volunteer. Enabled per session on
+  **Session Management** (pick which screen presents Landscape vs Portrait and which
+  orientation shows first, then **Start**), it lets one person run the whole show from the
+  **Scoring** page: a single **Advance** steps the live monitor forward (title → photos → end
+  card), then automatically switches to the other orientation's monitor for the same category
+  and moves on to the next category — in the session's category order. The idle monitor goes
+  black; the scorekeeper sees the title and end cards mirrored on their screen and scores each
+  photo inline. **Back** reverses, **Stop** ends it; **→/Space** advance and **←** back on the
+  keyboard. You choose what happens after the last category: wait on a "complete" screen, loop
+  back to the start, or black out and end.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
   for the selected session: a section per category (in the session's category order),
   Landscape before Portrait, one row per photo in display order with the photo name
@@ -183,9 +193,9 @@ that workflow.
   Standard-library only — no charting library.
 - **Session Management** — a per-session settings page (in the operator nav) with the
   session's **date & description**, its **scoring** settings (win threshold + total points,
-  default 11 of 15), and the per-session **category** manager. It opens to the session
-  selected on the console without changing that selection, and is built to gain more
-  per-session settings over time.
+  default 11 of 15), the **solo operator** setup (above), and the per-session **category**
+  manager. It opens to the session selected on the console without changing that selection,
+  and is built to gain more per-session settings over time.
 - **Mobile-friendly** — every control page (console, Upload/Reorder, Session Management,
   Scoring, How To) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
@@ -341,7 +351,8 @@ new sessions — copy to the local drive for an event).
 | `web/output.html` | Judge-facing output window (black-by-default display; Entry-QR mode) |
 | `web/admin.html` | Upload / reorder page |
 | `web/categories.html` | Session Management page (per-session settings + category manager; served at `/session`) |
-| `web/score.html` | Scoring page (follow a screen, record scores) |
+| `web/score.html` | Scoring page (follow a screen, record scores; drives solo operator mode) |
+| `solo.go` | Solo operator mode — segment sequencing + screen driving (start/advance/back/stop) |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
 | `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |
 | `web/stats.html` | Statistics page (time-frame filter, tables, hand-drawn SVG charts) |

@@ -14,6 +14,17 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Solo operator mode.** When only one person is available, they can run the whole night from
+  the **Scoring page**: a single **Advance** button steps the live output forward
+  (title → photos → end card), then **auto-switches to the other orientation's monitor** for the
+  same category and rolls on to the next category — following the per-session category order. The
+  idle monitor goes **black**, and the scorekeeper sees the **title and end cards** mirrored on
+  their own screen and scores each photo inline (🏆 winner flag and all). **Back** steps in
+  reverse (across segment boundaries onto the previous end card); **Stop** blacks the monitors.
+  Keyboard: **→ / Space** advance, **←** back. Configured per session on **Session Management**
+  (enable + which screen presents Landscape vs Portrait + which orientation shows first + what
+  happens at the end: **wait** on a "complete" screen, **loop** back to the start, or **black out
+  & end**), where you also **Start** the run. New sessions inherit the setup.
 - **Per-session scoring settings + "winning" photos.** Each session now has a **win
   threshold** and a **total points** (defaults **11 of 15**); a photo scoring at or above
   the threshold is a **winner** (eligible for the club's separate annual competition). A

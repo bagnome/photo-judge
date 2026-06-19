@@ -28,6 +28,7 @@
  .frow label{min-width:92px}
  .scard textarea{font-family:inherit;font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;flex:1 1 200px;box-sizing:border-box;resize:vertical;min-height:46px}
  .num-in{width:84px}
+ .scr-in{min-width:130px}
  .hint{color:#8a9099;font-size:12.5px;line-height:1.45;margin:2px 0 4px}
  #guide{display:none;margin:16px;padding:22px 26px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:660px;line-height:1.55}
  #guide.show{display:block}
@@ -92,6 +93,28 @@
     <div class="hint">A photo scoring <b>at or above</b> the win threshold is a “winner”, eligible for the annual competition. Leave the threshold blank for no winners. (e.g. 11 of 15.)</div>
     <div class="frow"><button id="saveScoring" class="primary">Save scoring</button></div>
   </div>
+  <div class="scard" style="flex-basis:100%;max-width:760px">
+    <h3>Solo operator mode</h3>
+    <div class="hint">One person can run the whole session from the <b>Scoring</b> page: a single <b>Advance</b> button steps the live screen forward, then auto-switches to the other orientation's monitor and on to the next category (in the Active order below). The idle monitor goes black.</div>
+    <div class="frow"><label for="sm-solo">Enable</label><input type="checkbox" id="sm-solo"></div>
+    <div class="frow"><label for="sm-ls">Landscape screen</label><select id="sm-ls" class="scr-in"></select>
+      <label for="sm-ps" style="min-width:auto">Portrait screen</label><select id="sm-ps" class="scr-in"></select></div>
+    <div class="frow"><label for="sm-first">Show first</label>
+      <select id="sm-first"><option value="Landscape">Landscape</option><option value="Portrait">Portrait</option></select>
+      <label for="sm-end" style="min-width:auto">When it ends</label>
+      <select id="sm-end">
+        <option value="" title="After the last category, the monitors stay on a “Presentation complete” screen until you press Stop.">Wait on “complete”</option>
+        <option value="loop" title="After the last category, the show restarts from the first category and keeps going.">Loop to the start</option>
+        <option value="close" title="After the last category, both monitors black out and the run ends automatically.">Black out &amp; end</option>
+      </select></div>
+    <div id="sm-solo-noscreens" class="hint" style="display:none;color:#ffd27a">No screens yet — create them on the <a href="/console" style="color:#7fa9f0">Console</a> first.</div>
+    <div class="frow">
+      <button id="saveSolo" class="primary">Save solo settings</button>
+      <button id="soloStart">▶ Start solo presentation</button>
+      <button id="soloStop" class="danger" style="display:none">■ Stop</button>
+      <span id="soloStatus" class="hint" style="margin:0"></span>
+    </div>
+  </div>
 </div>
 
 <div id="manager">
@@ -131,6 +154,8 @@ let detail = {active:[], inactive:[], used:[]};
 let selActive = null, selInactive = null;
 let loadedFor = null;            // session id whose detail is currently shown
 let seededFromConsole = false;   // have we defaulted to the console's selected session yet?
+let screens = [];                // output screens, for the solo-mode assignment dropdowns
+let soloState = null;            // st.solo — the active solo run, if any
 
 const sid = () => $('session').value;
 const curSessionObj = () => sessions.find(s => s.id === sid());
@@ -143,6 +168,8 @@ function toast(msg, kind){
 
 function applyState(st){
  sessions = st.sessions || [];
+ screens = st.screens || [];
+ soloState = st.solo || null;
  const sel=$('session'), cur=sel.value;
  sel.innerHTML='';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o); });
@@ -153,10 +180,41 @@ function applyState(st){
    sel.value = st.selectedSessionId;
    seededFromConsole = true;
  }
+ populateScreenSelects();
  updateView();
+ updateSolo();
  const cs = sid();
  if(cs && cs !== loadedFor) loadDetail();        // first session / selection arrived via SSE
  else if(!cs) loadedFor = null;
+}
+
+// Fill the landscape/portrait screen dropdowns from the live screen list, keeping any
+// current selection. A leading blank option means "unassigned".
+function populateScreenSelects(){
+ const names = screens.filter(s => (s.type || 'slideshow') !== 'entry').map(s => s.name);
+ [['sm-ls','soloLandscapeScreen'], ['sm-ps','soloPortraitScreen']].forEach(([id]) => {
+   const el = $(id); if(!el) return;
+   const cur = el.value;
+   el.innerHTML = '<option value="">— none —</option>';
+   names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; el.appendChild(o); });
+   if(cur && names.includes(cur)) el.value = cur;
+ });
+ $('sm-solo-noscreens').style.display = names.length ? 'none' : 'block';
+}
+
+// Reflect the active solo run on the Start/Stop buttons + status line.
+function updateSolo(){
+ const running = !!(soloState && soloState.active);
+ const mine = running && soloState.sessionId === sid();
+ $('soloStop').style.display = running ? '' : 'none';
+ $('soloStart').disabled = running || !($('sm-solo').checked && ($('sm-ls').value || $('sm-ps').value));
+ if(running){
+   $('soloStatus').textContent = mine
+     ? 'Running — segment ' + (soloState.index + 1) + '/' + soloState.total + ' · drive it from the Scoring page.'
+     : 'A solo run is active for another session (#' + soloState.sessionId + ').';
+ } else {
+   $('soloStatus').textContent = '';
+ }
 }
 
 function updateView(){
@@ -188,14 +246,23 @@ function fillSettings(){
  $('sm-desc').value = ss.description || '';
  $('sm-thr').value = (ss.winThreshold == null) ? '' : ss.winThreshold;
  $('sm-pts').value = (ss.maxPoints == null) ? '' : ss.maxPoints;
+ $('sm-solo').checked = !!ss.soloEnabled;
+ populateScreenSelects();
+ $('sm-ls').value = ss.soloLandscapeScreen || '';
+ $('sm-ps').value = ss.soloPortraitScreen || '';
+ $('sm-first').value = ss.soloFirst === 'Portrait' ? 'Portrait' : 'Landscape';
+ $('sm-end').value = (ss.soloEnd === 'loop' || ss.soloEnd === 'close') ? ss.soloEnd : '';
+ updateSolo();
 }
 
-// Save all per-session settings at once (both cards post the full set, so neither
-// clobbers the other's fields).
+// Save all per-session settings at once (every card posts the full set, so none
+// clobbers another's fields).
 async function saveSettings(){
  const id = sid(); if(!id) return;
  const body = {id, date:$('sm-date').value, description:$('sm-desc').value.trim(),
-   winThreshold:$('sm-thr').value.trim(), maxPoints:$('sm-pts').value.trim()};
+   winThreshold:$('sm-thr').value.trim(), maxPoints:$('sm-pts').value.trim(),
+   soloEnabled:$('sm-solo').checked, soloLandscapeScreen:$('sm-ls').value,
+   soloPortraitScreen:$('sm-ps').value, soloFirst:$('sm-first').value, soloEnd:$('sm-end').value};
  const r = await post('/api/session/settings', body);
  if(!r.ok){ toast((await r.text())||'Could not save settings', 'del'); return; }
  toast('Session settings saved');
@@ -289,6 +356,19 @@ $('actDown').onclick = () => moveSel(1);
 $('session').addEventListener('change', loadDetail);
 $('saveDetails').onclick = saveSettings;
 $('saveScoring').onclick = saveSettings;
+$('saveSolo').onclick = saveSettings;
+// Re-evaluate the Start button as the operator edits the solo config.
+['sm-solo','sm-ls','sm-ps'].forEach(id => $(id).addEventListener('change', updateSolo));
+$('soloStart').onclick = async () => {
+ const r = await post('/api/solo/start', {sessionId: sid()});
+ if(!r.ok){ toast((await r.text())||'Could not start', 'del'); return; }
+ location.href = '/score'; // jump straight to where you drive + score it
+};
+$('soloStop').onclick = async () => {
+ const r = await post('/api/solo/stop', {});
+ if(!r.ok){ toast((await r.text())||'Could not stop', 'del'); return; }
+ toast('Solo presentation stopped');
+};
 
 const es = new EventSource('/api/events?role=console');
 es.onmessage = e => applyState(JSON.parse(e.data));
