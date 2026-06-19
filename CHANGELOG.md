@@ -14,6 +14,17 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Statistics page** (`/stats`, in the operator nav) — entry counts across your
+  competition history, where an entry is any photo in a session (operator-uploaded or
+  member-submitted). A time-frame filter (**All time** / **This year** / **Last 12 months**
+  presets plus a custom **from–to** range, by session date) drives summary cards (entries,
+  sessions, categories, photographers) and three breakdown tables: by session (with a
+  per-category matrix and totals), by category (with each category's share), and by
+  photographer (with their per-category split; same-name photographers share a tally and
+  un-named photos bucket as **Unattributed**). Three hand-drawn SVG charts visualise it:
+  a **custom overlaid** chart (a faint per-session total bar with that session's category
+  counts drawn side by side in front), a **stacked** per-session chart, and a **category
+  totals** chart — all sharing one colour legend. Stdlib only; no charting library.
 - **Randomize photo order** — on the Upload / Reorder page, a **🔀 Randomize order now**
   button shuffles each orientation's display order for the selected category (handy for
   unbiased judging), and a **Random order on upload** toggle drops newly-uploaded photos into
