@@ -137,7 +137,8 @@ that workflow.
   and moves on to the next category — in the session's category order. The idle monitor goes
   black; the scorekeeper sees the title and end cards mirrored on their screen and scores each
   photo inline. **Back** reverses, **Stop** ends it; **→/Space** advance and **←** back on the
-  keyboard.
+  keyboard. You choose what happens after the last category: wait on a "complete" screen, loop
+  back to the start, or black out and end.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
   for the selected session: a section per category (in the session's category order),
   Landscape before Portrait, one row per photo in display order with the photo name

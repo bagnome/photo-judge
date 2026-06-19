@@ -22,8 +22,9 @@ not yet released.
   their own screen and scores each photo inline (🏆 winner flag and all). **Back** steps in
   reverse (across segment boundaries onto the previous end card); **Stop** blacks the monitors.
   Keyboard: **→ / Space** advance, **←** back. Configured per session on **Session Management**
-  (enable + which screen presents Landscape vs Portrait + which orientation shows first), where
-  you also **Start** the run. New sessions inherit the setup.
+  (enable + which screen presents Landscape vs Portrait + which orientation shows first + what
+  happens at the end: **wait** on a "complete" screen, **loop** back to the start, or **black out
+  & end**), where you also **Start** the run. New sessions inherit the setup.
 - **Per-session scoring settings + "winning" photos.** Each session now has a **win
   threshold** and a **total points** (defaults **11 of 15**); a photo scoring at or above
   the threshold is a **winner** (eligible for the club's separate annual competition). A

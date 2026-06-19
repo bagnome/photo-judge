@@ -151,11 +151,25 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 	} else if run.index+1 < len(run.segments) {
 		names = s.soloShowLocked(run.index+1, false) // switch to the next segment's title
 	} else {
-		run.finished = true // already on the last end card
-		if sc != nil {
-			sc.Position = sc.Count + 1
+		// Past the last segment's end card — behavior depends on the session's SoloEnd.
+		end := ""
+		if ss := s.sessionByID(run.sessionID); ss != nil {
+			end = ss.SoloEnd
 		}
-		names = []string{seg.screen}
+		switch end {
+		case "loop":
+			names = s.soloShowLocked(0, false) // restart from the first category
+		case "close":
+			s.blackSoloScreensLocked()
+			s.solo = nil
+			names = s.allScreenNamesLocked()
+		default:
+			run.finished = true // sit on the last end card until Stop
+			if sc != nil {
+				sc.Position = sc.Count + 1
+			}
+			names = []string{seg.screen}
+		}
 	}
 	s.mu.Unlock()
 	for _, n := range names {
@@ -193,16 +207,24 @@ func (s *server) handleSoloBack(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+// blackSoloScreensLocked blacks out the current run's configured monitors. Assumes
+// s.mu is held and s.solo is non-nil.
+func (s *server) blackSoloScreensLocked() {
+	ss := s.sessionByID(s.solo.sessionID)
+	if ss == nil {
+		return
+	}
+	for _, name := range []string{ss.SoloLandscapeScreen, ss.SoloPortraitScreen} {
+		if sc := s.screens[name]; sc != nil {
+			sc.Blackout = true
+		}
+	}
+}
+
 func (s *server) handleSoloStop(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	if run := s.solo; run != nil {
-		if ss := s.sessionByID(run.sessionID); ss != nil { // black the configured monitors
-			for _, name := range []string{ss.SoloLandscapeScreen, ss.SoloPortraitScreen} {
-				if sc := s.screens[name]; sc != nil {
-					sc.Blackout = true
-				}
-			}
-		}
+	if s.solo != nil {
+		s.blackSoloScreensLocked()
 		s.solo = nil
 	}
 	names := s.allScreenNamesLocked()

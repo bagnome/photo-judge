@@ -97,6 +97,9 @@ type Session struct {
 	SoloLandscapeScreen string `json:"soloLandscapeScreen,omitempty"`
 	SoloPortraitScreen  string `json:"soloPortraitScreen,omitempty"`
 	SoloFirst           string `json:"soloFirst,omitempty"`
+	// SoloEnd is what happens after the last category: "" = show "complete" and wait,
+	// "loop" = restart from the first category, "close" = black the monitors and end.
+	SoloEnd string `json:"soloEnd,omitempty"`
 }
 
 // soloScreenFor returns the screen assigned to present the given orientation.
@@ -536,12 +539,12 @@ func (s *server) createSession(date, description string) (*Session, error) {
 		active = append([]string{}, latest.Categories...)
 		inactive = append([]string{}, latest.InactiveCategories...)
 		win, max = latest.WinThreshold, latest.MaxPoints
-		solo = Session{SoloEnabled: latest.SoloEnabled, SoloLandscapeScreen: latest.SoloLandscapeScreen, SoloPortraitScreen: latest.SoloPortraitScreen, SoloFirst: latest.SoloFirst}
+		solo = Session{SoloEnabled: latest.SoloEnabled, SoloLandscapeScreen: latest.SoloLandscapeScreen, SoloPortraitScreen: latest.SoloPortraitScreen, SoloFirst: latest.SoloFirst, SoloEnd: latest.SoloEnd}
 	} else {
 		active = append([]string{}, s.categories...)
 	}
 	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max,
-		SoloEnabled: solo.SoloEnabled, SoloLandscapeScreen: solo.SoloLandscapeScreen, SoloPortraitScreen: solo.SoloPortraitScreen, SoloFirst: solo.SoloFirst}
+		SoloEnabled: solo.SoloEnabled, SoloLandscapeScreen: solo.SoloLandscapeScreen, SoloPortraitScreen: solo.SoloPortraitScreen, SoloFirst: solo.SoloFirst, SoloEnd: solo.SoloEnd}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -670,9 +673,9 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 // points). Threshold/points come in as strings; blank clears them (nil → no winners).
 func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		ID, Date, Description, WinThreshold, MaxPoints     string
-		SoloEnabled                                        bool
-		SoloLandscapeScreen, SoloPortraitScreen, SoloFirst string
+		ID, Date, Description, WinThreshold, MaxPoints              string
+		SoloEnabled                                                 bool
+		SoloLandscapeScreen, SoloPortraitScreen, SoloFirst, SoloEnd string
 	}
 	if decode(r, &body) != nil || !safeName(body.ID) {
 		http.Error(w, "bad request", 400)
@@ -710,6 +713,11 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 		ss.SoloFirst = "Portrait"
 	} else {
 		ss.SoloFirst = "Landscape"
+	}
+	if body.SoloEnd == "loop" || body.SoloEnd == "close" {
+		ss.SoloEnd = body.SoloEnd
+	} else {
+		ss.SoloEnd = ""
 	}
 	b, _ := json.MarshalIndent(ss, "", "  ")
 	werr := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)

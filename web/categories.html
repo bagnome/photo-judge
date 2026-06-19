@@ -100,7 +100,9 @@
     <div class="frow"><label for="sm-ls">Landscape screen</label><select id="sm-ls" class="scr-in"></select>
       <label for="sm-ps" style="min-width:auto">Portrait screen</label><select id="sm-ps" class="scr-in"></select></div>
     <div class="frow"><label for="sm-first">Show first</label>
-      <select id="sm-first"><option value="Landscape">Landscape</option><option value="Portrait">Portrait</option></select></div>
+      <select id="sm-first"><option value="Landscape">Landscape</option><option value="Portrait">Portrait</option></select>
+      <label for="sm-end" style="min-width:auto">When it ends</label>
+      <select id="sm-end"><option value="">Wait on “complete”</option><option value="loop">Loop to the start</option><option value="close">Black out &amp; end</option></select></div>
     <div id="sm-solo-noscreens" class="hint" style="display:none;color:#ffd27a">No screens yet — create them on the <a href="/console" style="color:#7fa9f0">Console</a> first.</div>
     <div class="frow">
       <button id="saveSolo" class="primary">Save solo settings</button>
@@ -245,6 +247,7 @@ function fillSettings(){
  $('sm-ls').value = ss.soloLandscapeScreen || '';
  $('sm-ps').value = ss.soloPortraitScreen || '';
  $('sm-first').value = ss.soloFirst === 'Portrait' ? 'Portrait' : 'Landscape';
+ $('sm-end').value = (ss.soloEnd === 'loop' || ss.soloEnd === 'close') ? ss.soloEnd : '';
  updateSolo();
 }
 
@@ -255,7 +258,7 @@ async function saveSettings(){
  const body = {id, date:$('sm-date').value, description:$('sm-desc').value.trim(),
    winThreshold:$('sm-thr').value.trim(), maxPoints:$('sm-pts').value.trim(),
    soloEnabled:$('sm-solo').checked, soloLandscapeScreen:$('sm-ls').value,
-   soloPortraitScreen:$('sm-ps').value, soloFirst:$('sm-first').value};
+   soloPortraitScreen:$('sm-ps').value, soloFirst:$('sm-first').value, soloEnd:$('sm-end').value};
  const r = await post('/api/session/settings', body);
  if(!r.ok){ toast((await r.text())||'Could not save settings', 'del'); return; }
  toast('Session settings saved');

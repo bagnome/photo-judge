@@ -128,6 +128,53 @@ func TestSoloBackAcrossBoundary(t *testing.T) {
 	}
 }
 
+// reachLastEndCard advances until the run sits on the final segment's end card (the
+// fixture has 3 segments; 9 advances gets there). Asserts we're there, not finished.
+func reachLastEndCard(t *testing.T, s *server) {
+	t.Helper()
+	for i := 0; i < 9; i++ {
+		postJSON(t, s.handleSoloAdvance, nil)
+	}
+	if s.solo == nil || s.solo.index != 2 || s.solo.finished {
+		t.Fatalf("expected last segment end card, got %+v", s.solo)
+	}
+}
+
+func TestSoloEndBehaviors(t *testing.T) {
+	// Default: one more advance past the last end card finishes and waits.
+	s, ss, _, _ := soloFixture(t)
+	postJSON(t, s.handleSoloStart, map[string]string{"sessionId": ss.ID})
+	reachLastEndCard(t, s)
+	postJSON(t, s.handleSoloAdvance, nil)
+	if s.solo == nil || !s.solo.finished {
+		t.Fatalf("default end: expected finished, got %+v", s.solo)
+	}
+
+	// Loop: advancing past the last end card restarts at the first title.
+	s2, ss2, c0, _ := soloFixture(t)
+	ss2.SoloEnd = "loop"
+	postJSON(t, s2.handleSoloStart, map[string]string{"sessionId": ss2.ID})
+	reachLastEndCard(t, s2)
+	postJSON(t, s2.handleSoloAdvance, nil)
+	L := s2.screens["L"]
+	if s2.solo == nil || s2.solo.index != 0 || s2.solo.finished || L.Category != c0 || L.Orientation != "Landscape" || L.Position != 0 {
+		t.Fatalf("loop end: expected restart at first title, got solo=%+v L=%+v", s2.solo, L)
+	}
+
+	// Close: advancing past the last end card blacks the monitors and ends the run.
+	s3, ss3, _, _ := soloFixture(t)
+	ss3.SoloEnd = "close"
+	postJSON(t, s3.handleSoloStart, map[string]string{"sessionId": ss3.ID})
+	reachLastEndCard(t, s3)
+	postJSON(t, s3.handleSoloAdvance, nil)
+	if s3.solo != nil {
+		t.Fatalf("close end: run should have ended, got %+v", s3.solo)
+	}
+	if !s3.screens["L"].Blackout || !s3.screens["P"].Blackout {
+		t.Fatal("close end: both monitors should be black")
+	}
+}
+
 func TestSoloStartErrors(t *testing.T) {
 	s, ss, _, _ := soloFixture(t)
 	// Disabled → 400.
