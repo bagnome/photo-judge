@@ -102,7 +102,11 @@
     <div class="frow"><label for="sm-first">Show first</label>
       <select id="sm-first"><option value="Landscape">Landscape</option><option value="Portrait">Portrait</option></select>
       <label for="sm-end" style="min-width:auto">When it ends</label>
-      <select id="sm-end"><option value="">Wait on “complete”</option><option value="loop">Loop to the start</option><option value="close">Black out &amp; end</option></select></div>
+      <select id="sm-end">
+        <option value="" title="After the last category, the monitors stay on a “Presentation complete” screen until you press Stop.">Wait on “complete”</option>
+        <option value="loop" title="After the last category, the show restarts from the first category and keeps going.">Loop to the start</option>
+        <option value="close" title="After the last category, both monitors black out and the run ends automatically.">Black out &amp; end</option>
+      </select></div>
     <div id="sm-solo-noscreens" class="hint" style="display:none;color:#ffd27a">No screens yet — create them on the <a href="/console" style="color:#7fa9f0">Console</a> first.</div>
     <div class="frow">
       <button id="saveSolo" class="primary">Save solo settings</button>
@@ -358,7 +362,7 @@ $('saveSolo').onclick = saveSettings;
 $('soloStart').onclick = async () => {
  const r = await post('/api/solo/start', {sessionId: sid()});
  if(!r.ok){ toast((await r.text())||'Could not start', 'del'); return; }
- toast('Solo presentation started — drive it from the Scoring page');
+ location.href = '/score'; // jump straight to where you drive + score it
 };
 $('soloStop').onclick = async () => {
  const r = await post('/api/solo/stop', {});

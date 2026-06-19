@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // soloFixture builds a session with two screens (L/P) and a known photo layout:
 //
@@ -140,12 +143,24 @@ func reachLastEndCard(t *testing.T, s *server) {
 	}
 }
 
+// advanceEvent advances once and returns the reported event ("advance"/"loop"/"close"/
+// "finished"), which the Scoring page uses to toast.
+func advanceEvent(t *testing.T, s *server) string {
+	t.Helper()
+	rr := postJSON(t, s.handleSoloAdvance, nil)
+	var out struct{ Event string }
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	return out.Event
+}
+
 func TestSoloEndBehaviors(t *testing.T) {
 	// Default: one more advance past the last end card finishes and waits.
 	s, ss, _, _ := soloFixture(t)
 	postJSON(t, s.handleSoloStart, map[string]string{"sessionId": ss.ID})
 	reachLastEndCard(t, s)
-	postJSON(t, s.handleSoloAdvance, nil)
+	if ev := advanceEvent(t, s); ev != "finished" {
+		t.Fatalf("default end event = %q want finished", ev)
+	}
 	if s.solo == nil || !s.solo.finished {
 		t.Fatalf("default end: expected finished, got %+v", s.solo)
 	}
@@ -155,7 +170,9 @@ func TestSoloEndBehaviors(t *testing.T) {
 	ss2.SoloEnd = "loop"
 	postJSON(t, s2.handleSoloStart, map[string]string{"sessionId": ss2.ID})
 	reachLastEndCard(t, s2)
-	postJSON(t, s2.handleSoloAdvance, nil)
+	if ev := advanceEvent(t, s2); ev != "loop" {
+		t.Fatalf("loop end event = %q want loop", ev)
+	}
 	L := s2.screens["L"]
 	if s2.solo == nil || s2.solo.index != 0 || s2.solo.finished || L.Category != c0 || L.Orientation != "Landscape" || L.Position != 0 {
 		t.Fatalf("loop end: expected restart at first title, got solo=%+v L=%+v", s2.solo, L)
@@ -166,7 +183,9 @@ func TestSoloEndBehaviors(t *testing.T) {
 	ss3.SoloEnd = "close"
 	postJSON(t, s3.handleSoloStart, map[string]string{"sessionId": ss3.ID})
 	reachLastEndCard(t, s3)
-	postJSON(t, s3.handleSoloAdvance, nil)
+	if ev := advanceEvent(t, s3); ev != "close" {
+		t.Fatalf("close end event = %q want close", ev)
+	}
 	if s3.solo != nil {
 		t.Fatalf("close end: run should have ended, got %+v", s3.solo)
 	}

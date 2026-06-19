@@ -145,6 +145,7 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 	seg := run.segments[run.index]
 	sc := s.screens[seg.screen]
 	var names []string
+	event := "advance" // what happened, so the Scoring page can toast loop/close
 	if sc != nil && sc.Position < sc.Count+1 {
 		sc.Position++ // title -> photo 1 -> ... -> end card
 		names = []string{seg.screen}
@@ -159,16 +160,19 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 		switch end {
 		case "loop":
 			names = s.soloShowLocked(0, false) // restart from the first category
+			event = "loop"
 		case "close":
 			s.blackSoloScreensLocked()
 			s.solo = nil
 			names = s.allScreenNamesLocked()
+			event = "close"
 		default:
 			run.finished = true // sit on the last end card until Stop
 			if sc != nil {
 				sc.Position = sc.Count + 1
 			}
 			names = []string{seg.screen}
+			event = "finished"
 		}
 	}
 	s.mu.Unlock()
@@ -176,7 +180,7 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 		s.pushScreen(n)
 	}
 	s.pushConsole()
-	w.WriteHeader(204)
+	writeJSON(w, map[string]string{"event": event})
 }
 
 func (s *server) handleSoloBack(w http.ResponseWriter, r *http.Request) {

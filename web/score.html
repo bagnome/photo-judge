@@ -462,7 +462,14 @@ document.addEventListener('keydown', e => {
 // re-renders this page (and the output monitors) in lockstep.
 async function soloCmd(action){
  const r = await post('/api/solo/' + action, {});
- if(!r.ok) toast('Could not ' + action + ': ' + (await r.text()), 'del');
+ if(!r.ok){ toast('Could not ' + action + ': ' + (await r.text()), 'del'); return; }
+ if(action === 'advance'){
+   try {
+     const j = await r.json();
+     if(j.event === 'loop') toast('↻ Looped back to the start');
+     else if(j.event === 'close') toast('■ Presentation ended');
+   } catch(e){}
+ }
 }
 $('soloAdvance').onclick = () => soloCmd('advance');
 $('soloBack').onclick = () => soloCmd('back');
