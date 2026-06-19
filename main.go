@@ -100,6 +100,20 @@ type Session struct {
 	// SoloEnd is what happens after the last category: "" = show "complete" and wait,
 	// "loop" = restart from the first category, "close" = black the monitors and end.
 	SoloEnd string `json:"soloEnd,omitempty"`
+	// Judge scoring config (per session). JudgeAggregation is "average" (default) or
+	// "total"; JudgesNeeded is how many scores make a photo "complete". Alternate enables
+	// a backup judge; Autodetect routes a photo by a judge to the alternate automatically;
+	// ShowPhotographer reveals the photographer to judges (off = impartial). Min/Max/
+	// Increment constrain the score box (pointers: nil = unset).
+	JudgeAggregation      string   `json:"judgeAggregation,omitempty"`
+	JudgesNeeded          int      `json:"judgesNeeded,omitempty"`
+	JudgeAnonymize        bool     `json:"judgeAnonymize,omitempty"`
+	JudgeAlternate        bool     `json:"judgeAlternate,omitempty"`
+	JudgeAutodetect       bool     `json:"judgeAutodetect,omitempty"`
+	JudgeShowPhotographer bool     `json:"judgeShowPhotographer,omitempty"`
+	JudgeMin              *float64 `json:"judgeMin,omitempty"`
+	JudgeMax              *float64 `json:"judgeMax,omitempty"`
+	JudgeIncrement        *float64 `json:"judgeIncrement,omitempty"`
 }
 
 // soloScreenFor returns the screen assigned to present the given orientation.
@@ -169,6 +183,9 @@ type View struct {
 	WifiSSID     string `json:"wifiSSID,omitempty"`     // network name to join (if known)
 	WifiPassword string `json:"wifiPassword,omitempty"` // network password (if known)
 	WifiQR       string `json:"wifiQR,omitempty"`       // WIFI: join string for a scannable QR
+	// Judge-QR screens (Mode == "judge"): page judges open + whether judge scoring is on.
+	JudgeURL string `json:"judgeUrl,omitempty"`
+	JudgeOn  bool   `json:"judgeOn,omitempty"`
 }
 
 // ---- SSE hub --------------------------------------------------------------
@@ -178,15 +195,18 @@ type hub struct {
 	consoles map[chan []byte]bool
 	outputs  map[string]map[chan []byte]bool
 	entries  map[chan []byte]bool // landing + member-entry pages (role=entry)
+	judges   map[chan []byte]bool // judge phone pages (role=judge)
 }
 
 func newHub() *hub {
-	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}, entries: map[chan []byte]bool{}}
+	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}, entries: map[chan []byte]bool{}, judges: map[chan []byte]bool{}}
 }
 func (h *hub) addConsole(ch chan []byte)    { h.mu.Lock(); h.consoles[ch] = true; h.mu.Unlock() }
 func (h *hub) removeConsole(ch chan []byte) { h.mu.Lock(); delete(h.consoles, ch); h.mu.Unlock() }
 func (h *hub) addEntry(ch chan []byte)      { h.mu.Lock(); h.entries[ch] = true; h.mu.Unlock() }
 func (h *hub) removeEntry(ch chan []byte)   { h.mu.Lock(); delete(h.entries, ch); h.mu.Unlock() }
+func (h *hub) addJudge(ch chan []byte)      { h.mu.Lock(); h.judges[ch] = true; h.mu.Unlock() }
+func (h *hub) removeJudge(ch chan []byte)   { h.mu.Lock(); delete(h.judges, ch); h.mu.Unlock() }
 func (h *hub) addOutput(name string, ch chan []byte) {
 	h.mu.Lock()
 	if h.outputs[name] == nil {
@@ -226,6 +246,16 @@ func (h *hub) sendEntries(data []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.entries {
+		select {
+		case ch <- data:
+		default:
+		}
+	}
+}
+func (h *hub) sendJudges(data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.judges {
 		select {
 		case ch <- data:
 		default:
@@ -275,6 +305,13 @@ type server struct {
 	// solo is the active solo-operator presentation run (nil = not running), driving the
 	// configured screens through each category's orientations. Guarded by mu. See solo.go.
 	solo *soloRun
+
+	// Judge scoring state (guarded by mu). judgeRoster tracks connected judges by name
+	// key; deferred/requested are transient per-photo flags keyed by "<target>|<judgeKey>".
+	// See judge.go.
+	judgeRoster    map[string]*judgeRosterEntry
+	judgeDeferred  map[string]bool
+	judgeRequested map[string]bool
 
 	// Member-entry state (guarded by mu). When entryOpen is true, competitors may
 	// submit photos to entrySessionID — the session locked in when the form was opened.
@@ -349,6 +386,9 @@ func applyOrder(dir string, files []string) []string {
 func (s *server) buildView(sc *Screen) View {
 	if sc.Type == "entry" {
 		return s.entryView()
+	}
+	if sc.Type == "judge" {
+		return s.judgeView()
 	}
 	if sc.Category == "" {
 		return View{Mode: "idle"}
@@ -534,17 +574,20 @@ func (s *server) createSession(date, description string) (*Session, error) {
 	// Scoring settings carry forward from the latest session; the very first session
 	// falls back to the club's usual 11-of-15 default.
 	win, max := floatPtr(11), floatPtr(15)
-	var solo Session // carries the solo fields forward from the latest session
-	if latest := s.latestSession(); latest != nil {
+	latest := s.latestSession()
+	if latest != nil {
 		active = append([]string{}, latest.Categories...)
 		inactive = append([]string{}, latest.InactiveCategories...)
 		win, max = latest.WinThreshold, latest.MaxPoints
-		solo = Session{SoloEnabled: latest.SoloEnabled, SoloLandscapeScreen: latest.SoloLandscapeScreen, SoloPortraitScreen: latest.SoloPortraitScreen, SoloFirst: latest.SoloFirst, SoloEnd: latest.SoloEnd}
 	} else {
 		active = append([]string{}, s.categories...)
 	}
-	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max,
-		SoloEnabled: solo.SoloEnabled, SoloLandscapeScreen: solo.SoloLandscapeScreen, SoloPortraitScreen: solo.SoloPortraitScreen, SoloFirst: solo.SoloFirst, SoloEnd: solo.SoloEnd}
+	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max}
+	if latest != nil { // carry the per-session presentation/judging config forward
+		ss.SoloEnabled, ss.SoloLandscapeScreen, ss.SoloPortraitScreen, ss.SoloFirst, ss.SoloEnd = latest.SoloEnabled, latest.SoloLandscapeScreen, latest.SoloPortraitScreen, latest.SoloFirst, latest.SoloEnd
+		ss.JudgeAggregation, ss.JudgesNeeded, ss.JudgeAnonymize, ss.JudgeAlternate, ss.JudgeAutodetect, ss.JudgeShowPhotographer = latest.JudgeAggregation, latest.JudgesNeeded, latest.JudgeAnonymize, latest.JudgeAlternate, latest.JudgeAutodetect, latest.JudgeShowPhotographer
+		ss.JudgeMin, ss.JudgeMax, ss.JudgeIncrement = latest.JudgeMin, latest.JudgeMax, latest.JudgeIncrement
+	}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -676,6 +719,11 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 		ID, Date, Description, WinThreshold, MaxPoints              string
 		SoloEnabled                                                 bool
 		SoloLandscapeScreen, SoloPortraitScreen, SoloFirst, SoloEnd string
+		JudgeAggregation                                            string
+		JudgesNeeded                                                int
+		JudgeAnonymize, JudgeAlternate, JudgeAutodetect             bool
+		JudgeShowPhotographer                                       bool
+		JudgeMin, JudgeMax, JudgeIncrement                          string
 	}
 	if decode(r, &body) != nil || !safeName(body.ID) {
 		http.Error(w, "bad request", 400)
@@ -693,6 +741,13 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 	max, err := parseOptFloat(body.MaxPoints)
 	if err != nil {
 		http.Error(w, "total points must be a number", 400)
+		return
+	}
+	jMin, e1 := parseOptFloat(body.JudgeMin)
+	jMax, e2 := parseOptFloat(body.JudgeMax)
+	jInc, e3 := parseOptFloat(body.JudgeIncrement)
+	if e1 != nil || e2 != nil || e3 != nil {
+		http.Error(w, "judge min/max/increment must be numbers", 400)
 		return
 	}
 	s.mu.Lock()
@@ -719,6 +774,18 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 	} else {
 		ss.SoloEnd = ""
 	}
+	if body.JudgeAggregation == "total" {
+		ss.JudgeAggregation = "total"
+	} else {
+		ss.JudgeAggregation = "average"
+	}
+	if body.JudgesNeeded < 0 {
+		body.JudgesNeeded = 0
+	}
+	ss.JudgesNeeded = body.JudgesNeeded
+	ss.JudgeAnonymize, ss.JudgeAlternate, ss.JudgeAutodetect = body.JudgeAnonymize, body.JudgeAlternate, body.JudgeAutodetect
+	ss.JudgeShowPhotographer = body.JudgeShowPhotographer
+	ss.JudgeMin, ss.JudgeMax, ss.JudgeIncrement = jMin, jMax, jInc
 	b, _ := json.MarshalIndent(ss, "", "  ")
 	werr := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
 	sort.Slice(s.sessions, func(i, j int) bool { return s.sessions[i].Date < s.sessions[j].Date })
@@ -1231,10 +1298,11 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown action", 400)
 		return
 	}
-	// "Only one live screen" setting: revealing a screen blacks out all the others,
-	// so the rest never show at once (same effect as Make live, applied automatically).
+	// "Only one live screen" setting (forced on while judge scoring is enabled, so there's
+	// a single judging target): revealing a screen blacks out all the others, so the rest
+	// never show at once (same effect as Make live, applied automatically).
 	revealedOthers := false
-	if !sc.Blackout && s.settings.SingleLiveScreen {
+	if !sc.Blackout && (s.settings.SingleLiveScreen || s.settings.JudgeScoringEnabled) {
 		for n, other := range s.screens {
 			if n != sc.Name {
 				other.Blackout = true
@@ -1819,6 +1887,15 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		s.h.addEntry(ch)
 		defer s.h.removeEntry(ch)
 		ch <- s.entryStateJSON()
+	} else if role == "judge" {
+		// Judge phones: presence is the live SSE connection (name + alternate from the
+		// query). The shared judging state is pushed; the page GETs its personal status.
+		key := normalizeNameKey(r.URL.Query().Get("name"))
+		alt := r.URL.Query().Get("alt") == "1"
+		s.judgeJoin(key, strings.TrimSpace(r.URL.Query().Get("name")), alt)
+		s.h.addJudge(ch)
+		defer func() { s.h.removeJudge(ch); s.judgeLeave(key) }()
+		ch <- s.judgeStateJSON()
 	} else {
 		name := r.URL.Query().Get("screen")
 		s.h.addOutput(name, ch)
@@ -2093,6 +2170,7 @@ func main() {
 	})
 	mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "console.html") })
 	mux.HandleFunc("/entry", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "entry.html") })
+	mux.HandleFunc("/judge", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "judge.html") })
 	mux.HandleFunc("/review", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "review.html") })
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
@@ -2144,6 +2222,11 @@ func main() {
 	mux.HandleFunc("/api/solo/advance", s.handleSoloAdvance)
 	mux.HandleFunc("/api/solo/back", s.handleSoloBack)
 	mux.HandleFunc("/api/solo/stop", s.handleSoloStop)
+	mux.HandleFunc("/api/judge/state", s.handleJudgeState)
+	mux.HandleFunc("/api/judge/submit", s.handleJudgeSubmit)
+	mux.HandleFunc("/api/judge/defer", s.handleJudgeDefer)
+	mux.HandleFunc("/api/judge/rescore", s.handleJudgeRescore)
+	mux.HandleFunc("/api/judge/board", s.handleJudgeBoard)
 	mux.HandleFunc("/api/entry/state", s.handleEntryState)
 	mux.HandleFunc("/api/entry/open", s.handleEntryOpen)
 	mux.HandleFunc("/api/entry/close", s.handleEntryClose)

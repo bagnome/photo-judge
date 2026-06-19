@@ -76,12 +76,42 @@ logo.onerror = () => { logo.style.display = 'none'; };
 
 const qrSrc = data => '/api/qr?data=' + encodeURIComponent(data);
 
+// showJudge reuses the entry two-step layout (Join Wi-Fi → Scan) with judge wording.
+function showJudge(v){
+ img.style.display = 'none';
+ title.style.display = 'none';
+ const steps = entry.querySelector('.esteps');
+ const closed = document.getElementById('eclosed');
+ const nolan = document.getElementById('enolan');
+ entry.querySelector('.ehead').textContent = 'Judges — score from your phone';
+ const ets = entry.querySelectorAll('.et');
+ ets[0].textContent = 'Join the Wi-Fi';
+ ets[1].textContent = 'Scan to score';
+ const wifiLine = document.getElementById('wifiLine'), wifiqr = document.getElementById('wifiqr');
+ if(v.wifiSSID){
+   wifiLine.innerHTML = 'Network: <b>' + esc(v.wifiSSID) + '</b>' + (v.wifiPassword ? '<br>Password: <b>' + esc(v.wifiPassword) + '</b>' : '');
+   if(v.wifiQR){ wifiqr.src = qrSrc(v.wifiQR); wifiqr.style.display = 'block'; } else wifiqr.style.display = 'none';
+ } else { wifiLine.textContent = 'Ask the host for the Wi-Fi name and password.'; wifiqr.style.display = 'none'; }
+ const entryqr = document.getElementById('entryqr'), urlLine = document.getElementById('entryUrlLine');
+ if(v.judgeUrl){ entryqr.src = qrSrc(v.judgeUrl); entryqr.style.display = 'block'; urlLine.innerHTML = 'or visit <b>' + esc(v.judgeUrl) + '</b>'; }
+ else { entryqr.style.display = 'none'; urlLine.textContent = ''; }
+ const on = v.judgeOn && !!v.judgeUrl;
+ steps.style.display = on ? 'flex' : 'none';
+ closed.textContent = 'Judge scoring is turned off.';
+ closed.style.display = (v.judgeUrl && !v.judgeOn) ? 'block' : 'none';
+ nolan.style.display = v.judgeUrl ? 'none' : 'block';
+ entry.style.display = 'block';
+}
+
 function showEntry(v){
  img.style.display = 'none';
  title.style.display = 'none';
  const steps = entry.querySelector('.esteps');
  const closed = document.getElementById('eclosed');
  const nolan = document.getElementById('enolan');
+ closed.textContent = 'Entries are now closed.';
+ entry.querySelector('.ehead').textContent = 'Add your photos to the competition';
+ entry.querySelectorAll('.et')[1].textContent = 'Scan to enter your photos';
  // Wi-Fi step
  const wifiLine = document.getElementById('wifiLine'), wifiqr = document.getElementById('wifiqr');
  if(v.wifiSSID){
@@ -109,7 +139,8 @@ function showEntry(v){
 }
 
 function show(v){
- if(v.mode !== 'entry') entry.style.display = 'none';
+ if(v.mode !== 'entry' && v.mode !== 'judge') entry.style.display = 'none';
+ if(v.mode === 'judge'){ showJudge(v); return; }
  if(v.mode === 'photo'){
    title.style.display = 'none';
    img.onload = () => { img.style.display = 'block'; };

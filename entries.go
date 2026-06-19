@@ -268,7 +268,7 @@ func (s *server) handleScreenType(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body", 400)
 		return
 	}
-	if body.Type != "slideshow" && body.Type != "entry" {
+	if body.Type != "slideshow" && body.Type != "entry" && body.Type != "judge" {
 		http.Error(w, "bad type", 400)
 		return
 	}
@@ -295,9 +295,15 @@ func (s *server) handleScreenType(w http.ResponseWriter, r *http.Request) {
 			s.entrySessionID = body.SessionID
 		}
 	}
+	if body.Type == "judge" && !s.settings.JudgeScoringEnabled {
+		s.mu.Unlock()
+		http.Error(w, "Judge scoring is turned off in Settings.", http.StatusConflict)
+		return
+	}
 	sc.Type = body.Type
 	s.mu.Unlock()
 	s.pushEntryAll()
+	s.pushJudge()
 	w.WriteHeader(204)
 }
 

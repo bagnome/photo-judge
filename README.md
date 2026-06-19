@@ -130,6 +130,15 @@ that workflow.
   the grid and the Scoring page. A separate **Physical prints** mode records printed entries that have no image
   file — a spreadsheet-style table of title / photographer / score per category that
   auto-extends as you type (Tab between fields, Enter for the next row).
+- **Judge scoring** — let the judges score from their own phones instead of a scorekeeper
+  typing. Turn on **Judge scoring** in Settings and set a screen to **Judge QR**; judges scan it,
+  enter their name (and whether they're the **alternate**), and submit a score for the live photo.
+  The app combines the scores (**average** or **total**) into the photo's score, and the Scoring
+  page shows each judge's score, the combined value, and how many of the needed judges are in —
+  with per-judge and all-judges **re-score** requests. A judge can **defer** a photo (e.g. their
+  own) to the alternate, optionally auto-detected by photographer name. The rules — combine mode,
+  judges needed, score range + step, anonymize, alternate, auto-defer — are set per session on
+  **Session Management**.
 - **Solo operator mode** — for nights with only one volunteer. Enabled per session on
   **Session Management** (pick which screen presents Landscape vs Portrait and which
   orientation shows first, then **Start**), it lets one person run the whole show from the
@@ -354,6 +363,8 @@ new sessions — copy to the local drive for an event).
 | `web/categories.html` | Session Management page (per-session settings + category manager; served at `/session`) |
 | `web/score.html` | Scoring page (follow a screen, record scores; drives solo operator mode) |
 | `solo.go` | Solo operator mode — segment sequencing + screen driving (start/advance/back/stop) |
+| `judge.go` | Judge scoring — Judge-QR view, per-judge scores (judgescores.json), combine + the judges board |
+| `web/judge.html` | Judge phone page — score the live photo, defer to the alternate |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
 | `randomize.go` | Randomize photo order (one category or whole session) + the spread-photographers shuffle |
 | `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |

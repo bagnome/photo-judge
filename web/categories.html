@@ -115,6 +115,31 @@
       <span id="soloStatus" class="hint" style="margin:0"></span>
     </div>
   </div>
+  <div class="scard" style="flex-basis:100%;max-width:760px">
+    <h3>Judge mode</h3>
+    <div class="hint">When <b>Judge scoring</b> is on (Settings), judges score the live photo from their phones via a <b>Judge QR</b> screen, and the app combines their scores. These rules apply to this session.</div>
+    <div class="frow">
+      <label for="jm-agg">Combine scores by</label>
+      <select id="jm-agg"><option value="average">Average</option><option value="total">Total</option></select>
+      <label for="jm-needed" style="min-width:auto">Judges needed</label>
+      <input type="number" id="jm-needed" class="num-in" min="0" step="1" placeholder="3">
+    </div>
+    <div class="frow">
+      <label for="jm-min">Score range</label>
+      <input type="number" id="jm-min" class="num-in" step="0.1" placeholder="min">
+      <span style="color:#9aa0a6">to</span>
+      <input type="number" id="jm-max" class="num-in" step="0.1" placeholder="max">
+      <label for="jm-inc" style="min-width:auto">steps of</label>
+      <select id="jm-inc"><option value="">any</option><option value="0.1">0.1</option><option value="0.2">0.2</option><option value="0.5">0.5</option><option value="1">1</option></select>
+    </div>
+    <div class="frow" style="gap:18px;flex-wrap:wrap">
+      <label class="frow" style="gap:7px;margin:0"><input type="checkbox" id="jm-anon" style="width:auto"> Keep judges anonymous</label>
+      <label class="frow" style="gap:7px;margin:0"><input type="checkbox" id="jm-alt" style="width:auto"> Use an alternate judge</label>
+      <label class="frow" style="gap:7px;margin:0"><input type="checkbox" id="jm-auto" style="width:auto"> Auto-defer a judge's own photo</label>
+      <label class="frow" style="gap:7px;margin:0"><input type="checkbox" id="jm-photog" style="width:auto"> Show photographer to judges</label>
+    </div>
+    <div class="frow"><button id="saveJudge" class="primary">Save judge mode</button></div>
+  </div>
 </div>
 
 <div id="manager">
@@ -252,6 +277,16 @@ function fillSettings(){
  $('sm-ps').value = ss.soloPortraitScreen || '';
  $('sm-first').value = ss.soloFirst === 'Portrait' ? 'Portrait' : 'Landscape';
  $('sm-end').value = (ss.soloEnd === 'loop' || ss.soloEnd === 'close') ? ss.soloEnd : '';
+ // Judge mode
+ $('jm-agg').value = ss.judgeAggregation === 'total' ? 'total' : 'average';
+ $('jm-needed').value = ss.judgesNeeded || '';
+ $('jm-min').value = (ss.judgeMin == null) ? '' : ss.judgeMin;
+ $('jm-max').value = (ss.judgeMax == null) ? '' : ss.judgeMax;
+ $('jm-inc').value = (ss.judgeIncrement == null) ? '' : String(ss.judgeIncrement);
+ $('jm-anon').checked = !!ss.judgeAnonymize;
+ $('jm-alt').checked = !!ss.judgeAlternate;
+ $('jm-auto').checked = !!ss.judgeAutodetect;
+ $('jm-photog').checked = !!ss.judgeShowPhotographer;
  updateSolo();
 }
 
@@ -262,7 +297,11 @@ async function saveSettings(){
  const body = {id, date:$('sm-date').value, description:$('sm-desc').value.trim(),
    winThreshold:$('sm-thr').value.trim(), maxPoints:$('sm-pts').value.trim(),
    soloEnabled:$('sm-solo').checked, soloLandscapeScreen:$('sm-ls').value,
-   soloPortraitScreen:$('sm-ps').value, soloFirst:$('sm-first').value, soloEnd:$('sm-end').value};
+   soloPortraitScreen:$('sm-ps').value, soloFirst:$('sm-first').value, soloEnd:$('sm-end').value,
+   judgeAggregation:$('jm-agg').value, judgesNeeded:(parseInt($('jm-needed').value,10)||0),
+   judgeAnonymize:$('jm-anon').checked, judgeAlternate:$('jm-alt').checked,
+   judgeAutodetect:$('jm-auto').checked, judgeShowPhotographer:$('jm-photog').checked,
+   judgeMin:$('jm-min').value.trim(), judgeMax:$('jm-max').value.trim(), judgeIncrement:$('jm-inc').value.trim()};
  const r = await post('/api/session/settings', body);
  if(!r.ok){ toast((await r.text())||'Could not save settings', 'del'); return; }
  toast('Session settings saved');
@@ -357,6 +396,7 @@ $('session').addEventListener('change', loadDetail);
 $('saveDetails').onclick = saveSettings;
 $('saveScoring').onclick = saveSettings;
 $('saveSolo').onclick = saveSettings;
+$('saveJudge').onclick = saveSettings;
 // Re-evaluate the Start button as the operator edits the solo config.
 ['sm-solo','sm-ls','sm-ps'].forEach(id => $(id).addEventListener('change', updateSolo));
 $('soloStart').onclick = async () => {

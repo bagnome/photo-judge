@@ -198,21 +198,42 @@ function render(){
  state.screens.forEach(sc => {
    const tr = document.createElement('tr');
    const isEntry = sc.type === 'entry';
+   const isJudge = sc.type === 'judge';
 
    const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
 
-   // Type dropdown (Entry QR disabled when the feature is turned off in Settings)
+   // Type dropdown (Entry QR / Judge QR disabled when those features are off in Settings)
    const entriesOn = !!(state.settings && state.settings.entriesEnabled);
+   const judgeOn = !!(state.settings && state.settings.judgeScoringEnabled);
    const tdT = document.createElement('td'); tdT.dataset.label='Type';
    const ts = document.createElement('select');
-   [['slideshow','Slideshow'],['entry','Entry QR']].forEach(([v,l]) => {
+   [['slideshow','Slideshow'],['entry','Entry QR'],['judge','Judge QR']].forEach(([v,l]) => {
      const o=document.createElement('option'); o.value=v; o.textContent=l;
      if(v==='entry' && !entriesOn && !isEntry) o.disabled = true;
+     if(v==='judge' && !judgeOn && !isJudge) o.disabled = true;
      ts.appendChild(o);
    });
-   ts.value = isEntry ? 'entry' : 'slideshow';
+   ts.value = isEntry ? 'entry' : isJudge ? 'judge' : 'slideshow';
    ts.onchange = () => setScreenType(sc.name, ts.value);
    tdT.appendChild(ts); tr.appendChild(tdT);
+
+   if(isJudge){
+     // Judge-QR row: shows the join/scan QR; no category to load here. Judges score
+     // whatever photo is live on another (slideshow) screen.
+     const tdInfo = document.createElement('td'); tdInfo.dataset.label='Judges'; tdInfo.colSpan = 3;
+     tdInfo.innerHTML = 'Judge QR — judges scan to score the <b>live</b> photo';
+     tr.appendChild(tdInfo);
+     const tdS = document.createElement('td'); tdS.className='status'; tdS.dataset.label='Showing';
+     tdS.innerHTML = judgeOn ? '<span class="entryon">scan to score</span>' : '<span class="entryoff">scoring off</span>';
+     tr.appendChild(tdS);
+     const tdK = document.createElement('td'); tdK.dataset.label='Controls';
+     const g = document.createElement('div'); g.className='grp';
+     const ow = btn('⧉ Open window', () => openOutputWindow(sc.name)); ow.className='deskonly'; g.appendChild(ow);
+     const dsb = btn('🗑', () => deleteScreen(sc.name)); dsb.className='danger'; dsb.title='Delete this screen'; g.appendChild(dsb);
+     tdK.appendChild(g); tr.appendChild(tdK);
+     rows.appendChild(tr);
+     return;
+   }
 
    if(isEntry){
      // Entry-QR row: no category/orientation/load; show where entries land + open/close.
@@ -440,7 +461,7 @@ async function deleteScreen(name){
  });
 }
 
-$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout && sc.type !== 'entry') cmd(sc.name,'blackout'); }); };
+$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout && sc.type !== 'entry' && sc.type !== 'judge') cmd(sc.name,'blackout'); }); };
 $('reviewbtn').onclick = () => location.href = '/review';
 
 // Re-render when the selected session changes so each screen's category menu

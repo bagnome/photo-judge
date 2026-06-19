@@ -14,6 +14,18 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Judge scoring (phase 1)** — judges score from their own phones. Turn on **Judge scoring** in
+  Settings, then set a screen's type to **Judge QR**: judges scan it, enter their name (and tick
+  if they're the **alternate**), and submit a score for whatever photo is live — the app combines
+  the scores into the photo's score (**average** or **total**). The **Scoring page** becomes a live
+  board of each judge's score, the combined value, and an *N / needed* indicator, with **Rescore**
+  (per judge) and **Ask all to re-score** buttons. Conflicts are handled: a judge can **defer** a
+  photo (e.g. their own) to the **alternate**, and an optional **auto-defer** matches the
+  photographer's name to a judge automatically. Per-session config lives on **Session Management**
+  (combine by average/total, judges needed, score range + step, anonymize, alternate, auto-defer,
+  show-photographer-to-judges), inherited by new sessions. While judge scoring is on, only one
+  screen shows at a time. (Named presets and a per-judge breakdown on the PDF/archive are planned
+  for a follow-up.)
 - **Randomize a whole session at once**, and a **spread-photographers** option. The Upload /
   Reorder page now has a **🔀 Randomize whole session** button (alongside the per-category one)
   that reshuffles every category's display order in a single click. A new Settings toggle —
