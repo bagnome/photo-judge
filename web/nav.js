@@ -12,6 +12,7 @@
     { href: '/categories',      icon: '🗂️', label: 'Manage categories' },
     { href: '/score',           icon: '🏆', label: 'Scoring' },
     { href: '/archived',        icon: '🗄️', label: 'Archived Sessions' },
+    { href: '/stats',           icon: '📊', label: 'Statistics' },
     { href: '/settings',        icon: '⚙️', label: 'Settings' },
     { href: '/how-to', icon: '📖', label: 'How To' }
   ];

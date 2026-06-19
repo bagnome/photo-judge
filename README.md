@@ -167,6 +167,16 @@ that workflow.
   space. The session becomes read-only and leaves the console; archived sessions are
   browsable on the **Archived Sessions** page (search by date range / session ID /
   photographer / title) and downloadable as JSON.
+- **Statistics page** — entry counts across your competition history, **including archived
+  sessions** (an entry is any photo in a session). Filter by time frame — **All time** /
+  **This year** / **Last 12 months** presets, or a custom date range — to see summary cards
+  (entries, sessions, categories, photographers) and breakdowns **by session**, **by
+  category** (with each category's share), and **by photographer**. Four hand-drawn SVG
+  charts visualise it: a custom **overlaid** chart (a faint per-session total bar with that
+  session's categories drawn side by side in front), a **stacked** per-session chart, a
+  **category totals** chart, and a **photographer-per-session** chart (one cluster per
+  session, one bar per photographer, stacked by category). Standard-library only — no
+  charting library.
 - **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
   Scoring, How To) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
@@ -323,6 +333,8 @@ new sessions — copy to the local drive for an event).
 | `web/categories.html` | Category manager (per-session) page |
 | `web/score.html` | Scoring page (follow a screen, record scores) |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
+| `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |
+| `web/stats.html` | Statistics page (time-frame filter, tables, hand-drawn SVG charts) |
 | `web/how-to.html` | How To page — tabbed step-by-step guides (Getting started is the first tab) |
 | `getting-started-images/` | Screenshots for the How To guides (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
