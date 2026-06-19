@@ -306,9 +306,13 @@ type server struct {
 	// configured screens through each category's orientations. Guarded by mu. See solo.go.
 	solo *soloRun
 
-	// Judge scoring state (guarded by mu). judgeRoster tracks connected judges by name
-	// key; deferred/requested are transient per-photo flags keyed by "<target>|<judgeKey>".
-	// See judge.go.
+	// Judge scoring state (guarded by mu). judgeActive gates a running judging session
+	// (locked to judgeSessionID): until it's started the slideshow stays black, the
+	// operator can't drive it, and judges can't score. judgeRoster tracks connected
+	// judges by name key; deferred/requested are transient per-photo flags keyed by
+	// "<target>|<judgeKey>". See judge.go.
+	judgeActive    bool
+	judgeSessionID string
 	judgeRoster    map[string]*judgeRosterEntry
 	judgeDeferred  map[string]bool
 	judgeRequested map[string]bool
@@ -390,6 +394,11 @@ func (s *server) buildView(sc *Screen) View {
 	if sc.Type == "judge" {
 		return s.judgeView()
 	}
+	// While judge scoring is on but the judging session hasn't been started, the
+	// slideshow stays black — the operator can't present and judges can't score yet.
+	if s.settings.JudgeScoringEnabled && !s.judgeActive {
+		return View{Mode: "black", Category: sc.Category, Orientation: sc.Orientation, Position: sc.Position, Count: sc.Count}
+	}
 	if sc.Category == "" {
 		return View{Mode: "idle"}
 	}
@@ -439,19 +448,21 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version           string     `json:"version"`
-		NewerVersion      string     `json:"newerVersion,omitempty"`
-		Sessions          []*Session `json:"sessions"`
-		Categories        []string   `json:"categories"`
-		Screens           []*Screen  `json:"screens"`
-		Settings          Settings   `json:"settings"`
-		EntryOpen         bool       `json:"entryOpen"`
-		EntrySessionID    string     `json:"entrySessionId,omitempty"`
-		PendingCount      int        `json:"pendingCount"`
-		SelectedSessionID string     `json:"selectedSessionId,omitempty"`
-		Solo              *soloView  `json:"solo,omitempty"`
+		Version           string         `json:"version"`
+		NewerVersion      string         `json:"newerVersion,omitempty"`
+		Sessions          []*Session     `json:"sessions"`
+		Categories        []string       `json:"categories"`
+		Screens           []*Screen      `json:"screens"`
+		Settings          Settings       `json:"settings"`
+		EntryOpen         bool           `json:"entryOpen"`
+		EntrySessionID    string         `json:"entrySessionId,omitempty"`
+		PendingCount      int            `json:"pendingCount"`
+		SelectedSessionID string         `json:"selectedSessionId,omitempty"`
+		Solo              *soloView      `json:"solo,omitempty"`
+		Judges            map[string]any `json:"judges,omitempty"`
 	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
-		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID, s.soloViewLocked()}
+		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID, s.soloViewLocked(),
+		s.judgeConsoleSnapshotLocked()}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -1246,6 +1257,7 @@ func (s *server) handleScreenLoad(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	s.pushScreen(body.Name)
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	w.WriteHeader(204)
 }
 
@@ -1273,6 +1285,13 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 	if sc == nil {
 		s.mu.Unlock()
 		http.Error(w, "no such screen", 404)
+		return
+	}
+	// While judge scoring is on but the session hasn't started, the operator can't drive
+	// the slideshow — the screens stay black until they click Start judging.
+	if s.settings.JudgeScoringEnabled && !s.judgeActive && (sc.Type == "" || sc.Type == "slideshow") {
+		s.mu.Unlock()
+		http.Error(w, "start the judging session before presenting", http.StatusConflict)
 		return
 	}
 	switch body.Action {
@@ -1324,6 +1343,7 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		s.pushScreen(body.Name)
 	}
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	w.WriteHeader(204)
 }
 
@@ -2227,6 +2247,8 @@ func main() {
 	mux.HandleFunc("/api/judge/defer", s.handleJudgeDefer)
 	mux.HandleFunc("/api/judge/rescore", s.handleJudgeRescore)
 	mux.HandleFunc("/api/judge/board", s.handleJudgeBoard)
+	mux.HandleFunc("/api/judge/start", s.handleJudgeStart)
+	mux.HandleFunc("/api/judge/stop", s.handleJudgeStop)
 	mux.HandleFunc("/api/entry/state", s.handleEntryState)
 	mux.HandleFunc("/api/entry/open", s.handleEntryOpen)
 	mux.HandleFunc("/api/entry/close", s.handleEntryClose)

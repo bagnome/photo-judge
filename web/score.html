@@ -40,6 +40,9 @@
  #solobar .muted{color:#8a9099;font-size:12.5px}
  body.solo #op, body.solo #lockrow, body.solo #gotoop, body.solo #prev, body.solo #next{display:none}
  body.solo #screenctrls label, body.solo #screen{display:none}
+ /* Judge mode: the scorekeeper is locked to the operator's live screen — hide the
+    Follow-screen picker (the slate still shows what's live). */
+ body.judge #screenctrls label, body.judge #screen{display:none}
  #nav{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
  #counter{font-variant-numeric:tabular-nums;color:#cdd;font-size:15px;min-width:120px;text-align:center}
  #lockrow{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:14px;color:#cdd;cursor:pointer;user-select:none}
@@ -455,6 +458,7 @@ async function updateJudgePanel(){
 
 function renderJudgeBoard(b){
  const el = $('judgeboard');
+ if(b && !b.active){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">Judging hasn’t started — the operator starts it from the console once the judges have joined.</div>'; return; }
  if(!b || !b.open){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">No photo is live to judge yet — load a category and reveal a photo.</div>'; return; }
  let n = 0;
  const rows = (b.judges || []).map(j => {

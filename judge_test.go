@@ -24,7 +24,8 @@ func liveJudge(t *testing.T, photographer string) (*server, *Session, string, st
 	s.mu.Lock()
 	sc := s.screens["Main"]
 	s.loadScreenLocked(sc, ss.ID, cat, "Landscape")
-	sc.Position = 1 // reveal photo 1 → it's the live judging target
+	sc.Position = 1                               // reveal photo 1 → it's the live judging target
+	s.judgeActive, s.judgeSessionID = true, ss.ID // the judging session is running
 	s.mu.Unlock()
 	return s, ss, cat, "a.jpg"
 }
@@ -118,6 +119,51 @@ func TestJudgeAutodetectConflict(t *testing.T) {
 	}
 	if !st.You.Deferred || st.You.MayScore {
 		t.Fatalf("auto-detect: judge Ann Lee should be deferred and not score her own photo: %+v", st.You)
+	}
+}
+
+func TestJudgeStartGating(t *testing.T) {
+	s := newTestServer(t)
+	s.settings.JudgeScoringEnabled = true
+	ss, _ := s.createSession("2026-01-01", "")
+	ss.JudgesNeeded, ss.JudgeMin, ss.JudgeMax = 0, nil, nil
+	start := func() *httptest.ResponseRecorder {
+		return postJSON(t, s.handleJudgeStart, map[string]any{"session": ss.ID})
+	}
+	if rr := start(); rr.Code != 409 { // no "judges needed" set
+		t.Fatalf("start with no judges-needed = %d want 409", rr.Code)
+	}
+	ss.JudgesNeeded = 2
+	if rr := start(); rr.Code != 409 { // no score range set
+		t.Fatalf("start with no range = %d want 409", rr.Code)
+	}
+	ss.JudgeMin, ss.JudgeMax = floatPtr(0), floatPtr(10)
+	if rr := start(); rr.Code != 409 { // not enough judges joined
+		t.Fatalf("start with 0 judges = %d want 409", rr.Code)
+	}
+	s.judgeJoin("ann", "Ann", false)
+	if rr := start(); rr.Code != 409 { // still only 1 of 2
+		t.Fatalf("start with 1 judge = %d want 409", rr.Code)
+	}
+	s.judgeJoin("bob", "Bob", false)
+	if rr := start(); rr.Code != 204 {
+		t.Fatalf("start with 2 judges = %d want 204 (%s)", rr.Code, rr.Body.String())
+	}
+	if !s.judgeActive || s.judgeSessionID != ss.ID {
+		t.Fatalf("session not marked active: active=%v id=%q", s.judgeActive, s.judgeSessionID)
+	}
+	if rr := postJSON(t, s.handleJudgeStop, map[string]any{}); rr.Code != 204 || s.judgeActive {
+		t.Fatalf("stop = %d active=%v", rr.Code, s.judgeActive)
+	}
+}
+
+func TestJudgeInactiveBlocksScoring(t *testing.T) {
+	s, ss, cat, file := liveJudge(t, "")
+	s.mu.Lock()
+	s.judgeActive = false // session not started
+	s.mu.Unlock()
+	if rr := submitJudge(t, s, ss, cat, file, "Ann", false, "8"); rr.Code != 409 {
+		t.Fatalf("submit before start = %d want 409", rr.Code)
 	}
 }
 

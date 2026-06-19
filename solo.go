@@ -180,6 +180,7 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 		s.pushScreen(n)
 	}
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	writeJSON(w, map[string]string{"event": event})
 }
 
@@ -208,6 +209,7 @@ func (s *server) handleSoloBack(w http.ResponseWriter, r *http.Request) {
 		s.pushScreen(n)
 	}
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	w.WriteHeader(204)
 }
 

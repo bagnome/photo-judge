@@ -178,7 +178,7 @@ func (s *server) judgeView() View { // assumes s.mu held
 // ---- shared judge state (SSE broadcast + the GET base) ----
 
 func (s *server) judgeSharedLocked(t judgeTarget) map[string]any { // assumes s.mu held
-	m := map[string]any{"enabled": s.settings.JudgeScoringEnabled, "open": t.ok}
+	m := map[string]any{"enabled": s.settings.JudgeScoringEnabled, "active": s.judgeActive, "open": t.ok}
 	if !t.ok {
 		return m
 	}
@@ -225,7 +225,7 @@ func (s *server) handleJudgeState(w http.ResponseWriter, r *http.Request) {
 				you["submitted"], you["score"] = e.Score != "", e.Score
 			}
 		}
-		you["mayScore"] = !deferred && (!alt || s.alternateActiveLocked(t, ss))
+		you["mayScore"] = s.judgeActive && !deferred && (!alt || s.alternateActiveLocked(t, ss))
 	}
 	resp["you"] = you
 	writeJSON(w, resp)
@@ -308,6 +308,11 @@ func (s *server) handleJudgeSubmit(w http.ResponseWriter, r *http.Request) {
 	score := strings.TrimSpace(body.Score)
 	s.mu.Lock()
 	s.ensureJudgeMaps()
+	if !s.judgeActive {
+		s.mu.Unlock()
+		http.Error(w, "the judging session hasn't started yet", http.StatusConflict)
+		return
+	}
 	t := s.judgingTarget()
 	if !t.matches(body.Session, body.Category, body.Orientation, body.File) {
 		s.mu.Unlock()
@@ -349,6 +354,11 @@ func (s *server) handleJudgeDefer(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	s.ensureJudgeMaps()
+	if !s.judgeActive {
+		s.mu.Unlock()
+		http.Error(w, "the judging session hasn't started yet", http.StatusConflict)
+		return
+	}
 	t := s.judgingTarget()
 	if !t.matches(body.Session, body.Category, body.Orientation, body.File) {
 		s.mu.Unlock()
@@ -412,7 +422,7 @@ func (s *server) handleJudgeBoard(w http.ResponseWriter, r *http.Request) {
 	s.ensureJudgeMaps()
 	t := s.judgingTarget()
 	if !t.ok {
-		writeJSON(w, map[string]any{"open": false})
+		writeJSON(w, map[string]any{"open": false, "active": s.judgeActive})
 		return
 	}
 	ss := s.sessionByID(t.sessionID)
@@ -469,7 +479,8 @@ func (s *server) handleJudgeBoard(w http.ResponseWriter, r *http.Request) {
 		needed = ss.JudgesNeeded
 	}
 	writeJSON(w, map[string]any{
-		"open": true, "session": t.sessionID, "category": t.category, "orientation": t.orientation,
+		"open": true, "active": s.judgeActive,
+		"session": t.sessionID, "category": t.category, "orientation": t.orientation,
 		"file": t.file, "title": t.title,
 		"judges":      rows,
 		"combined":    loadScores(dir)[t.file],
@@ -479,4 +490,100 @@ func (s *server) handleJudgeBoard(w http.ResponseWriter, r *http.Request) {
 		"complete":    needed > 0 && counting >= needed,
 		"anonymize":   ss != nil && ss.JudgeAnonymize,
 	})
+}
+
+// ---- judging-session lifecycle (start / stop) ----
+
+type judgeName struct {
+	Name      string `json:"name"`
+	Alternate bool   `json:"alternate"`
+}
+
+// presentJudgesLocked lists connected judges and counts present primaries (the alternate
+// is a backup and doesn't count toward "judges needed"). Assumes s.mu held.
+func (s *server) presentJudgesLocked() (names []judgeName, primaries int) {
+	names = []judgeName{}
+	for _, e := range s.judgeRoster {
+		names = append(names, judgeName{Name: e.name, Alternate: e.alternate})
+		if !e.alternate {
+			primaries++
+		}
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if names[i].Alternate != names[j].Alternate {
+			return names[j].Alternate // alternate last
+		}
+		return names[i].Name < names[j].Name
+	})
+	return names, primaries
+}
+
+// judgeConsoleSnapshotLocked is the judge block in the console snapshot (nil when judge
+// scoring is off, so it's omitted). Assumes s.mu held.
+func (s *server) judgeConsoleSnapshotLocked() map[string]any {
+	if !s.settings.JudgeScoringEnabled {
+		return nil
+	}
+	names, primaries := s.presentJudgesLocked()
+	return map[string]any{
+		"active":    s.judgeActive,
+		"sessionId": s.judgeSessionID,
+		"joined":    names,
+		"primaries": primaries,
+	}
+}
+
+// handleJudgeStart opens a judging session locked to the chosen session. It refuses until
+// the session's rules are set (judges needed + score range) and all needed judges have
+// joined — then the slideshow comes off black and judges can score.
+func (s *server) handleJudgeStart(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Session string }
+	if decode(r, &body) != nil || !safeName(body.Session) {
+		http.Error(w, "bad body", 400)
+		return
+	}
+	s.mu.Lock()
+	s.ensureJudgeMaps()
+	if !s.settings.JudgeScoringEnabled {
+		s.mu.Unlock()
+		http.Error(w, "judge scoring is turned off in Settings", http.StatusConflict)
+		return
+	}
+	ss := s.sessionByID(body.Session)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "session not found", 404)
+		return
+	}
+	if ss.JudgesNeeded < 1 {
+		s.mu.Unlock()
+		http.Error(w, "set how many judges are needed on Session Management first", http.StatusConflict)
+		return
+	}
+	if ss.JudgeMin == nil || ss.JudgeMax == nil {
+		s.mu.Unlock()
+		http.Error(w, "set the score range on Session Management first", http.StatusConflict)
+		return
+	}
+	if _, primaries := s.presentJudgesLocked(); primaries < ss.JudgesNeeded {
+		s.mu.Unlock()
+		http.Error(w, fmt.Sprintf("waiting for judges — %d of %d have joined", primaries, ss.JudgesNeeded), http.StatusConflict)
+		return
+	}
+	s.judgeActive, s.judgeSessionID = true, ss.ID
+	s.mu.Unlock()
+	s.pushAllScreens() // slideshow comes off black
+	s.pushJudge()
+	s.pushConsole()
+	w.WriteHeader(204)
+}
+
+func (s *server) handleJudgeStop(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.judgeActive, s.judgeSessionID = false, ""
+	s.mu.Unlock()
+	s.pushAllScreens() // slideshow goes black again
+	s.pushJudge()
+	s.pushConsole()
+	w.WriteHeader(204)
 }

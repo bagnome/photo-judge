@@ -24,8 +24,13 @@ not yet released.
   photographer's name to a judge automatically. Per-session config lives on **Session Management**
   (combine by average/total, judges needed, score range + step, anonymize, alternate, auto-defer,
   show-photographer-to-judges), inherited by new sessions. While judge scoring is on, only one
-  screen shows at a time. (Named presets and a per-judge breakdown on the PDF/archive are planned
-  for a follow-up.)
+  screen shows at a time. A judging session is an explicit thing you **Start** and **Stop** from the
+  console: until you start it the slideshow stays **black**, the operator can't drive it, and judges
+  can't score. **Start** is gated — the session must have **judges needed** and a **score range**
+  set, and **all needed judges must have joined** first — and pops a confirmation showing the
+  session and its rules; a strip below the action bar shows **how many judges have joined**. The
+  Scoring page is **locked to the operator's live screen** while judging. (Named presets and a
+  per-judge breakdown on the PDF/archive are planned for a follow-up.)
 - **Randomize a whole session at once**, and a **spread-photographers** option. The Upload /
   Reorder page now has a **🔀 Randomize whole session** button (alongside the per-category one)
   that reshuffles every category's display order in a single click. A new Settings toggle —

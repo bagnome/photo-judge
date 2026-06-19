@@ -118,6 +118,7 @@ function render(){
    $('idlemsg').innerHTML = '<span class="em">' + em + '</span>' + msg; };
 
  if(!state || !state.enabled){ idle('💤', 'Judge scoring is currently turned off.'); return; }
+ if(!state.active){ lastFile = null; idle('⏳', 'Waiting for the scorekeeper to start the session…'); return; }
  if(!state.open){ lastFile = null; idle('⏳', 'Waiting for the next photo…'); return; }
 
  const you = state.you || {};
