@@ -20,6 +20,7 @@
  button:hover{background:#363a42}
  .presets{display:flex;gap:6px;flex-wrap:wrap}
  .presets button.active{background:#2d6cdf;border-color:#2d6cdf}
+ #mediumfilter.hide{display:none}
  #content{padding:14px 16px 48px}
  .empty{color:#777;font-size:14px;padding:28px 0}
  .rangelabel{color:#9aa0a6;font-size:13px;margin:0 0 12px}
@@ -60,14 +61,15 @@
 </head>
 <body>
 <header>Photo Judge — Statistics</header>
-<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any photo in a session — operator-uploaded or member-submitted. Switch to <b>Winners</b> for photos that reached their session's points threshold. Pick a time frame to filter either view.</div>
+<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any <b>photo</b> or <b>physical print</b> in a session. Switch to <b>Winners</b> for entries that reached their session's points threshold, or <b>Compare</b> for digital vs physical. The time frame and the Show filter apply to the Entries and Winners views.</div>
 <div class="tabs">
   <button data-tab="entries" class="active">Entries</button>
   <button data-tab="winners">🏆 Winners</button>
+  <button data-tab="compare">⚖ Compare</button>
 </div>
 <div class="bar">
   <div class="f"><label>Quick range</label>
-    <div class="presets">
+    <div class="presets" id="rangepresets">
       <button data-preset="all">All time</button>
       <button data-preset="ytd">This year</button>
       <button data-preset="12m">Last 12 months</button>
@@ -76,6 +78,13 @@
   <div class="f"><label>From</label><input type="date" id="from"></div>
   <div class="f"><label>To</label><input type="date" id="to"></div>
   <button id="apply">Apply</button>
+  <div class="f" id="mediumfilter"><label>Show</label>
+    <div class="presets">
+      <button data-medium="both" class="active">Both</button>
+      <button data-medium="digital">Digital</button>
+      <button data-medium="physical">Physical</button>
+    </div>
+  </div>
 </div>
 <div id="content"><div class="empty">Loading…</div></div>
 
@@ -94,8 +103,8 @@ const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i
 const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
 const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
 const winCatVal = (s, c) => { const e = (s.winnersByCategory || []).find(x => x.category === c); return e ? e.count : 0; };
-const GOLD = '#c9a23b';
-let activeTab = 'entries', lastData = null;
+const GOLD = '#c9a23b', DIGITAL_C = '#2d6cdf', PHYSICAL_C = '#e0683b';
+let activeTab = 'entries', activeMedium = 'both', lastData = null;
 
 function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
 
@@ -306,16 +315,22 @@ function rangeLabel(d){
 function render(d){
  CATS = d.categories || [];
  // Flag any date shared by 2+ sessions so labels can disambiguate with the session id.
+ // Use the complete session list (compare covers both media) when available.
+ const allSess = (d.compare && d.compare.bySession && d.compare.bySession.length) ? d.compare.bySession : (d.bySession || []);
  const dateCounts = {};
- (d.bySession || []).forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
+ allSess.forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
  DUP_DATES = new Set(Object.keys(dateCounts).filter(k => dateCounts[k] > 1));
- if(activeTab === 'winners') renderWinners(d); else renderEntries(d);
+ if(activeTab === 'compare') renderCompare(d);
+ else if(activeTab === 'winners') renderWinners(d);
+ else renderEntries(d);
 }
+
+const mediumNote = d => d.medium === 'digital' ? ' · digital only' : d.medium === 'physical' ? ' · physical prints only' : '';
 
 function renderEntries(d){
  const t = d.totals || {};
  if(!t.entries){
-   $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>'
+   $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>'
      + '<div class="empty">No entries in this time frame. Add photos to a session, or widen the range.</div>';
    return;
  }
@@ -325,7 +340,7 @@ function renderEntries(d){
  ].map(([l,n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
  const out = [];
- out.push('<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>');
+ out.push('<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>');
  out.push('<div class="cards">' + cards + '</div>');
  out.push(legend());
  out.push('<div class="chart"><h3>Total &amp; category entries per session</h3>'
@@ -401,10 +416,10 @@ function winnerSessionTable(sess){
 
 function renderWinners(d){
  const t = d.totals || {};
- const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d))
-   + ' · a winner is a photo scoring at or above its session\'s threshold</div>';
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d)
+   + ' · a winner is an entry scoring at or above its session\'s threshold</div>';
  if(!t.winners){
-   $('content').innerHTML = head + '<div class="empty">No winning photos in this time frame. '
+   $('content').innerHTML = head + '<div class="empty">No winning entries in this time frame. '
      + 'Winners need a session <b>win threshold</b> (set on Session Management) and scores that reach it.</div>';
    return;
  }
@@ -430,10 +445,70 @@ function renderWinners(d){
  $('content').innerHTML = out.join('');
 }
 
+// Two bars per group (digital vs physical) — used by the Compare tab.
+function chartTwoSeries(items, labelFn, aFn, bFn){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 46;
+ const groupW = 88, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(1, ...items.map(i => Math.max(aFn(i), bFn(i)))));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const gx = padL + i * groupW, bw = 26, gap = 6, totalW = bw * 2 + gap, x0 = gx + (groupW - totalW) / 2;
+   g += rect(x0, yOf(aFn(it)), bw, base - yOf(aFn(it)), DIGITAL_C, null, `${labelFn(it)} · digital: ${aFn(it)}`);
+   g += rect(x0 + bw + gap, yOf(bFn(it)), bw, base - yOf(bFn(it)), PHYSICAL_C, null, `${labelFn(it)} · physical: ${bFn(it)}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, labelFn(it), '', null);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function mediumLegend(){
+ return '<div class="legend">'
+   + `<span class="li"><span class="sw" style="background:${DIGITAL_C}"></span>Digital photos</span>`
+   + `<span class="li"><span class="sw" style="background:${PHYSICAL_C}"></span>Physical prints</span></div>`;
+}
+
+function compareTable(dig, phy){
+ const total = dig.entries + phy.entries, totWin = dig.winners + phy.winners;
+ const rate = (w, e) => e ? (Math.round(1000 * w / e) / 10).toFixed(1) + '%' : '–';
+ const share = e => total ? (100 * e / total).toFixed(1) + '%' : '–';
+ const row = (name, col, m) => `<tr><td><span class="sw-inline" style="background:${col}"></span>${name}</td>`
+   + `<td class="n">${m.entries}</td><td class="n">${share(m.entries)}</td><td class="n">${m.winners}</td><td class="n">${rate(m.winners, m.entries)}</td></tr>`;
+ return '<div class="tablewrap"><h3>Digital vs physical</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Medium</th><th class="n">Entries</th><th class="n">Share</th><th class="n">Winners</th><th class="n">Win rate</th></tr></thead><tbody>'
+   + row('Digital photos', DIGITAL_C, dig) + row('Physical prints', PHYSICAL_C, phy)
+   + '</tbody><tfoot><tr><td>Total</td><td class="n">' + total + '</td><td class="n">100%</td>'
+   + '<td class="n">' + totWin + '</td><td class="n">' + rate(totWin, total) + '</td></tr></tfoot></table></div></div>';
+}
+
+function renderCompare(d){
+ const c = d.compare || {};
+ const dig = c.digital || {entries:0, winners:0}, phy = c.physical || {entries:0, winners:0};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + ' · digital photos vs physical prints</div>';
+ if(!(dig.entries + phy.entries)){
+   $('content').innerHTML = head + '<div class="empty">No entries in this time frame.</div>';
+   return;
+ }
+ const cards = [
+   ['Digital entries', dig.entries], ['Physical entries', phy.entries],
+   ['Digital winners', dig.winners], ['Physical winners', phy.winners],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+ const out = [head, '<div class="cards">' + cards + '</div>', mediumLegend()];
+ out.push('<div class="chart"><h3>Entries by category — digital vs physical</h3>'
+   + '<div class="desc">Two bars per category: digital photos and physical prints.</div>'
+   + chartTwoSeries(c.byCategory || [], it => it.category, it => it.digital, it => it.physical) + '</div>');
+ out.push('<div class="chart"><h3>Entries per session — digital vs physical</h3>'
+   + '<div class="desc">Two bars per session, in date order.</div>'
+   + chartTwoSeries(c.bySession || [], it => sessLabel(it), it => it.digital, it => it.physical) + '</div>');
+ out.push(compareTable(dig, phy));
+ $('content').innerHTML = out.join('');
+}
+
 async function load(){
  const p = new URLSearchParams();
  if($('from').value) p.set('from', $('from').value);
  if($('to').value)   p.set('to', $('to').value);
+ if(activeMedium !== 'both') p.set('medium', activeMedium);
  $('content').innerHTML = '<div class="empty">Loading…</div>';
  try {
    const r = await fetch('/api/stats?' + p.toString());
@@ -445,18 +520,22 @@ async function load(){
  }
 }
 
-// Switch tabs without refetching — the cached payload has both views' data.
+// The medium filter only applies to Entries/Winners; Compare always shows both.
+function syncMediumVisibility(){ $('mediumfilter').classList.toggle('hide', activeTab === 'compare'); }
+
+// Switch tabs without refetching — the cached payload has all three views' data.
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
  activeTab = b.dataset.tab;
  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+ syncMediumVisibility();
  if(lastData) render(lastData);
 });
 
 function setActive(preset){
- document.querySelectorAll('.presets button').forEach(b =>
+ document.querySelectorAll('#rangepresets button').forEach(b =>
    b.classList.toggle('active', b.dataset.preset === preset));
 }
-document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
+document.querySelectorAll('#rangepresets button').forEach(b => b.onclick = () => {
  const today = new Date();
  if(b.dataset.preset === 'all'){ $('from').value = ''; $('to').value = ''; }
  else if(b.dataset.preset === 'ytd'){
@@ -473,11 +552,20 @@ document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
 $('apply').onclick = () => { setActive(''); load(); };
 ['from','to'].forEach(id => $(id).addEventListener('change', () => setActive('')));
 
-// Optional ?tab=winners deep-link (also lets the tab be bookmarked).
-if(new URLSearchParams(location.search).get('tab') === 'winners'){
- activeTab = 'winners';
- document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === 'winners'));
+// Medium filter (Both / Digital / Physical) — refetches with ?medium=.
+document.querySelectorAll('#mediumfilter button').forEach(b => b.onclick = () => {
+ activeMedium = b.dataset.medium;
+ document.querySelectorAll('#mediumfilter button').forEach(x => x.classList.toggle('active', x === b));
+ load();
+});
+
+// Optional ?tab=winners|compare deep-link (also lets the tab be bookmarked).
+const wantTab = new URLSearchParams(location.search).get('tab');
+if(wantTab === 'winners' || wantTab === 'compare'){
+ activeTab = wantTab;
+ document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
 }
+syncMediumVisibility();
 setActive('all');
 load();
 </script>

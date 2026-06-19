@@ -176,9 +176,11 @@ that workflow.
   charts visualise it: a custom **overlaid** chart (a faint per-session total bar with that
   session's categories drawn side by side in front), a **stacked** per-session chart, a
   **category totals** chart, and a **photographer-per-session** chart (one cluster per
-  session, one bar per photographer, stacked by category). The page also has a **Winners**
-  tab (photos that reached their session's threshold) with the same kind of cards, tables,
-  and charts. Standard-library only — no charting library.
+  session, one bar per photographer, stacked by category). Entries include **physical
+  prints** as well as digital photos, with a **Show** filter (Both / Digital / Physical). A
+  **Winners** tab covers entries that reached their session's threshold (same kind of cards,
+  tables, and charts), and a **Compare** tab puts digital vs physical side by side.
+  Standard-library only — no charting library.
 - **Session Management** — a per-session settings page (in the operator nav) with the
   session's **date & description**, its **scoring** settings (win threshold + total points,
   default 11 of 15), and the per-session **category** manager. It opens to the session

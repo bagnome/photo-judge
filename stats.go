@@ -50,9 +50,35 @@ type statsTotals struct {
 	WinningPhotographers int `json:"winningPhotographers"`
 }
 
+// mediumStat is a digital-or-physical tally. compareCat/compareSession hold the
+// digital-vs-physical split for the Compare tab's side-by-side charts.
+type mediumStat struct {
+	Entries int `json:"entries"`
+	Winners int `json:"winners"`
+}
+type compareCat struct {
+	Category string `json:"category"`
+	Digital  int    `json:"digital"`
+	Physical int    `json:"physical"`
+}
+type compareSession struct {
+	ID          string `json:"id"`
+	Date        string `json:"date"`
+	Description string `json:"description,omitempty"`
+	Digital     int    `json:"digital"`
+	Physical    int    `json:"physical"`
+}
+type compareStats struct {
+	Digital    mediumStat       `json:"digital"`
+	Physical   mediumStat       `json:"physical"`
+	ByCategory []compareCat     `json:"byCategory"` // entries per category, digital vs physical
+	BySession  []compareSession `json:"bySession"`  // entries per session, digital vs physical
+}
+
 type statsResult struct {
 	From                  string             `json:"from"` // requested range bounds ("" = open)
 	To                    string             `json:"to"`
+	Medium                string             `json:"medium"`     // "" (both) | "digital" | "physical" — the active filter
 	Categories            []string           `json:"categories"` // stable union order → shared chart colors/legend
 	Totals                statsTotals        `json:"totals"`
 	ByCategory            []catCount         `json:"byCategory"`
@@ -60,13 +86,30 @@ type statsResult struct {
 	ByPhotographer        []photographerStat `json:"byPhotographer"` // count desc, Unattributed last
 	WinnersByCategory     []catCount         `json:"winnersByCategory"`
 	WinnersByPhotographer []photographerStat `json:"winnersByPhotographer"`
+	// Compare always covers BOTH media regardless of the Medium filter, for the side-by-side view.
+	Compare compareStats `json:"compare"`
+}
+
+// mediumMatch reports whether a record (physical or not) passes the medium filter
+// ("" / "both" = everything).
+func mediumMatch(physical bool, medium string) bool {
+	switch medium {
+	case "digital":
+		return !physical
+	case "physical":
+		return physical
+	default:
+		return true
+	}
 }
 
 // handleStats serves the aggregated statistics JSON. Optional from/to query params
-// (YYYY-MM-DD) bound the session dates included; either may be omitted for an open end.
+// (YYYY-MM-DD) bound the session dates; medium ("digital"/"physical"/"both") filters
+// which entries the main aggregates count (the Compare block always covers both).
 func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 	from := strings.TrimSpace(r.URL.Query().Get("from"))
 	to := strings.TrimSpace(r.URL.Query().Get("to"))
+	medium := strings.TrimSpace(r.URL.Query().Get("medium"))
 	if from != "" && !validDate(from) {
 		http.Error(w, "bad from date", http.StatusBadRequest)
 		return
@@ -75,8 +118,15 @@ func (s *server) handleStats(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad to date", http.StatusBadRequest)
 		return
 	}
+	if medium == "both" {
+		medium = ""
+	}
+	if medium != "" && medium != "digital" && medium != "physical" {
+		http.Error(w, "bad medium", http.StatusBadRequest)
+		return
+	}
 	s.mu.Lock()
-	res := s.computeStats(from, to)
+	res := s.computeStats(from, to, medium)
 	s.mu.Unlock()
 	writeJSON(w, res)
 }
@@ -89,12 +139,13 @@ type phAgg struct {
 	byCat   map[string]int
 }
 
-// photoRec is one counted entry: which category it's in, who shot it, and whether its
-// score reached the session's win threshold.
+// photoRec is one counted entry: its category, who shot it, whether its score reached
+// the session's win threshold, and whether it's a physical print (vs a digital photo).
 type photoRec struct {
 	category     string
 	photographer string
 	win          bool
+	physical     bool
 }
 
 // rawSession is a date-placed session (live or archived) reduced to its photos, so
@@ -186,18 +237,22 @@ func sortPhotographers(m map[string]*phAgg) []photographerStat {
 
 // computeStats tallies entries by category, by session, and by photographer across
 // every session — live AND archived — whose Date falls within [from,to] (inclusive;
-// blank bound = open). Archived sessions have no image files left on disk, so their
-// counts come from the saved archive metadata. Assumes s.mu is held.
-func (s *server) computeStats(from, to string) statsResult {
+// blank bound = open). Entries are digital photos AND physical prints; the medium
+// filter ("digital"/"physical"/"" = both) narrows the main aggregates, while the
+// Compare block always covers both. Archived sessions have no image files left on
+// disk, so their counts come from the saved archive metadata. Assumes s.mu is held.
+func (s *server) computeStats(from, to, medium string) statsResult {
 	res := statsResult{
 		From:                  from,
 		To:                    to,
+		Medium:                medium,
 		Categories:            []string{},
 		ByCategory:            []catCount{},
 		BySession:             []sessionStat{},
 		ByPhotographer:        []photographerStat{},
 		WinnersByCategory:     []catCount{},
 		WinnersByPhotographer: []photographerStat{},
+		Compare:               compareStats{ByCategory: []compareCat{}, BySession: []compareSession{}},
 	}
 
 	// Reduce every in-range session (live + archived) to its photos.
@@ -223,6 +278,9 @@ func (s *server) computeStats(from, to string) statsResult {
 				}
 			}
 		}
+		for _, p := range s.loadPhysical(ss.ID) {
+			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer, win: ss.isWinner(p.Score), physical: true})
+		}
 		raw = append(raw, rs)
 	}
 	for _, a := range s.loadArchives() {
@@ -232,6 +290,9 @@ func (s *server) computeStats(from, to string) statsResult {
 		rs := rawSession{id: a.SessionID, date: a.Date, desc: a.Description}
 		for _, p := range a.Photos {
 			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer, win: scoreWins(a.WinThreshold, p.Score)})
+		}
+		for _, p := range a.PhysicalPrints {
+			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer, win: scoreWins(a.WinThreshold, p.Score), physical: true})
 		}
 		raw = append(raw, rs)
 	}
@@ -247,6 +308,8 @@ func (s *server) computeStats(from, to string) statsResult {
 	photographers := map[string]*phAgg{}
 	winCatTotals := map[string]int{}
 	winPhotographers := map[string]*phAgg{}
+	compDigCat := map[string]int{} // Compare accumulators — always both media.
+	compPhyCat := map[string]int{}
 
 	for _, rs := range raw {
 		if len(rs.photos) == 0 {
@@ -255,8 +318,28 @@ func (s *server) computeStats(from, to string) statsResult {
 		sessCat := map[string]int{}
 		sessPh := map[string]*phAgg{}
 		sessWinCat := map[string]int{}
-		winners := 0
+		winners, filtered, cDig, cPhy := 0, 0, 0, 0
 		for _, pr := range rs.photos {
+			// Compare counters count every record, ignoring the medium filter.
+			if pr.physical {
+				cPhy++
+				compPhyCat[pr.category]++
+				res.Compare.Physical.Entries++
+				if pr.win {
+					res.Compare.Physical.Winners++
+				}
+			} else {
+				cDig++
+				compDigCat[pr.category]++
+				res.Compare.Digital.Entries++
+				if pr.win {
+					res.Compare.Digital.Winners++
+				}
+			}
+			if !mediumMatch(pr.physical, medium) {
+				continue
+			}
+			filtered++
 			catTotals[pr.category]++
 			sessCat[pr.category]++
 			upsertPhoto(photographers, pr.photographer, pr.category)
@@ -268,14 +351,20 @@ func (s *server) computeStats(from, to string) statsResult {
 				upsertPhoto(winPhotographers, pr.photographer, pr.category)
 			}
 		}
-		sc := sessionStat{ID: rs.id, Date: rs.date, Description: rs.desc, Total: len(rs.photos), Winners: winners}
+		if cDig+cPhy > 0 {
+			res.Compare.BySession = append(res.Compare.BySession, compareSession{ID: rs.id, Date: rs.date, Description: rs.desc, Digital: cDig, Physical: cPhy})
+		}
+		if filtered == 0 {
+			continue // the chosen medium has nothing in this session
+		}
+		sc := sessionStat{ID: rs.id, Date: rs.date, Description: rs.desc, Total: filtered, Winners: winners}
 		// Session category breakdown, ordered by count then name (charts/table look up
 		// by name, so this order is just for tidiness).
 		sc.ByCategory = sortedCatCounts(sessCat)
 		sc.WinnersByCategory = sortedCatCounts(sessWinCat)
 		sc.ByPhotographer = sortPhotographers(sessPh)
 		res.BySession = append(res.BySession, sc)
-		res.Totals.Entries += len(rs.photos)
+		res.Totals.Entries += filtered
 		res.Totals.Winners += winners
 		res.Totals.Sessions++
 	}
@@ -314,6 +403,30 @@ func (s *server) computeStats(from, to string) statsResult {
 		if k != unattributedKey {
 			res.Totals.WinningPhotographers++
 		}
+	}
+
+	// Compare-by-category: digital vs physical entries per category, ordered by combined
+	// total (both media), so it's complete regardless of the medium filter.
+	compTotal := map[string]int{}
+	for c, n := range compDigCat {
+		compTotal[c] += n
+	}
+	for c, n := range compPhyCat {
+		compTotal[c] += n
+	}
+	compOrder := make([]string, 0, len(compTotal))
+	for c := range compTotal {
+		compOrder = append(compOrder, c)
+	}
+	sort.Slice(compOrder, func(i, j int) bool {
+		a, b := compOrder[i], compOrder[j]
+		if compTotal[a] != compTotal[b] {
+			return compTotal[a] > compTotal[b]
+		}
+		return a < b
+	})
+	for _, c := range compOrder {
+		res.Compare.ByCategory = append(res.Compare.ByCategory, compareCat{Category: c, Digital: compDigCat[c], Physical: compPhyCat[c]})
 	}
 
 	return res

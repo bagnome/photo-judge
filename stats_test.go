@@ -77,7 +77,7 @@ func TestStatsAllTime(t *testing.T) {
 	catA, catB := statsFixture(t, s)
 
 	s.mu.Lock()
-	res := s.computeStats("", "")
+	res := s.computeStats("", "", "")
 	s.mu.Unlock()
 
 	if res.Totals.Entries != 9 || res.Totals.Sessions != 3 || res.Totals.Categories != 2 || res.Totals.Photographers != 3 {
@@ -140,7 +140,7 @@ func TestStatsDateFilter(t *testing.T) {
 	}
 	for _, c := range cases {
 		s.mu.Lock()
-		res := s.computeStats(c.from, c.to)
+		res := s.computeStats(c.from, c.to, "")
 		s.mu.Unlock()
 		if res.Totals.Entries != c.entries || res.Totals.Sessions != c.sessions {
 			t.Fatalf("range [%s..%s]: entries=%d sessions=%d, want %d/%d",
@@ -190,7 +190,7 @@ func TestStatsIncludesArchives(t *testing.T) {
 	})
 
 	s.mu.Lock()
-	all := s.computeStats("", "")
+	all := s.computeStats("", "", "")
 	s.mu.Unlock()
 
 	// Archived 3 entries fold into the all-time totals (9 + 3 = 12, 4 sessions).
@@ -208,7 +208,7 @@ func TestStatsIncludesArchives(t *testing.T) {
 
 	// A range that excludes the archive year leaves the live total untouched.
 	s.mu.Lock()
-	since2025 := s.computeStats("2025-01-01", "")
+	since2025 := s.computeStats("2025-01-01", "", "")
 	s.mu.Unlock()
 	if since2025.Totals.Entries != 9 {
 		t.Fatalf("since 2025 entries = %d want 9 (archive excluded)", since2025.Totals.Entries)
@@ -246,7 +246,7 @@ func TestStatsWinners(t *testing.T) {
 	setScore(dir, "d.jpg", "HM") // non-numeric never wins
 
 	s.mu.Lock()
-	res := s.computeStats("", "")
+	res := s.computeStats("", "", "")
 	s.mu.Unlock()
 
 	if res.Totals.Winners != 2 {
@@ -268,13 +268,68 @@ func TestStatsWinners(t *testing.T) {
 	// Clearing the threshold removes all winners (entries are unchanged).
 	s.mu.Lock()
 	ss.WinThreshold = nil
-	res2 := s.computeStats("", "")
+	res2 := s.computeStats("", "", "")
 	s.mu.Unlock()
 	if res2.Totals.Winners != 0 {
 		t.Fatalf("winners after clearing threshold = %d want 0", res2.Totals.Winners)
 	}
 	if res2.Totals.Entries != 4 {
 		t.Fatalf("entries = %d want 4", res2.Totals.Entries)
+	}
+}
+
+func TestStatsMediumAndCompare(t *testing.T) {
+	s := newTestServer(t)
+	ss, err := s.createSession("2026-03-01", "Spring")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat := ss.Categories[0]
+	// 2 digital photos (one a winner), 3 physical prints (two winners).
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "a.jpg", "Alice Smith")
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "b.jpg", "Bob Jones")
+	dir := s.photosDir(ss.ID, cat, "Landscape")
+	setScore(dir, "a.jpg", "12") // digital winner
+	setScore(dir, "b.jpg", "7")
+	if err := s.savePhysical(ss.ID, []PhysicalPrint{
+		{Category: cat, Title: "P1", Photographer: "Carol Lee", Score: "13"}, // physical winner
+		{Category: cat, Title: "P2", Photographer: "Carol Lee", Score: "11"}, // physical winner (boundary)
+		{Category: cat, Title: "P3", Photographer: "Dan Ray", Score: "9"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	get := func(medium string) statsResult {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.computeStats("", "", medium)
+	}
+
+	both := get("")
+	if both.Totals.Entries != 5 || both.Totals.Winners != 3 {
+		t.Fatalf("both: entries=%d winners=%d want 5/3", both.Totals.Entries, both.Totals.Winners)
+	}
+	dig := get("digital")
+	if dig.Totals.Entries != 2 || dig.Totals.Winners != 1 {
+		t.Fatalf("digital: entries=%d winners=%d want 2/1", dig.Totals.Entries, dig.Totals.Winners)
+	}
+	phy := get("physical")
+	if phy.Totals.Entries != 3 || phy.Totals.Winners != 2 {
+		t.Fatalf("physical: entries=%d winners=%d want 3/2", phy.Totals.Entries, phy.Totals.Winners)
+	}
+
+	// Compare block is identical regardless of the filter (always both media).
+	for _, r := range []statsResult{both, dig, phy} {
+		if r.Compare.Digital.Entries != 2 || r.Compare.Digital.Winners != 1 ||
+			r.Compare.Physical.Entries != 3 || r.Compare.Physical.Winners != 2 {
+			t.Fatalf("compare totals = %+v / %+v want dig 2/1, phy 3/2", r.Compare.Digital, r.Compare.Physical)
+		}
+		if len(r.Compare.ByCategory) != 1 || r.Compare.ByCategory[0].Digital != 2 || r.Compare.ByCategory[0].Physical != 3 {
+			t.Fatalf("compare byCategory = %+v", r.Compare.ByCategory)
+		}
+		if len(r.Compare.BySession) != 1 || r.Compare.BySession[0].Digital != 2 || r.Compare.BySession[0].Physical != 3 {
+			t.Fatalf("compare bySession = %+v", r.Compare.BySession)
+		}
 	}
 }
 
@@ -294,7 +349,7 @@ func TestStatsArchivedWinners(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.mu.Lock()
-	res := s.computeStats("", "")
+	res := s.computeStats("", "", "")
 	s.mu.Unlock()
 	if res.Totals.Winners != 1 || res.Totals.Entries != 2 {
 		t.Fatalf("archived: winners=%d entries=%d want 1/2", res.Totals.Winners, res.Totals.Entries)

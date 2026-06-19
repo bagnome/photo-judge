@@ -23,6 +23,11 @@ not yet released.
     (winning entries, win rate, winning photographers), and winners **by photographer**, **by
     category**, and **per session** (tables + charts). Archived sessions are included via the
     threshold saved at archive time. Tabs are deep-linkable (`/stats?tab=winners`).
+  - **Digital + physical, and a Compare tab.** Statistics now counts **physical prints** as
+    entries alongside digital photos, with a **Show** filter (Both / Digital / Physical) on the
+    Entries and Winners views, and a third **Compare** tab (`/stats?tab=compare`) putting digital
+    vs physical side by side (summary cards, grouped per-category and per-session bar charts, and
+    a win-rate table).
   - A **🏆 badge** marks winning photos on the **Upload / Reorder** grid and the **Scoring**
     page (which also shows the score is out of the session's total points).
   - The **archive** records each session's threshold, flags winning photos (and prints) with
