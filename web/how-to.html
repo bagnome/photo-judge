@@ -109,6 +109,8 @@ const GUIDES = [
      body:'Drag <b>JPG / PNG</b> files onto the drop zone (or click it to browse). Each photo is sorted into <b>Landscape</b> or <b>Portrait</b> automatically by its shape, under the category you picked.' },
    { title:'Set the viewing order',
      body:'Drag the thumbnails to arrange them within each orientation — this is the order the judges will see. On a phone or tablet, drag by the <b>⠿</b> grip on each photo.' },
+   { title:'Randomize the order (optional)',
+     body:'For unbiased judging you can shuffle the photos: click <b>🔀 Randomize order now</b> to reshuffle the current category’s order, or switch on <b>Random order on upload</b> so newly added photos drop into <b>random positions</b> instead of going on the end. The toggle is remembered on this device.' },
    { title:'Note the photographers',
      body:'Type a <b>photographer</b> name under each photo. It shows on the Scoring page and is pre-filled into the score sheet.' },
    { title:'Fill names & titles from photo metadata (optional)',
@@ -117,6 +119,25 @@ const GUIDES = [
      body:'The <b>✕</b> on a photo moves it to <code>photos\\_deleted</code> — recoverable on disk, not gone for good.' },
   ],
   note:'Photos belong to the selected session and category; switch either at the top to manage a different group. They’re only shown to judges when you Load that category onto a screen, so you can add them well ahead of the night.'
+ },
+ {
+  id:'member-entries', icon:'📲', title:'Member entries',
+  intro:'Let competitors add their own photos at the last minute from their phones. You show a QR code on a screen; they scan it, enter their name, and upload — then you approve each entry (or have them added automatically).',
+  steps:[
+   { title:'Turn on member entries',
+     body:'On the <b>⚙️ Settings</b> page, switch on <b>Enable member entries</b>. While you’re there you can set the optional <b>limits</b> (total per competitor, and per category — leave a box <b>Unlimited</b> for no cap), the <b>Wi-Fi</b> name and password to show competitors (leave blank to use the host computer’s current Wi-Fi automatically), and whether to <b>require approval</b> (see step 5).' },
+   { title:'Select the session to collect into',
+     body:'On the console, pick the session in the <b>Session</b> menu. Entries lock to whichever session is selected at the moment you open the form (next step), and keep going to it even if you change the menu afterward.' },
+   { title:'Show the entry QR on a screen',
+     body:'On a screen’s row, set its <b>Type</b> dropdown to <b>Entry QR</b>. That monitor then shows how to join the Wi-Fi plus a QR code (and web address) for the entry page, and the form opens for the selected session. Devices need <b>LAN access</b> turned on to connect — see <b>Enable LAN access</b>.' },
+   { title:'What competitors do',
+     body:'A competitor joins the shown <b>Wi-Fi</b>, scans the QR (or types the address), enters their <b>first and last name</b>, then adds entries — each is one photo with a <b>category</b> and a <b>title</b>. They see their submissions with a live status (Awaiting review / Accepted / Rejected) and can edit, replace, or remove one until it’s accepted.' },
+   { title:'Review the entries',
+     body:'Click <b>🛂 Review entries</b> on the console (the badge shows how many are waiting). For each one you see the photo, competitor and category — click <b>Approve</b> to sort it into the right category and orientation (then reorder it like any photo), or <b>Reject</b>. If you turned <b>Require approval</b> off in Settings, submissions are added straight into the session and skip this step.' },
+   { title:'Close the form when you’re done',
+     body:'Click <b>Close Entry Form</b> on the screen’s row to stop accepting entries. You can reopen it later, or switch the screen’s Type back to <b>Slideshow</b> to present photos on that monitor again.' },
+  ],
+  note:'Limits count every photo by a photographer’s name for the whole session — including ones you added yourself — so the same name can’t go over by using another device. The <b>Enable member entries</b> switch turns the whole feature off at once.'
  },
  {
   id:'scoring', icon:'🏆', title:'Score keeping',
