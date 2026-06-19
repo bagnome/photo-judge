@@ -107,9 +107,10 @@ that workflow.
   (`sunset.jpg` → `sunset (2).jpg`), other files skipped; drag thumbnails within a
   section to set display order (saved to `order.json`); remove a photo with an ×
   (recoverable soft-delete); and a per-photo text box to record the
-  **photographer's name** (saved to `names.json`). A **🔀 Randomize order** button shuffles
-  each orientation's display order, and a **Random order on upload** toggle scatters newly
-  uploaded photos into random positions — both useful for unbiased judging.
+  **photographer's name** (saved to `names.json`). Randomize the display order for **one
+  category** or the **whole session** in a click, with an optional **Spread photographers**
+  setting that keeps the same photographer's photos apart; a **Random order on upload** toggle
+  scatters newly uploaded photos into random positions — all useful for unbiased judging.
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
   appear before you choose one). Auto-placed on a chosen monitor via the Window
@@ -354,6 +355,7 @@ new sessions — copy to the local drive for an event).
 | `web/score.html` | Scoring page (follow a screen, record scores; drives solo operator mode) |
 | `solo.go` | Solo operator mode — segment sequencing + screen driving (start/advance/back/stop) |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
+| `randomize.go` | Randomize photo order (one category or whole session) + the spread-photographers shuffle |
 | `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |
 | `web/stats.html` | Statistics page (time-frame filter, tables, hand-drawn SVG charts) |
 | `web/how-to.html` | How To page — tabbed step-by-step guides (Getting started is the first tab) |
