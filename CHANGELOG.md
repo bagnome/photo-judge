@@ -14,6 +14,12 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Randomize a whole session at once**, and a **spread-photographers** option. The Upload /
+  Reorder page now has a **🔀 Randomize whole session** button (alongside the per-category one)
+  that reshuffles every category's display order in a single click. A new Settings toggle —
+  **Spread photographers when randomizing** — makes the shuffle try to keep the same
+  photographer's photos from landing next to each other (when the mix allows). Both randomize
+  buttons run on the server and honor the setting.
 - **Solo operator mode.** When only one person is available, they can run the whole night from
   the **Scoring page**: a single **Advance** button steps the live output forward
   (title → photos → end card), then **auto-switches to the other orientation's monitor** for the

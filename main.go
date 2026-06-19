@@ -2160,6 +2160,7 @@ func main() {
 	mux.HandleFunc("/api/logo", s.handleLogo)
 	mux.HandleFunc("/api/upload", s.handleUpload)
 	mux.HandleFunc("/api/order", s.handleOrderSet)
+	mux.HandleFunc("/api/order/randomize", s.handleOrderRandomize)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
 	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
 	mux.HandleFunc("/api/photo/score", s.handlePhotoScore)

@@ -79,6 +79,13 @@
       </div>
       <label class="sw"><input type="checkbox" id="singleLiveScreen"><span class="sl"></span></label>
     </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Spread photographers when randomizing</div>
+        <div class="d">When you randomize photo order on the Upload / Reorder page, try to keep the same photographer's photos from landing next to each other (when the mix allows).</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="spreadPhotographers"><span class="sl"></span></label>
+    </div>
   </div>
 
   <div class="card">
@@ -185,7 +192,7 @@ const $ = id => document.getElementById(id);
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const enc = encodeURIComponent;
-const TOGGLES = ['lockScorekeeper','singleLiveScreen','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
+const TOGGLES = ['lockScorekeeper','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
 let state = null; // last GET response
 
 function toast(msg, kind){
@@ -201,6 +208,7 @@ function collect(){
  return {
    lockScorekeeper: $('lockScorekeeper').checked,
    singleLiveScreen: $('singleLiveScreen').checked,
+   spreadPhotographers: $('spreadPhotographers').checked,
    activeLogo: state ? state.settings.activeLogo : '',
    pdfHeader: $('pdfHeader').value,
    lanAccess: $('lanAccess').checked,
@@ -228,6 +236,7 @@ function apply(st){
  const s = st.settings;
  $('lockScorekeeper').checked = s.lockScorekeeper;
  $('singleLiveScreen').checked = s.singleLiveScreen;
+ $('spreadPhotographers').checked = s.spreadPhotographers;
  $('lanAccess').checked = s.lanAccess;
  $('importPhotographer').checked = s.importPhotographer;
  $('importTitle').checked = s.importTitle;

@@ -101,8 +101,9 @@
     <label class="rndtog" title="New photos are dropped in at random positions instead of added to the end">
       <input type="checkbox" id="randomUpload"> Random order on upload
     </label>
-    <button id="randomizebtn">🔀 Randomize order now</button>
-    <span class="d">Shuffles each orientation's order — handy for unbiased judging.</span>
+    <button id="randomizebtn">🔀 Randomize this category</button>
+    <button id="randomizesessionbtn">🔀 Randomize whole session</button>
+    <span class="d">Shuffles the display order — handy for unbiased judging. Spread photographers in <b>Settings</b>.</span>
   </div>
 
   <div class="sec">
@@ -325,12 +326,6 @@ async function saveOrder(orient, silent){
  return r.ok;
 }
 
-// Fisher–Yates shuffle, in place.
-function shuffle(a){
- for(let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
- return a;
-}
-
 // scatterNew drops just-uploaded files into random positions among the existing order
 // (existing photos keep their relative order). Used when "Random order on upload" is on.
 function scatterNew(orient, newFiles){
@@ -340,16 +335,28 @@ function scatterNew(orient, newFiles){
  sect[orient].files = base;
 }
 
-// randomizeAll shuffles every orientation's order for the current category and saves.
+// randomizeAll shuffles the current category (both orientations) on the server, which
+// honors the "spread photographers" Setting, then refreshes the grid.
 async function randomizeAll(){
- if(!ctx().category){ pjAlert('Pick a category first.'); return; }
+ const c = ctx();
+ if(!c.category){ pjAlert('Pick a category first.'); return; }
  const total = ORIENTS.reduce((n, o) => n + sect[o].files.length, 0);
  if(total < 2){ toast('Add at least two photos to randomize.'); return; }
- let ok = true;
- for(const o of ORIENTS){
-   if(sect[o].files.length > 1){ shuffle(sect[o].files); renderSection(o); ok = (await saveOrder(o, true)) && ok; }
- }
- toast(ok ? '🔀 Order randomized' : 'Could not save randomized order', ok ? '' : 'del');
+ const r = await post('/api/order/randomize', {session:c.session, category:c.category});
+ if(!r.ok){ toast('Could not randomize: '+(await r.text()), 'del'); return; }
+ await refreshGrid();
+ toast('🔀 Category order randomized');
+}
+
+// randomizeSession shuffles EVERY category in the session in one click.
+async function randomizeSession(){
+ const c = ctx();
+ if(!c.session){ pjAlert('Select a session first.'); return; }
+ if(!await pjConfirm('Randomize the photo order of every category in this session?', {title:'Randomize whole session', okLabel:'Randomize'})) return;
+ const r = await post('/api/order/randomize', {session:c.session});
+ if(!r.ok){ toast('Could not randomize: '+(await r.text()), 'del'); return; }
+ await refreshGrid();
+ toast('🔀 Whole session randomized');
 }
 
 async function savePhotographer(orient, fn, input){
@@ -431,6 +438,7 @@ $('randomUpload').addEventListener('change', () => {
  try { localStorage.setItem('pj-random-upload', $('randomUpload').checked ? '1' : '0'); } catch(_){}
 });
 $('randomizebtn').onclick = randomizeAll;
+$('randomizesessionbtn').onclick = randomizeSession;
 
 const drop = $('drop'), fi = $('fileinput');
 drop.onclick = () => fi.click();
