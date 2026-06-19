@@ -8,6 +8,10 @@
  body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
  header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
  .intro{color:#8a9099;font-size:13px;padding:10px 16px 0;line-height:1.5}
+ .tabs{display:flex;gap:6px;padding:10px 16px 0}
+ .tabs button{font-size:14px;font-weight:600;padding:8px 18px;background:#23262c;color:#c9ccd1;border:1px solid #3a3e45;border-radius:6px;cursor:pointer}
+ .tabs button:hover{background:#2a2e35}
+ .tabs button.active{background:#2d6cdf;border-color:#2d6cdf;color:#fff}
  .bar{padding:12px 16px;display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap;border-bottom:1px solid #333}
  .f{display:flex;flex-direction:column;gap:4px}
  .f label{color:#9aa0a6;font-size:12px}
@@ -56,7 +60,11 @@
 </head>
 <body>
 <header>Photo Judge — Statistics</header>
-<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any photo in a session — operator-uploaded or member-submitted. Pick a time frame to see totals, a per-session and per-category breakdown, and who entered the most.</div>
+<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any photo in a session — operator-uploaded or member-submitted. Switch to <b>Winners</b> for photos that reached their session's points threshold. Pick a time frame to filter either view.</div>
+<div class="tabs">
+  <button data-tab="entries" class="active">Entries</button>
+  <button data-tab="winners">🏆 Winners</button>
+</div>
 <div class="bar">
   <div class="f"><label>Quick range</label>
     <div class="presets">
@@ -85,6 +93,9 @@ let CATS = [];
 const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
 const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
 const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const winCatVal = (s, c) => { const e = (s.winnersByCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const GOLD = '#c9a23b';
+let activeTab = 'entries', lastData = null;
 
 function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
 
@@ -257,29 +268,31 @@ function sessionTable(sess){
    + heads.join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody>' + foot + '</table></div></div>';
 }
 
-function categoryTable(byCat, grand){
+function categoryTable(byCat, grand, noun){
  if(!byCat.length) return '';
+ noun = noun || 'Entries';
  const rows = byCat.map(c => {
    const pct = grand ? (100 * c.count / grand) : 0;
    return `<tr><td><span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)}</td>`
      + `<td class="n">${c.count}</td><td class="n">${pct.toFixed(1)}%</td></tr>`;
  });
- return '<div class="tablewrap"><h3>Entries by category</h3><div class="tcard"><table>'
-   + '<thead><tr><th>Category</th><th class="n">Entries</th><th class="n">Share</th></tr></thead>'
+ return '<div class="tablewrap"><h3>' + noun + ' by category</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Category</th><th class="n">' + noun + '</th><th class="n">Share</th></tr></thead>'
    + '<tbody>' + rows.join('') + '</tbody>'
    + `<tfoot><tr><td>Total</td><td class="n">${grand}</td><td class="n">100%</td></tr></tfoot>`
    + '</table></div></div>';
 }
 
-function photographerTable(byPh){
+function photographerTable(byPh, noun){
  if(!byPh.length) return '';
+ noun = noun || 'Entries';
  const rows = byPh.map(p => {
    const breakdown = (p.byCategory || []).map(c =>
      `<span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)} ${c.count}`).join('&nbsp;&nbsp; ') || '<span class="muted">–</span>';
    return `<tr><td>${esc(p.name)}</td><td class="n">${p.count}</td><td>${breakdown}</td></tr>`;
  });
- return '<div class="tablewrap"><h3>Entries by photographer</h3><div class="tcard"><table>'
-   + '<thead><tr><th>Photographer</th><th class="n">Entries</th><th>By category</th></tr></thead>'
+ return '<div class="tablewrap"><h3>' + noun + ' by photographer</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Photographer</th><th class="n">' + noun + '</th><th>By category</th></tr></thead>'
    + '<tbody>' + rows.join('') + '</tbody></table></div></div>';
 }
 
@@ -296,6 +309,10 @@ function render(d){
  const dateCounts = {};
  (d.bySession || []).forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
  DUP_DATES = new Set(Object.keys(dateCounts).filter(k => dateCounts[k] > 1));
+ if(activeTab === 'winners') renderWinners(d); else renderEntries(d);
+}
+
+function renderEntries(d){
  const t = d.totals || {};
  if(!t.entries){
    $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + '</div>'
@@ -329,6 +346,90 @@ function render(d){
  $('content').innerHTML = out.join('');
 }
 
+// A plain vertical bar chart over a list of {label, count}, one colour.
+function chartValueBars(items, fill){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 50;
+ const groupW = 92, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...items.map(i => i.count)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const bw = Math.min(groupW - 22, 50), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   g += rect(x0, yOf(it.count), bw, base - yOf(it.count), fill, null, `${it.label}: ${it.count}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, it.label, '', `${it.label}: ${it.count}`);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Winners per session, stacked by category (only sessions that had winners).
+function chartWinnersPerSession(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
+ const groupW = 84, plotW = rows.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...rows.map(s => s.winners)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ rows.forEach((s, i) => {
+   const bw = Math.min(groupW - 16, 48), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   let acc = 0;
+   CATS.forEach(c => {
+     const v = winCatVal(s, c);
+     if(v <= 0) return;
+     g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
+     acc += v;
+   });
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function winnerSessionTable(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const heads = ['<th>Session</th>', '<th class="n">Winners</th>'].concat(CATS.map(c =>
+   `<th class="n"><span class="sw-inline" style="background:${colorFor(c)}"></span>${esc(c)}</th>`));
+ const body = rows.map(s => {
+   const cells = CATS.map(c => { const v = winCatVal(s, c); return `<td class="n">${v || '<span class="muted">–</span>'}</td>`; });
+   const idTag = DUP_DATES.has(s.date) ? ` <span class="muted">#${esc(s.id)}</span>` : '';
+   return `<tr><td>${esc(s.date)}${idTag}</td><td class="n">${s.winners}</td>${cells.join('')}</tr>`;
+ });
+ return '<div class="tablewrap"><h3>Winners by session</h3><div class="tcard"><table><thead><tr>'
+   + heads.join('') + '</tr></thead><tbody>' + body.join('') + '</tbody></table></div></div>';
+}
+
+function renderWinners(d){
+ const t = d.totals || {};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d))
+   + ' · a winner is a photo scoring at or above its session\'s threshold</div>';
+ if(!t.winners){
+   $('content').innerHTML = head + '<div class="empty">No winning photos in this time frame. '
+     + 'Winners need a session <b>win threshold</b> (set on Session Management) and scores that reach it.</div>';
+   return;
+ }
+ const winRate = t.entries ? Math.round(1000 * t.winners / t.entries) / 10 : 0;
+ const cards = [
+   ['Winning entries', t.winners], ['Win rate', winRate + '%'],
+   ['Winning photographers', t.winningPhotographers], ['Sessions', t.sessions],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+ const out = [head, '<div class="cards">' + cards + '</div>', legend()];
+ out.push('<div class="chart"><h3>Winners by photographer</h3>'
+   + '<div class="desc">Who has photos eligible for the annual competition.</div>'
+   + chartValueBars((d.winnersByPhotographer || []).map(p => ({label: p.name, count: p.count})), GOLD) + '</div>');
+ out.push('<div class="chart"><h3>Winners by category</h3>'
+   + '<div class="desc">Winning photos per category across the time frame.</div>'
+   + chartCategories(d.winnersByCategory) + '</div>');
+ out.push('<div class="chart"><h3>Winners per session</h3>'
+   + '<div class="desc">Each bar is a session; segments are its winning photos by category.</div>'
+   + chartWinnersPerSession(d.bySession) + '</div>');
+ out.push(photographerTable(d.winnersByPhotographer, 'Winners'));
+ out.push(categoryTable(d.winnersByCategory, t.winners, 'Winners'));
+ out.push(winnerSessionTable(d.bySession));
+ $('content').innerHTML = out.join('');
+}
+
 async function load(){
  const p = new URLSearchParams();
  if($('from').value) p.set('from', $('from').value);
@@ -337,11 +438,19 @@ async function load(){
  try {
    const r = await fetch('/api/stats?' + p.toString());
    if(!r.ok) throw new Error(await r.text());
-   render(await r.json());
+   lastData = await r.json();
+   render(lastData);
  } catch(e){
    $('content').innerHTML = '<div class="empty">Could not load statistics. ' + esc(e.message || '') + '</div>';
  }
 }
+
+// Switch tabs without refetching — the cached payload has both views' data.
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+ activeTab = b.dataset.tab;
+ document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+ if(lastData) render(lastData);
+});
 
 function setActive(preset){
  document.querySelectorAll('.presets button').forEach(b =>
@@ -364,6 +473,11 @@ document.querySelectorAll('.presets button').forEach(b => b.onclick = () => {
 $('apply').onclick = () => { setActive(''); load(); };
 ['from','to'].forEach(id => $(id).addEventListener('change', () => setActive('')));
 
+// Optional ?tab=winners deep-link (also lets the tab be bookmarked).
+if(new URLSearchParams(location.search).get('tab') === 'winners'){
+ activeTab = 'winners';
+ document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === 'winners'));
+}
 setActive('all');
 load();
 </script>

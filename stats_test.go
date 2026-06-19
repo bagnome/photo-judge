@@ -223,3 +223,80 @@ func containsPhotographer(list []photographerStat, name string) bool {
 	}
 	return false
 }
+
+func TestStatsWinners(t *testing.T) {
+	s := newTestServer(t)
+	ss, err := s.createSession("2026-03-01", "Spring")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// createSession defaults the win threshold to 11.
+	if ss.WinThreshold == nil || *ss.WinThreshold != 11 {
+		t.Fatalf("default threshold = %v want 11", ss.WinThreshold)
+	}
+	cat := ss.Categories[0]
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "a.jpg", "Alice Smith")
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "b.jpg", "Bob Jones")
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "c.jpg", "Alice Smith")
+	seedNamedPhoto(t, s, ss.ID, cat, "Landscape", "d.jpg", "Bob Jones")
+	dir := s.photosDir(ss.ID, cat, "Landscape")
+	setScore(dir, "a.jpg", "12") // winner
+	setScore(dir, "b.jpg", "8")  // below threshold
+	setScore(dir, "c.jpg", "11") // winner (boundary: == threshold wins)
+	setScore(dir, "d.jpg", "HM") // non-numeric never wins
+
+	s.mu.Lock()
+	res := s.computeStats("", "")
+	s.mu.Unlock()
+
+	if res.Totals.Winners != 2 {
+		t.Fatalf("winners = %d want 2", res.Totals.Winners)
+	}
+	if res.Totals.WinningPhotographers != 1 { // only Alice
+		t.Fatalf("winning photographers = %d want 1", res.Totals.WinningPhotographers)
+	}
+	if len(res.WinnersByCategory) != 1 || res.WinnersByCategory[0].Count != 2 {
+		t.Fatalf("winnersByCategory = %+v", res.WinnersByCategory)
+	}
+	if len(res.WinnersByPhotographer) != 1 || res.WinnersByPhotographer[0].Name != "Alice Smith" || res.WinnersByPhotographer[0].Count != 2 {
+		t.Fatalf("winnersByPhotographer = %+v", res.WinnersByPhotographer)
+	}
+	if res.BySession[0].Winners != 2 {
+		t.Fatalf("session winners = %d want 2", res.BySession[0].Winners)
+	}
+
+	// Clearing the threshold removes all winners (entries are unchanged).
+	s.mu.Lock()
+	ss.WinThreshold = nil
+	res2 := s.computeStats("", "")
+	s.mu.Unlock()
+	if res2.Totals.Winners != 0 {
+		t.Fatalf("winners after clearing threshold = %d want 0", res2.Totals.Winners)
+	}
+	if res2.Totals.Entries != 4 {
+		t.Fatalf("entries = %d want 4", res2.Totals.Entries)
+	}
+}
+
+func TestStatsArchivedWinners(t *testing.T) {
+	s := newTestServer(t)
+	thr := floatPtr(11)
+	a := ArchivedSession{SessionID: "900", Date: "2024-04-01", Categories: []string{}, WinThreshold: thr,
+		Photos: []ArchivedPhoto{
+			{Category: "Pictorial", Title: "A", Photographer: "Zoe New", Score: "13"}, // winner
+			{Category: "Pictorial", Title: "B", Photographer: "Zoe New", Score: "9"},  // not
+		}}
+	if err := os.MkdirAll(s.archivesDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(a)
+	if err := os.WriteFile(filepath.Join(s.archivesDir(), "900.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	res := s.computeStats("", "")
+	s.mu.Unlock()
+	if res.Totals.Winners != 1 || res.Totals.Entries != 2 {
+		t.Fatalf("archived: winners=%d entries=%d want 1/2", res.Totals.Winners, res.Totals.Entries)
+	}
+}

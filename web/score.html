@@ -42,6 +42,7 @@
  #score{width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:10px;background:#2a2d33;border:1px solid #444;border-radius:6px;color:#fff}
  #score:focus{border-color:#2d6cdf;outline:none}
  #score.set{border-color:#2e7d46}
+ .winflag{background:#b8860b;color:#fff;font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;margin-left:6px;vertical-align:1px}
  #scorehint{color:#777;font-size:12px;margin-top:6px}
  #op{padding:12px 14px;border-radius:7px;background:#22252b;border:1px solid #3a3e45;font-size:14px;line-height:1.4}
  #op .opwhat{font-weight:600;color:#cdd}
@@ -136,7 +137,7 @@
       <div class="val muted" id="ph">—</div>
     </div>
     <div class="field">
-      <div class="lbl">Score</div>
+      <div class="lbl">Score <span id="winflag" class="winflag" style="display:none"></span></div>
       <input id="score" type="text" inputmode="decimal" placeholder="—" autocomplete="off">
       <div id="scorehint">Press Enter to save · saved per photo.</div>
     </div>
@@ -153,6 +154,7 @@ let screens = [];          // from the console stream
 let curName = null;        // which screen we're following
 let slateKey = '';         // session|category|orientation we last loaded photos for
 let files = [], names = {}, scores = {};
+let winThr = null, maxPts = null;  // this session's win threshold / total points (null = unset)
 let idx = 0;               // 1-based judge cursor into files (0 = nothing)
 let shownFn = null;        // filename currently rendered in the score box
 
@@ -225,6 +227,8 @@ async function syncToScreen(){
    const r = await fetch('/api/photos?session='+enc(sc.sessionId)+'&category='+enc(sc.category)+'&orientation='+enc(sc.orientation));
    const j = await r.json();
    files = j.files || []; names = j.names || {}; scores = j.scores || {};
+   winThr = (typeof j.winThreshold === 'number') ? j.winThreshold : null;
+   maxPts = (typeof j.maxPoints === 'number') ? j.maxPoints : null;
    // Land on the operator's current photo if they're on one, else the first photo.
    idx = (sc.position >= 1 && sc.position <= files.length) ? sc.position : (files.length ? 1 : 0);
  }
@@ -258,6 +262,7 @@ function render(){
    $('pn').textContent = '—'; $('pn').className = 'val muted';
    $('ph').textContent = '—'; $('ph').className = 'val muted';
    $('score').value = ''; $('score').classList.remove('set'); $('score').disabled = true;
+   winInfo(null);
    shownFn = null;
    renderOp();
    return;
@@ -283,8 +288,20 @@ function render(){
    sIn.classList.toggle('set', !!scores[fn]);
  }
  sIn.disabled = false;
+ winInfo(fn);
  shownFn = fn;
  renderOp();
+}
+
+// winInfo refreshes the 🏆 winner flag and the score hint for the current photo,
+// based on this session's win threshold and total points.
+function winInfo(fn){
+ const wf = $('winflag');
+ const isWin = winThr != null && fn != null && scores[fn] != null && scores[fn] !== '' && parseFloat(scores[fn]) >= winThr;
+ wf.textContent = isWin ? '🏆 Winner' : '';
+ wf.style.display = isWin ? 'inline-block' : 'none';
+ $('scorehint').textContent = (maxPts != null ? 'Out of ' + maxPts + ' points · ' : '')
+   + 'Press Enter to save.' + (winThr != null ? ' Winner at ' + winThr + '+.' : '');
 }
 
 // renderOp describes where the operator is on the followed screen and highlights

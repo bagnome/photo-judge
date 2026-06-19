@@ -121,6 +121,14 @@ const $ = id => document.getElementById(id);
 const post = (url, body) => fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
 const currentSession = () => $('session').value;
 
+// Tell the server which session the console has selected, so the Session Management
+// page can open to it. Guarded so it only posts on an actual change (not every render).
+let lastPostedSession = null;
+function syncSelectedSession(){
+ const v = currentSession();
+ if(v && v !== lastPostedSession){ lastPostedSession = v; post('/api/console/session', {sessionId:v}); }
+}
+
 function toast(msg, kind){
  const t = document.createElement('div');
  t.className = 'toast' + (kind ? ' '+kind : '');
@@ -161,6 +169,7 @@ function render(){
  else if(cur && ids.includes(cur)){ sel.value = cur; }
  else if(cur && ids.length){ sel.value = ids[ids.length-1]; } // prior session was archived/deleted — fall back to the latest remaining
  // else: initial load (browser picks the first) or no sessions left (unselected)
+ syncSelectedSession();
 
  // Categories offered for loading = the selected session's active slate (per-session).
  const selSession = state.sessions.find(s => s.id === sel.value);

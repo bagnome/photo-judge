@@ -9,7 +9,7 @@
   var PAGES = [
     { href: '/console',         icon: '🎛️', label: 'Console' },
     { href: '/admin',           icon: '🖼️', label: 'Upload / Reorder' },
-    { href: '/categories',      icon: '🗂️', label: 'Manage categories' },
+    { href: '/session',         icon: '🗂️', label: 'Session Management' },
     { href: '/score',           icon: '🏆', label: 'Scoring' },
     { href: '/archived',        icon: '🗄️', label: 'Archived Sessions' },
     { href: '/stats',           icon: '📊', label: 'Statistics' },

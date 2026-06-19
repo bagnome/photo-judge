@@ -25,12 +25,14 @@ type catCount struct {
 }
 
 type sessionStat struct {
-	ID             string             `json:"id"`
-	Date           string             `json:"date"`
-	Description    string             `json:"description,omitempty"`
-	Total          int                `json:"total"`
-	ByCategory     []catCount         `json:"byCategory"`
-	ByPhotographer []photographerStat `json:"byPhotographer"` // this session's photographers (count desc, Unattributed last)
+	ID                string             `json:"id"`
+	Date              string             `json:"date"`
+	Description       string             `json:"description,omitempty"`
+	Total             int                `json:"total"`
+	ByCategory        []catCount         `json:"byCategory"`
+	ByPhotographer    []photographerStat `json:"byPhotographer"` // this session's photographers (count desc, Unattributed last)
+	Winners           int                `json:"winners"`
+	WinnersByCategory []catCount         `json:"winnersByCategory"`
 }
 
 type photographerStat struct {
@@ -40,20 +42,24 @@ type photographerStat struct {
 }
 
 type statsTotals struct {
-	Entries       int `json:"entries"`
-	Sessions      int `json:"sessions"`
-	Categories    int `json:"categories"`
-	Photographers int `json:"photographers"`
+	Entries              int `json:"entries"`
+	Sessions             int `json:"sessions"`
+	Categories           int `json:"categories"`
+	Photographers        int `json:"photographers"`
+	Winners              int `json:"winners"`
+	WinningPhotographers int `json:"winningPhotographers"`
 }
 
 type statsResult struct {
-	From           string             `json:"from"` // requested range bounds ("" = open)
-	To             string             `json:"to"`
-	Categories     []string           `json:"categories"` // stable union order → shared chart colors/legend
-	Totals         statsTotals        `json:"totals"`
-	ByCategory     []catCount         `json:"byCategory"`
-	BySession      []sessionStat      `json:"bySession"`      // chronological (drives both per-session charts)
-	ByPhotographer []photographerStat `json:"byPhotographer"` // count desc, Unattributed last
+	From                  string             `json:"from"` // requested range bounds ("" = open)
+	To                    string             `json:"to"`
+	Categories            []string           `json:"categories"` // stable union order → shared chart colors/legend
+	Totals                statsTotals        `json:"totals"`
+	ByCategory            []catCount         `json:"byCategory"`
+	BySession             []sessionStat      `json:"bySession"`      // chronological (drives both per-session charts)
+	ByPhotographer        []photographerStat `json:"byPhotographer"` // count desc, Unattributed last
+	WinnersByCategory     []catCount         `json:"winnersByCategory"`
+	WinnersByPhotographer []photographerStat `json:"winnersByPhotographer"`
 }
 
 // handleStats serves the aggregated statistics JSON. Optional from/to query params
@@ -83,10 +89,12 @@ type phAgg struct {
 	byCat   map[string]int
 }
 
-// photoRec is one counted entry: which category it's in and who shot it.
+// photoRec is one counted entry: which category it's in, who shot it, and whether its
+// score reached the session's win threshold.
 type photoRec struct {
 	category     string
 	photographer string
+	win          bool
 }
 
 // rawSession is a date-placed session (live or archived) reduced to its photos, so
@@ -120,6 +128,22 @@ func upsertPhoto(m map[string]*phAgg, photographer, cat string) {
 	}
 	p.total++
 	p.byCat[cat]++
+}
+
+// sortedCatCounts turns a category→count map into a list ordered by count desc then
+// name (charts and tables look up by name, so the order is just for tidiness).
+func sortedCatCounts(m map[string]int) []catCount {
+	out := make([]catCount, 0, len(m))
+	for cat, n := range m {
+		out = append(out, catCount{Category: cat, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Category < out[j].Category
+	})
+	return out
 }
 
 // sortPhotographers turns a photographer aggregate map into a stable list: most
@@ -166,12 +190,14 @@ func sortPhotographers(m map[string]*phAgg) []photographerStat {
 // counts come from the saved archive metadata. Assumes s.mu is held.
 func (s *server) computeStats(from, to string) statsResult {
 	res := statsResult{
-		From:           from,
-		To:             to,
-		Categories:     []string{},
-		ByCategory:     []catCount{},
-		BySession:      []sessionStat{},
-		ByPhotographer: []photographerStat{},
+		From:                  from,
+		To:                    to,
+		Categories:            []string{},
+		ByCategory:            []catCount{},
+		BySession:             []sessionStat{},
+		ByPhotographer:        []photographerStat{},
+		WinnersByCategory:     []catCount{},
+		WinnersByPhotographer: []photographerStat{},
 	}
 
 	// Reduce every in-range session (live + archived) to its photos.
@@ -185,13 +211,15 @@ func (s *server) computeStats(from, to string) statsResult {
 		cats := append(append([]string{}, ss.Categories...), ss.InactiveCategories...)
 		for _, cat := range cats {
 			for _, orient := range []string{"Landscape", "Portrait"} {
+				dir := s.photosDir(ss.ID, cat, orient)
 				files := s.photoFiles(ss.ID, cat, orient)
 				if len(files) == 0 {
 					continue
 				}
-				names := loadNames(s.photosDir(ss.ID, cat, orient))
+				names := loadNames(dir)
+				scores := loadScores(dir)
 				for _, f := range files {
-					rs.photos = append(rs.photos, photoRec{category: cat, photographer: names[f]})
+					rs.photos = append(rs.photos, photoRec{category: cat, photographer: names[f], win: ss.isWinner(scores[f])})
 				}
 			}
 		}
@@ -203,7 +231,7 @@ func (s *server) computeStats(from, to string) statsResult {
 		}
 		rs := rawSession{id: a.SessionID, date: a.Date, desc: a.Description}
 		for _, p := range a.Photos {
-			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer})
+			rs.photos = append(rs.photos, photoRec{category: p.Category, photographer: p.Photographer, win: scoreWins(a.WinThreshold, p.Score)})
 		}
 		raw = append(raw, rs)
 	}
@@ -217,6 +245,8 @@ func (s *server) computeStats(from, to string) statsResult {
 
 	catTotals := map[string]int{}
 	photographers := map[string]*phAgg{}
+	winCatTotals := map[string]int{}
+	winPhotographers := map[string]*phAgg{}
 
 	for _, rs := range raw {
 		if len(rs.photos) == 0 {
@@ -224,27 +254,29 @@ func (s *server) computeStats(from, to string) statsResult {
 		}
 		sessCat := map[string]int{}
 		sessPh := map[string]*phAgg{}
+		sessWinCat := map[string]int{}
+		winners := 0
 		for _, pr := range rs.photos {
 			catTotals[pr.category]++
 			sessCat[pr.category]++
 			upsertPhoto(photographers, pr.photographer, pr.category)
 			upsertPhoto(sessPh, pr.photographer, pr.category)
+			if pr.win {
+				winners++
+				winCatTotals[pr.category]++
+				sessWinCat[pr.category]++
+				upsertPhoto(winPhotographers, pr.photographer, pr.category)
+			}
 		}
-		sc := sessionStat{ID: rs.id, Date: rs.date, Description: rs.desc, Total: len(rs.photos)}
+		sc := sessionStat{ID: rs.id, Date: rs.date, Description: rs.desc, Total: len(rs.photos), Winners: winners}
 		// Session category breakdown, ordered by count then name (charts/table look up
 		// by name, so this order is just for tidiness).
-		for cat, n := range sessCat {
-			sc.ByCategory = append(sc.ByCategory, catCount{Category: cat, Count: n})
-		}
-		sort.Slice(sc.ByCategory, func(i, j int) bool {
-			if sc.ByCategory[i].Count != sc.ByCategory[j].Count {
-				return sc.ByCategory[i].Count > sc.ByCategory[j].Count
-			}
-			return sc.ByCategory[i].Category < sc.ByCategory[j].Category
-		})
+		sc.ByCategory = sortedCatCounts(sessCat)
+		sc.WinnersByCategory = sortedCatCounts(sessWinCat)
 		sc.ByPhotographer = sortPhotographers(sessPh)
 		res.BySession = append(res.BySession, sc)
 		res.Totals.Entries += len(rs.photos)
+		res.Totals.Winners += winners
 		res.Totals.Sessions++
 	}
 
@@ -264,6 +296,9 @@ func (s *server) computeStats(from, to string) statsResult {
 	res.Categories = catOrder
 	for _, cat := range catOrder {
 		res.ByCategory = append(res.ByCategory, catCount{Category: cat, Count: catTotals[cat]})
+		if n := winCatTotals[cat]; n > 0 {
+			res.WinnersByCategory = append(res.WinnersByCategory, catCount{Category: cat, Count: n})
+		}
 	}
 	res.Totals.Categories = len(catOrder)
 
@@ -271,6 +306,13 @@ func (s *server) computeStats(from, to string) statsResult {
 	for k := range photographers {
 		if k != unattributedKey {
 			res.Totals.Photographers++
+		}
+	}
+
+	res.WinnersByPhotographer = sortPhotographers(winPhotographers)
+	for k := range winPhotographers {
+		if k != unattributedKey {
+			res.Totals.WinningPhotographers++
 		}
 	}
 
