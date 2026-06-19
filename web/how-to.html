@@ -66,8 +66,8 @@ const GUIDES = [
      body:'A <b>session</b> is one competition night — it holds all that evening’s photos. On the console, click <b>➕ New session</b>, pick the date, optionally type a short <b>description</b> to tell it apart later, and click <b>Create</b>.' },
    { title:'Select your session', img:'gs-select-session.png',
      body:'Choose the session you just made from the <b>Session</b> dropdown. Everything you do from here applies to the selected session, and its description shows just under the toolbar.' },
-   { title:'Open Manage categories',
-     body:'From the menu on the right, open <b>Manage categories</b> to set up this session’s judging categories. (A brand-new session starts with a copy of your last session’s categories, so you can often skip ahead.)' },
+   { title:'Open Session Management',
+     body:'From the menu on the right, open <b>Session Management</b> to set up this session’s judging categories. (A brand-new session starts with a copy of your last session’s categories, so you can often skip ahead.)' },
    { title:'Set up the categories', img:'gs-categories.png',
      body:'Use the two panes to <b>activate</b> or <b>deactivate</b> categories, <b>add</b> new ones, <b>delete</b> unused ones, and the arrows to <b>reorder</b> the active list. This order is what shows in the menus and on the score sheet.' },
    { title:'Open the Upload / Reorder page',
@@ -84,10 +84,10 @@ const GUIDES = [
  },
  {
   id:'categories', icon:'🗂️', title:'Configuring categories',
-  intro:'Every session has its own list of judging <b>categories</b>. Manage them on the <b>Manage categories</b> page — the <b>Active</b> order drives the console and scoring dropdowns and the score sheet.',
+  intro:'Every session has its own list of judging <b>categories</b>. Manage them on the <b>Session Management</b> page — the <b>Active</b> order drives the console and scoring dropdowns and the score sheet.',
   steps:[
-   { title:'Open Manage categories', img:'gs-categories.png',
-     body:'From the menu on the right, open <b>Manage categories</b>, then pick the session at the top. You’ll see two panes: <b>Active</b> (the categories this session uses, in order) and <b>Inactive</b> (ones set aside).' },
+   { title:'Open Session Management', img:'gs-categories.png',
+     body:'From the menu on the right, open <b>Session Management</b>, then pick the session at the top. You’ll see two panes: <b>Active</b> (the categories this session uses, in order) and <b>Inactive</b> (ones set aside).' },
    { title:'Add a category',
      body:'Type a name in <b>Add category</b> and click <b>Add to Active</b>. The name doubles as the photo folder and the on-screen <b>title-card</b> text, so spell it the way you want the judges to see it.' },
    { title:'Activate or deactivate',
@@ -110,7 +110,7 @@ const GUIDES = [
    { title:'Set the viewing order',
      body:'Drag the thumbnails to arrange them within each orientation — this is the order the judges will see. On a phone or tablet, drag by the <b>⠿</b> grip on each photo.' },
    { title:'Randomize the order (optional)',
-     body:'For unbiased judging you can shuffle the photos: click <b>🔀 Randomize order now</b> to reshuffle the current category’s order, or switch on <b>Random order on upload</b> so newly added photos drop into <b>random positions</b> instead of going on the end. The toggle is remembered on this device.' },
+     body:'For unbiased judging you can shuffle the photos: <b>🔀 Randomize this category</b> reshuffles the current category, or <b>🔀 Randomize whole session</b> reshuffles every category at once. Switch on <b>Random order on upload</b> to have newly added photos drop into <b>random positions</b> instead of going on the end (remembered on this device). To keep one photographer’s photos from sitting next to each other, turn on <b>Spread photographers when randomizing</b> on the <b>⚙️ Settings</b> page.' },
    { title:'Note the photographers',
      body:'Type a <b>photographer</b> name under each photo. It shows on the Scoring page and is pre-filled into the score sheet.' },
    { title:'Fill names & titles from photo metadata (optional)',
@@ -208,6 +208,23 @@ const GUIDES = [
    { title:'Download a record',
      body:'On any archived session, <b>⤓ PDF</b> downloads a printable report and <b>⤓ JSON</b> saves the raw record. To keep the actual pictures, copy them out of the <code>photos\\</code> folder <i>before</i> archiving — or export the session first (see <b>Importing &amp; exporting</b>).' },
   ]
+ },
+ {
+  id:'statistics', icon:'📊', title:'Statistics',
+  intro:'See how many entries the club has had over time — by session, category and photographer — across your whole history, including archived sessions. An entry is any photo or physical print in a session.',
+  steps:[
+   { title:'Open Statistics', img:'stats-entries.png',
+     body:'From the menu on the right, open <b>📊 Statistics</b>. The <b>Entries</b> tab shows summary cards (entries, sessions, categories, photographers) and a set of charts and tables — totals and category mix per session, category totals, and a photographer-per-session breakdown.' },
+   { title:'Pick a time frame',
+     body:'Use the quick buttons — <b>All time</b>, <b>This year</b>, <b>Last 12 months</b> — or set a custom <b>From / To</b> date range and click <b>Apply</b>. Everything on the page updates to that window (sessions are placed by their session date).' },
+   { title:'Filter by photo or print',
+     body:'The <b>Show</b> filter (<b>Both</b> / <b>Digital</b> / <b>Physical</b>) narrows the Entries and Winners views to digital photos, physical prints, or both.' },
+   { title:'See the winners',
+     body:'Switch to the <b>🏆 Winners</b> tab for entries that reached their session’s <b>points threshold</b> — with cards (winning entries, win rate, winning photographers) and breakdowns by photographer, category and session. Winners only appear once you set a <b>win threshold</b> for the session on <b>Session Management → Scoring</b>.' },
+   { title:'Compare digital vs physical',
+     body:'The <b>Compare</b> tab puts digital photos and physical prints side by side — totals, grouped per-category and per-session bars, and a win-rate table.' },
+  ],
+  note:'Archived sessions are included too, using the counts and (for winners) the threshold saved when they were archived. Tabs are shareable as links, e.g. <code>/stats?tab=winners</code>.'
  },
  {
   id:'rotate-monitor', icon:'🔄', title:'Rotate a monitor for portrait photos',
