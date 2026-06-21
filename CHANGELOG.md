@@ -14,6 +14,21 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **Guided, console-driven presentation for scoring nights (phase 1).** When a presentation mode is
+  on, the operator runs the whole show from the **Console** instead of free-form screen control, to
+  reduce mistakes and streamline scoring. Three Settings toggles share one engine: **Guided
+  presentation** (a guided slideshow, no scoring), **Score Keeper mode** (guided slideshow + an
+  inline score box on the Console), and **Judge scoring** (guided slideshow + the judge board inline).
+  Score Keeper and Judge scoring are **mutually exclusive**. A **Start / Pause / End** bar appears on
+  the Console: until you Start, the monitors stay black and the screen-table nav is locked; after
+  Start a panel below the table shows the current photo with one **Prev/Next** that steps it across
+  screens & categories (the old Solo engine), with inline scoring or the judge board beside it.
+  **Pause** suspends the run so you can reconfigure screens; **End** locks the session's scores
+  (read-only). The Solo screen config moved to a **Presentation** section on Session Management (the
+  old per-session "Solo mode" Enable/Start/Stop are gone — presenting now starts from the Console),
+  and the Scoring page shows a "driven from the Console" notice for these modes (physical-prints
+  scoring still works there). (Phase 2 will add a Restart-that-erases-scores, surfaced start/end
+  times, and a "judged" marker on the session dropdowns.)
 - **The selected session sticks across the app.** Pick a session on any operator page — Console,
   Upload / Reorder, Session Management, or the Scoring page's physical-prints mode — and the others
   open to that same session as you navigate, instead of resetting to the earliest one. (The choice

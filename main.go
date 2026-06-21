@@ -114,7 +114,16 @@ type Session struct {
 	JudgeMin              *float64 `json:"judgeMin,omitempty"`
 	JudgeMax              *float64 `json:"judgeMax,omitempty"`
 	JudgeIncrement        *float64 `json:"judgeIncrement,omitempty"`
+	// Presentation lifecycle (set when the operator runs a guided session from the
+	// console). StartedAt is stamped on the first Start; EndedAt is stamped on End and,
+	// once set, locks the session's scores (read-only). Both RFC3339, omitempty.
+	StartedAt string `json:"startedAt,omitempty"`
+	EndedAt   string `json:"endedAt,omitempty"`
 }
+
+// locked reports whether the session's scores are frozen because its judging/scoring
+// run has been ended.
+func (ss *Session) locked() bool { return ss != nil && ss.EndedAt != "" }
 
 // soloScreenFor returns the screen assigned to present the given orientation.
 func (ss *Session) soloScreenFor(orient string) string {
@@ -302,9 +311,12 @@ type server struct {
 	// Tracked server-side so the Session Management page can open to it (guarded by mu).
 	selectedSessionID string
 
-	// solo is the active solo-operator presentation run (nil = not running), driving the
-	// configured screens through each category's orientations. Guarded by mu. See solo.go.
-	solo *soloRun
+	// solo is the active guided presentation run (nil = not running), driving the
+	// configured screens through each category's orientations. Shared by all presentation
+	// modes (guided/score-keeper/judge). runPaused suspends it so the operator can
+	// reconfigure screens without ending the run. Guarded by mu. See solo.go / presentation.go.
+	solo      *soloRun
+	runPaused bool
 
 	// Judge scoring state (guarded by mu). judgeActive gates a running judging session
 	// (locked to judgeSessionID): until it's started the slideshow stays black, the
@@ -394,9 +406,10 @@ func (s *server) buildView(sc *Screen) View {
 	if sc.Type == "judge" {
 		return s.judgeView()
 	}
-	// While judge scoring is on but the judging session hasn't been started, the
-	// slideshow stays black — the operator can't present and judges can't score yet.
-	if s.settings.JudgeScoringEnabled && !s.judgeActive {
+	// While a presentation mode is on but no guided run is active, the slideshow stays
+	// black — the operator can't present and nobody can score until they Start. Once a run
+	// is active the guided engine controls per-screen reveal/blackout (below).
+	if s.settings.presentationMode() && s.solo == nil {
 		return View{Mode: "black", Category: sc.Category, Orientation: sc.Orientation, Position: sc.Position, Count: sc.Count}
 	}
 	if sc.Category == "" {
@@ -1288,12 +1301,21 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such screen", 404)
 		return
 	}
-	// While judge scoring is on but the session hasn't started, the operator can't drive
-	// the slideshow — the screens stay black until they click Start judging.
-	if s.settings.JudgeScoringEnabled && !s.judgeActive && (sc.Type == "" || sc.Type == "slideshow") {
-		s.mu.Unlock()
-		http.Error(w, "start the judging session before presenting", http.StatusConflict)
-		return
+	// In a presentation mode the slideshow is driven by the guided run, not free-form: the
+	// table's nav is locked before Start (screens are black) and while a run is actively
+	// presenting (the console panel is the sole driver). It's only operable when the run is
+	// paused, so the operator can reconfigure screens.
+	if s.settings.presentationMode() && (sc.Type == "" || sc.Type == "slideshow") {
+		if s.solo == nil {
+			s.mu.Unlock()
+			http.Error(w, "start the presentation before driving the screens", http.StatusConflict)
+			return
+		}
+		if !s.runPaused {
+			s.mu.Unlock()
+			http.Error(w, "the presentation panel is driving — pause to reconfigure screens", http.StatusConflict)
+			return
+		}
 	}
 	switch body.Action {
 	case "next":
@@ -1318,11 +1340,11 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown action", 400)
 		return
 	}
-	// "Only one live screen" setting (forced on while judge scoring is enabled, so there's
-	// a single judging target): revealing a screen blacks out all the others, so the rest
+	// "Only one live screen" setting (forced on while a scoring mode is enabled, so there's
+	// a single scoring target): revealing a screen blacks out all the others, so the rest
 	// never show at once (same effect as Make live, applied automatically).
 	revealedOthers := false
-	if !sc.Blackout && (s.settings.SingleLiveScreen || s.settings.JudgeScoringEnabled) {
+	if !sc.Blackout && (s.settings.SingleLiveScreen || s.settings.ScoreKeeperEnabled || s.settings.JudgeScoringEnabled) {
 		for n, other := range s.screens {
 			if n != sc.Name {
 				other.Blackout = true
@@ -1433,6 +1455,13 @@ func (s *server) handlePhotoScore(w http.ResponseWriter, r *http.Request) {
 	}
 	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
 		http.Error(w, "bad names", 400)
+		return
+	}
+	s.mu.Lock()
+	locked := s.sessionByID(body.Session).locked()
+	s.mu.Unlock()
+	if locked {
+		http.Error(w, "this session has ended — scores are locked", http.StatusConflict)
 		return
 	}
 	dir := s.photosDir(body.Session, body.Category, body.Orientation)
@@ -2243,6 +2272,10 @@ func main() {
 	mux.HandleFunc("/api/solo/advance", s.handleSoloAdvance)
 	mux.HandleFunc("/api/solo/back", s.handleSoloBack)
 	mux.HandleFunc("/api/solo/stop", s.handleSoloStop)
+	mux.HandleFunc("/api/presentation/start", s.handlePresentationStart)
+	mux.HandleFunc("/api/presentation/pause", s.handlePresentationPause)
+	mux.HandleFunc("/api/presentation/resume", s.handlePresentationResume)
+	mux.HandleFunc("/api/presentation/end", s.handlePresentationEnd)
 	mux.HandleFunc("/api/judge/state", s.handleJudgeState)
 	mux.HandleFunc("/api/judge/submit", s.handleJudgeSubmit)
 	mux.HandleFunc("/api/judge/defer", s.handleJudgeDefer)

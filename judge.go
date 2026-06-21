@@ -264,6 +264,9 @@ func validateJudgeScore(score string, ss *Session) string {
 // recomputeCombinedLocked aggregates the photo's non-deferred judge scores (average or
 // total) and writes the result to the normal scores.json. Assumes s.mu held.
 func (s *server) recomputeCombinedLocked(t judgeTarget) {
+	if s.sessionByID(t.sessionID).locked() {
+		return // scores are frozen once the session has ended
+	}
 	dir := s.photosDir(t.sessionID, t.category, t.orientation)
 	js := loadJudgeScores(dir)[t.file]
 	prefix := t.key() + "|"
@@ -319,6 +322,11 @@ func (s *server) handleJudgeSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the photo changed — check the screen before scoring", http.StatusConflict)
 		return
 	}
+	if s.sessionByID(t.sessionID).locked() {
+		s.mu.Unlock()
+		http.Error(w, "this session has ended — scores are locked", http.StatusConflict)
+		return
+	}
 	if msg := validateJudgeScore(score, s.sessionByID(t.sessionID)); msg != "" {
 		s.mu.Unlock()
 		http.Error(w, msg, 400)
@@ -365,6 +373,11 @@ func (s *server) handleJudgeDefer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "the photo changed", http.StatusConflict)
 		return
 	}
+	if s.sessionByID(t.sessionID).locked() {
+		s.mu.Unlock()
+		http.Error(w, "this session has ended — scores are locked", http.StatusConflict)
+		return
+	}
 	s.judgeDeferred[t.key()+"|"+key] = true
 	dir := s.photosDir(t.sessionID, t.category, t.orientation)
 	if js := loadJudgeScores(dir); js[t.file] != nil {
@@ -391,6 +404,11 @@ func (s *server) handleJudgeRescore(w http.ResponseWriter, r *http.Request) {
 	jk := normalizeNameKey(body.Judge)
 	s.mu.Lock()
 	s.ensureJudgeMaps()
+	if s.sessionByID(body.Session).locked() {
+		s.mu.Unlock()
+		http.Error(w, "this session has ended — scores are locked", http.StatusConflict)
+		return
+	}
 	dir := s.photosDir(body.Session, body.Category, body.Orientation)
 	tk := targetKey(body.Session, body.Category, body.Orientation, body.File)
 	js := loadJudgeScores(dir)
@@ -533,6 +551,23 @@ func (s *server) judgeConsoleSnapshotLocked() map[string]any {
 	}
 }
 
+// judgeStartGateLocked checks that a judging session may start for ss: the rules must be
+// set (judges needed + score range) and all needed primary judges must have joined. It
+// returns (0, "") when ok, else an HTTP status + message. Assumes s.mu held and judge
+// maps ensured. Shared by handleJudgeStart and the presentation lifecycle.
+func (s *server) judgeStartGateLocked(ss *Session) (int, string) {
+	if ss.JudgesNeeded < 1 {
+		return http.StatusConflict, "set how many judges are needed on Session Management first"
+	}
+	if ss.JudgeMin == nil || ss.JudgeMax == nil {
+		return http.StatusConflict, "set the score range on Session Management first"
+	}
+	if _, primaries := s.presentJudgesLocked(); primaries < ss.JudgesNeeded {
+		return http.StatusConflict, fmt.Sprintf("waiting for judges — %d of %d have joined", primaries, ss.JudgesNeeded)
+	}
+	return 0, ""
+}
+
 // handleJudgeStart opens a judging session locked to the chosen session. It refuses until
 // the session's rules are set (judges needed + score range) and all needed judges have
 // joined — then the slideshow comes off black and judges can score.
@@ -555,19 +590,9 @@ func (s *server) handleJudgeStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "session not found", 404)
 		return
 	}
-	if ss.JudgesNeeded < 1 {
+	if code, msg := s.judgeStartGateLocked(ss); code != 0 {
 		s.mu.Unlock()
-		http.Error(w, "set how many judges are needed on Session Management first", http.StatusConflict)
-		return
-	}
-	if ss.JudgeMin == nil || ss.JudgeMax == nil {
-		s.mu.Unlock()
-		http.Error(w, "set the score range on Session Management first", http.StatusConflict)
-		return
-	}
-	if _, primaries := s.presentJudgesLocked(); primaries < ss.JudgesNeeded {
-		s.mu.Unlock()
-		http.Error(w, fmt.Sprintf("waiting for judges — %d of %d have joined", primaries, ss.JudgesNeeded), http.StatusConflict)
+		http.Error(w, msg, code)
 		return
 	}
 	s.judgeActive, s.judgeSessionID = true, ss.ID

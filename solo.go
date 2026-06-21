@@ -5,7 +5,13 @@
 // idle monitor goes black. Standard library only.
 package main
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+	"net/url"
+	"path/filepath"
+	"strings"
+)
 
 // soloSegment is one (category, orientation) shown on a specific screen.
 type soloSegment struct {
@@ -22,7 +28,9 @@ type soloRun struct {
 	finished  bool
 }
 
-// soloView is the solo state surfaced to the Scoring page via the console snapshot.
+// soloView is the active guided-run state surfaced to the console (presentation panel)
+// and the Scoring page via the console snapshot. It carries the live segment plus the
+// current photo so the panel can render the title-card / photo / end-card states.
 type soloView struct {
 	Active      bool   `json:"active"`
 	SessionID   string `json:"sessionId"`
@@ -32,6 +40,16 @@ type soloView struct {
 	Category    string `json:"category"`
 	Orientation string `json:"orientation"`
 	Finished    bool   `json:"finished"`
+	Paused      bool   `json:"paused"`
+	Locked      bool   `json:"locked"` // the run's session has ended → scores read-only
+	// Current photo on the live screen (empty/0 on title and end cards).
+	Position     int    `json:"position"` // 0 = title card, >Count = end card
+	Count        int    `json:"count"`
+	File         string `json:"file,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Photographer string `json:"photographer,omitempty"`
+	PhotoURL     string `json:"photoUrl,omitempty"`
+	Score        string `json:"score,omitempty"` // current saved score for the live photo
 }
 
 // buildSoloSegments lays out the presentation: each active category in order, each
@@ -92,10 +110,23 @@ func (s *server) soloViewLocked() *soloView {
 		return nil
 	}
 	run := s.solo
-	v := &soloView{Active: true, SessionID: run.sessionID, Index: run.index, Total: len(run.segments), Finished: run.finished}
+	v := &soloView{Active: true, SessionID: run.sessionID, Index: run.index, Total: len(run.segments),
+		Finished: run.finished, Paused: s.runPaused, Locked: s.sessionByID(run.sessionID).locked()}
 	if run.index >= 0 && run.index < len(run.segments) {
 		seg := run.segments[run.index]
 		v.Screen, v.Category, v.Orientation = seg.screen, seg.category, seg.orientation
+		if sc := s.screens[seg.screen]; sc != nil {
+			v.Position, v.Count = sc.Position, sc.Count
+			if sc.Position >= 1 && sc.Position <= sc.Count && sc.Position-1 < len(sc.Files) {
+				dir := s.photosDir(sc.SessionID, sc.Category, sc.Orientation)
+				v.File = sc.Files[sc.Position-1]
+				v.Title = strings.TrimSuffix(v.File, filepath.Ext(v.File))
+				v.Photographer = loadNames(dir)[v.File]
+				v.Score = loadScores(dir)[v.File]
+				v.PhotoURL = fmt.Sprintf("/api/photo?session=%s&category=%s&orientation=%s&file=%s",
+					url.QueryEscape(sc.SessionID), url.QueryEscape(sc.Category), url.QueryEscape(sc.Orientation), url.QueryEscape(v.File))
+			}
+		}
 	}
 	return v
 }
@@ -139,6 +170,11 @@ func (s *server) handleSoloAdvance(w http.ResponseWriter, r *http.Request) {
 	if s.solo == nil {
 		s.mu.Unlock()
 		http.Error(w, "no solo run", 409)
+		return
+	}
+	if s.runPaused {
+		s.mu.Unlock()
+		http.Error(w, "the presentation is paused — resume to advance", http.StatusConflict)
 		return
 	}
 	run := s.solo
@@ -189,6 +225,11 @@ func (s *server) handleSoloBack(w http.ResponseWriter, r *http.Request) {
 	if s.solo == nil {
 		s.mu.Unlock()
 		http.Error(w, "no solo run", 409)
+		return
+	}
+	if s.runPaused {
+		s.mu.Unlock()
+		http.Error(w, "the presentation is paused — resume to step", http.StatusConflict)
 		return
 	}
 	run := s.solo

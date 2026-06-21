@@ -20,6 +20,13 @@
  .sep{color:#444}
  #empty{display:none;margin:40px 16px;padding:26px 30px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:640px;line-height:1.55}
  #empty.show{display:block}
+ /* Presentation modes are driven from the Console, so the on-screen scoring UI is hidden
+    here (physical-prints mode still works). */
+ #presnotice{display:none;margin:40px 16px;padding:26px 30px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:640px;line-height:1.55}
+ #presnotice h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
+ body.presmode:not(.physmode) #presnotice{display:block}
+ body.presmode:not(.physmode) main.show{display:none}
+ body.presmode #solobar{display:none !important}
  #empty h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
  main{display:none;padding:16px;gap:20px;align-items:flex-start}
  main.show{display:flex}
@@ -142,6 +149,11 @@
 
 <div id="empty"></div>
 
+<div id="presnotice">
+  <h2>Scoring happens on the Console</h2>
+  A presentation mode is on, so the operator drives the show and enters scores (or runs the judge board) from the <a href="/console" style="color:#7fa9f0">Console</a>. Switch to <b>Physical prints</b> above to record printed entries here.
+</div>
+
 <div id="physical">
   <p class="pnote">Record physical prints judged this session — there's no image to show, so just type each print's title, photographer and score. A new row appears as you start the last one. <b>Tab</b> moves between fields; <b>Enter</b> goes to the next row.</p>
   <div id="ppick" class="pnote" style="display:none">Pick a session and category above to start.</div>
@@ -202,6 +214,9 @@ let settings = {};         // st.settings — for judge mode etc.
 let selSessionId = '';     // st.selectedSessionId — the app-wide current session
 const soloActive = () => !!(solo && solo.active);
 const judgeOn = () => !!settings.judgeScoringEnabled;
+// presMode: any console-driven presentation mode is on, so on-screen scoring lives on the
+// Console and this page shows a notice (physical-prints mode still works here).
+const presMode = () => !!(settings.guidedPresentation || settings.scoreKeeperEnabled || settings.judgeScoringEnabled);
 let sessions = [];         // from the console stream (for physical mode)
 let physAll = [];          // all physical prints for the selected session
 let psid = '', pcat = '';  // selected session id / category for physical mode
@@ -228,6 +243,7 @@ function applyState(st){
  solo = st.solo || null;
  settings = st.settings || {};
  selSessionId = st.selectedSessionId || '';
+ document.body.classList.toggle('presmode', presMode());
  // Judge mode: the scorekeeper watches the live photo the judges are scoring, so follow
  // the live slideshow screen automatically (single-live is forced while judge mode is on).
  if(judgeOn() && !soloActive()){
@@ -518,6 +534,7 @@ $('score').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDe
 $('score').addEventListener('change', saveScore);
 document.addEventListener('keydown', e => {
  if(mode !== 'screen') return;                  // physical mode has its own table keys
+ if(presMode()) return;                         // presentation modes are driven from the Console
  if(e.target === $('score')) return;            // typing a score, not navigating
  if(soloActive()){                              // solo: arrows/space drive the live screen
    if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); soloCmd('advance'); }
@@ -551,6 +568,7 @@ $('soloStop').onclick = () => soloCmd('stop');
 // session; rows auto-extend as you type, Tab moves between fields, Enter to next row.
 function setMode(m){
  mode = m;
+ document.body.classList.toggle('physmode', m === 'physical');
  $('modescreen').classList.toggle('active', m === 'screen');
  $('modephysical').classList.toggle('active', m === 'physical');
  $('screenctrls').style.display = m === 'screen' ? '' : 'none';
