@@ -40,6 +40,9 @@
  #solobar .muted{color:#8a9099;font-size:12.5px}
  body.solo #op, body.solo #lockrow, body.solo #gotoop, body.solo #prev, body.solo #next{display:none}
  body.solo #screenctrls label, body.solo #screen{display:none}
+ /* Judge mode: the scorekeeper is locked to the operator's live screen — hide the
+    Follow-screen picker (the slate still shows what's live). */
+ body.judge #screenctrls label, body.judge #screen{display:none}
  #nav{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
  #counter{font-variant-numeric:tabular-nums;color:#cdd;font-size:15px;min-width:120px;text-align:center}
  #lockrow{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:14px;color:#cdd;cursor:pointer;user-select:none}
@@ -56,6 +59,19 @@
  #score:focus{border-color:#2d6cdf;outline:none}
  #score.set{border-color:#2e7d46}
  .winflag{background:#b8860b;color:#fff;font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;margin-left:6px;vertical-align:1px}
+ #judgeboard .jrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2c2f35;font-size:14px}
+ #judgeboard .jname{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #judgeboard .jtag{font-size:11px;color:#9aa0a6;background:#1b1d21;border:1px solid #3a3e45;border-radius:9px;padding:0 6px}
+ #judgeboard .jscore{font-variant-numeric:tabular-nums;font-weight:600;min-width:54px;text-align:right}
+ #judgeboard .jscore.none{color:#777;font-weight:400}
+ #judgeboard .jre{font-size:12px;padding:5px 9px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;cursor:pointer}
+ #judgeboard .jre:hover{background:#363a42}
+ #judgeboard .combined{margin-top:14px;font-size:15px;color:#cdd}
+ #judgeboard .combined b{font-size:22px;font-variant-numeric:tabular-nums;color:#fff}
+ #judgeboard .done{color:#79d28e;font-weight:600}
+ #judgeboard .pending{color:#ffd27a;font-weight:600}
+ #judgeboard .rescoreall{margin-top:14px;width:100%;font-size:13px;padding:8px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer}
+ body.judge #op, body.judge #lockrow, body.judge #gotoop, body.judge #scorefield{display:none}
  #scorehint{color:#777;font-size:12px;margin-top:6px}
  #op{padding:12px 14px;border-radius:7px;background:#22252b;border:1px solid #3a3e45;font-size:14px;line-height:1.4}
  #op .opwhat{font-weight:600;color:#cdd}
@@ -157,11 +173,12 @@
       <div class="lbl">Photographer</div>
       <div class="val muted" id="ph">—</div>
     </div>
-    <div class="field">
+    <div class="field" id="scorefield">
       <div class="lbl">Score <span id="winflag" class="winflag" style="display:none"></span></div>
       <input id="score" type="text" inputmode="decimal" placeholder="—" autocomplete="off">
       <div id="scorehint">Press Enter to save · saved per photo.</div>
     </div>
+    <div id="judgeboard" style="display:none"></div>
   </div>
 </main>
 <div id="toasts"></div>
@@ -181,7 +198,9 @@ let shownFn = null;        // filename currently rendered in the score box
 
 let mode = 'screen';       // 'screen' = follow a screen · 'physical' = print table
 let solo = null;           // st.solo — when active, this page drives the show
+let settings = {};         // st.settings — for judge mode etc.
 const soloActive = () => !!(solo && solo.active);
+const judgeOn = () => !!settings.judgeScoringEnabled;
 let sessions = [];         // from the console stream (for physical mode)
 let physAll = [];          // all physical prints for the selected session
 let psid = '', pcat = '';  // selected session id / category for physical mode
@@ -206,6 +225,13 @@ function applyState(st){
  screens = st.screens || [];
  sessions = st.sessions || [];
  solo = st.solo || null;
+ settings = st.settings || {};
+ // Judge mode: the scorekeeper watches the live photo the judges are scoring, so follow
+ // the live slideshow screen automatically (single-live is forced while judge mode is on).
+ if(judgeOn() && !soloActive()){
+   const live = screens.find(sc => (!sc.type || sc.type === 'slideshow') && !sc.blackout && sc.position >= 1 && sc.position <= sc.count);
+   if(live) curName = live.name;
+ }
  // Solo operator mode takes over: this page drives the live screen. Force on-screen
  // mode, follow the active screen, and show the Advance/Back/Stop bar.
  const soloOn = soloActive();
@@ -338,6 +364,7 @@ function renderSolo(){
 }
 
 function render(){
+ updateJudgePanel(); // judge-mode board (replaces the manual score box when on)
  if(soloActive()){ renderSolo(); return; }
  const sc = curScreen();
  maybeFollow();
@@ -416,6 +443,48 @@ function go(n){
  if(!files.length) return;
  idx = Math.min(Math.max(1, n), files.length);
  render();
+}
+
+// ---- judge mode: the scorekeeper watches each judge's score for the live photo ----
+async function updateJudgePanel(){
+ const on = judgeOn();
+ document.body.classList.toggle('judge', on);
+ $('judgeboard').style.display = on ? '' : 'none';
+ if(!on) return;
+ let b;
+ try { b = await (await fetch('/api/judge/board')).json(); } catch(e){ return; }
+ renderJudgeBoard(b);
+}
+
+function renderJudgeBoard(b){
+ const el = $('judgeboard');
+ if(b && !b.active){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">Judging hasn’t started — the operator starts it from the console once the judges have joined.</div>'; return; }
+ if(!b || !b.open){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">No photo is live to judge yet — load a category and reveal a photo.</div>'; return; }
+ let n = 0;
+ const rows = (b.judges || []).map(j => {
+   const label = b.anonymize ? (j.alternate ? 'Alternate' : ('Judge ' + (++n))) : (j.name || (j.alternate ? 'Alternate' : 'Judge'));
+   let sc = '—', cls = 'jscore none';
+   if(j.deferred){ sc = 'deferred'; }
+   else if(j.requested){ sc = 're-scoring…'; }
+   else if(j.score){ sc = j.score; cls = 'jscore'; }
+   const tag = j.alternate ? '<span class="jtag">alt</span>' : (j.present ? '' : '<span class="jtag">away</span>');
+   return '<div class="jrow"><span class="jname">' + esc(label) + '</span>' + tag
+     + '<span class="' + cls + '">' + esc(sc) + '</span>'
+     + '<button class="jre" data-k="' + esc(j.key) + '">Rescore</button></div>';
+ }).join('') || '<div class="muted" style="padding:8px 0;color:#8a9099">No judges connected yet.</div>';
+ const done = b.needed ? ('<span class="' + (b.complete ? 'done' : 'pending') + '">' + b.counting + ' / ' + b.needed + (b.complete ? ' ✓' : '') + '</span>') : (b.counting + ' scored');
+ el.innerHTML = rows
+   + '<div class="combined">' + (b.aggregation === 'total' ? 'Total' : 'Average') + ': <b>' + esc(b.combined || '—') + '</b> &nbsp;·&nbsp; ' + done + '</div>'
+   + '<button class="rescoreall">🔁 Ask all judges to re-score</button>';
+ el.querySelectorAll('.jre').forEach(btn => btn.onclick = () => rescore(b, btn.dataset.k));
+ el.querySelector('.rescoreall').onclick = () => rescore(b, '');
+}
+
+async function rescore(b, judge){
+ const r = await post('/api/judge/rescore', {session:b.session, category:b.category, orientation:b.orientation, file:b.file, judge});
+ if(!r.ok){ toast('Could not request a re-score', 'del'); return; }
+ toast(judge ? 'Re-score requested' : 'Re-score requested for all judges');
+ updateJudgePanel();
 }
 
 async function saveScore(){

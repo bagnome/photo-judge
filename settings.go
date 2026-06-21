@@ -22,6 +22,7 @@ type Settings struct {
 	LockScorekeeper     bool   `json:"lockScorekeeper"`     // force the scoring page to follow the operator
 	SingleLiveScreen    bool   `json:"singleLiveScreen"`    // revealing a screen blacks out all the others
 	SpreadPhotographers bool   `json:"spreadPhotographers"` // when randomizing, keep a photographer's photos apart
+	JudgeScoringEnabled bool   `json:"judgeScoringEnabled"` // master switch: judges score from their phones
 	ActiveLogo          string `json:"activeLogo"`          // filename in logo\ to show on title cards
 	PDFHeader           string `json:"pdfHeader"`           // custom heading on the PDFs ("" = "Photo Judge")
 	LanAccess           bool   `json:"lanAccess"`           // gated by properties lanAccess

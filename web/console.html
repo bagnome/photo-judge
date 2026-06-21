@@ -12,6 +12,9 @@
  select,input,button{font-size:14px;padding:6px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
  button{cursor:pointer}
  button:hover{background:#363a42}
+ button:disabled{opacity:.4;cursor:not-allowed}
+ button:disabled:hover{background:#2a2d33}
+ button.primary:disabled:hover{background:#2d6cdf}
  button.primary{background:#2d6cdf;border-color:#2d6cdf}
  button.primary:hover{background:#3b78e6}
  button.danger{background:#a83232;border-color:#a83232}
@@ -31,6 +34,22 @@
  /* Selected session's description, shown between the action bar and the screens table. */
  .sessdesc{display:none;padding:9px 16px;background:#202329;border-bottom:1px solid #333;color:#c9ccd1;font-size:13.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
  .sessdesc.show{display:block}
+ /* Judging-session control strip (Start/Stop + how many judges have joined). */
+ .judgebar{display:none;padding:10px 16px;background:#1f2630;border-bottom:1px solid #33414f;flex-wrap:wrap;align-items:center;gap:12px}
+ .judgebar.show{display:flex}
+ .judgebar.live{background:#16301f;border-bottom-color:#2f6b41}
+ .jb-state{font-size:14px;font-weight:600}
+ .jb-state.on{color:#4caf50}
+ .jb-state.off{color:#e0b052}
+ .jb-joined{font-size:13px;color:#9aa0a6}
+ .jb-joined b{color:#e8e8e8}
+ .jb-names{flex-basis:100%;font-size:13px;color:#9aa0a6;line-height:1.5}
+ .jb-tag{display:inline-block;background:#2a2d33;border:1px solid #444;border-radius:12px;padding:1px 9px;margin:2px 4px 0 0;font-size:12.5px;color:#cfd3d8}
+ .jb-tag.alt{border-color:#5a6b3a;color:#bcd29a}
+ .jb-spacer{flex:1 1 auto}
+ #jstartmodal .rules{margin:0 0 14px;padding:0;list-style:none;font-size:13.5px;color:#c9ccd1;line-height:1.7}
+ #jstartmodal .rules b{color:#e8e8e8;font-weight:600}
+ #jstartmodal .warn{color:#e0b052;font-size:13px;margin:0 0 12px}
  /* Create / edit session modal. */
  #sessmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000}
  #sessmodal.show{display:flex}
@@ -99,6 +118,14 @@
   <button id="closeapp" class="danger">✕ Close App</button>
 </div>
 <div id="sessdesc" class="sessdesc"></div>
+<div id="judgebar" class="judgebar">
+  <span id="jb-state" class="jb-state"></span>
+  <span id="jb-joined" class="jb-joined"></span>
+  <span class="jb-spacer"></span>
+  <button id="jb-start" class="primary">▶ Start judging</button>
+  <button id="jb-stop" class="danger" style="display:none">■ Stop judging</button>
+  <div id="jb-names" class="jb-names"></div>
+</div>
 <table>
  <thead><tr><th>Screen</th><th>Type</th><th>Category</th><th>Orientation</th><th></th><th>Showing</th><th>Controls</th></tr></thead>
  <tbody id="rows"></tbody>
@@ -111,6 +138,17 @@
     <textarea id="sm-desc" maxlength="500" placeholder="e.g. April club competition — judged by Jane Smith"></textarea></div>
   <div class="btns"><button id="sm-cancel">Cancel</button><button id="sm-save" class="primary">Create</button></div>
 </div></div>
+<div id="jstartmodal" class="" style="position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:2000">
+  <div class="card" style="background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:20px;width:min(460px,92vw);box-shadow:0 10px 40px rgba(0,0,0,.55)">
+  <h3 style="margin:0 0 6px;font-size:16px">Start judging session</h3>
+  <div id="js-session" style="font-size:13.5px;color:#9aa0a6;margin-bottom:14px"></div>
+  <ul class="rules" id="js-rules"></ul>
+  <div class="warn" id="js-warn"></div>
+  <div class="btns" style="display:flex;gap:10px;justify-content:flex-end">
+    <button id="js-cancel">Cancel</button><button id="js-go" class="primary">▶ Start judging</button>
+  </div>
+  </div>
+</div>
 <div id="toasts"></div>
 
 <script>
@@ -140,6 +178,9 @@ function toast(msg, kind){
 
 function btn(label, fn){ const b=document.createElement('button'); b.textContent=label; b.onclick=fn; return b; }
 function cmd(name, action){ post('/api/screen/cmd', {name, action}); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function selectedSession(){ return state.sessions.find(s => s.id === currentSession()); }
+let judgeLock = false; // judge scoring on but session not started → block slideshow control
 
 function statusText(sc){
  if(sc.blackout) return '<span class="blk">BLACK</span>';
@@ -183,6 +224,49 @@ function render(){
  if(selSession && selSession.description){ sd.textContent = '📝  ' + selSession.description; sd.classList.add('show'); }
  else { sd.textContent = ''; sd.classList.remove('show'); }
 
+ // Judging-session bar: Start/Stop + how many judges have joined. Only when judge
+ // scoring is on. While it's off (not started), the slideshow stays black and the
+ // operator's presentation controls are locked (judgeLock), enforced server-side too.
+ judgeLock = false;
+ const jbOn = !!(state.settings && state.settings.judgeScoringEnabled);
+ const jdata = state.judges || null;
+ const jbar = $('judgebar');
+ if(!jbOn || !jdata){
+   jbar.classList.remove('show','live');
+ } else {
+   jbar.classList.add('show');
+   const active = !!jdata.active;
+   judgeLock = !active;
+   jbar.classList.toggle('live', active);
+   const needed = selSession ? (selSession.judgesNeeded||0) : 0;
+   const primaries = jdata.primaries||0;
+   const joined = jdata.joined||[];
+   const st = $('jb-state');
+   st.className = 'jb-state ' + (active ? 'on' : 'off');
+   st.textContent = active ? '● Judging in progress' : '○ Not started';
+   $('jb-joined').innerHTML = needed
+     ? 'Judges joined: <b>'+primaries+'</b> of <b>'+needed+'</b>'
+     : 'Judges joined: <b>'+primaries+'</b>';
+   const nm = $('jb-names');
+   nm.innerHTML = joined.length
+     ? joined.map(j => '<span class="jb-tag'+(j.alternate?' alt':'')+'">'+esc(j.name)+(j.alternate?' · alternate':'')+'</span>').join('')
+     : '<span class="muted">No judges connected yet — they join by scanning the Judge QR.</span>';
+   const sb = $('jb-start'), stopb = $('jb-stop');
+   if(active){
+     sb.style.display='none'; stopb.style.display='';
+   } else {
+     sb.style.display=''; stopb.style.display='none';
+     const rangeSet = !!selSession && selSession.judgeMin != null && selSession.judgeMax != null;
+     const ready = !!selSession && needed >= 1 && rangeSet && primaries >= needed;
+     sb.disabled = !ready;
+     sb.title = ready ? 'Start the judging session'
+       : !selSession ? 'Select a session first'
+       : needed < 1 ? 'Set “judges needed” on Session Management first'
+       : !rangeSet ? 'Set the score range on Session Management first'
+       : 'Waiting for all judges to join';
+   }
+ }
+
  // Review-entries badge (pending count across the locked entry session).
  const pb = $('pendbadge');
  if(state.pendingCount > 0){ pb.textContent = state.pendingCount; pb.style.display=''; }
@@ -198,21 +282,42 @@ function render(){
  state.screens.forEach(sc => {
    const tr = document.createElement('tr');
    const isEntry = sc.type === 'entry';
+   const isJudge = sc.type === 'judge';
 
    const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
 
-   // Type dropdown (Entry QR disabled when the feature is turned off in Settings)
+   // Type dropdown (Entry QR / Judge QR disabled when those features are off in Settings)
    const entriesOn = !!(state.settings && state.settings.entriesEnabled);
+   const judgeOn = !!(state.settings && state.settings.judgeScoringEnabled);
    const tdT = document.createElement('td'); tdT.dataset.label='Type';
    const ts = document.createElement('select');
-   [['slideshow','Slideshow'],['entry','Entry QR']].forEach(([v,l]) => {
+   [['slideshow','Slideshow'],['entry','Entry QR'],['judge','Judge QR']].forEach(([v,l]) => {
      const o=document.createElement('option'); o.value=v; o.textContent=l;
      if(v==='entry' && !entriesOn && !isEntry) o.disabled = true;
+     if(v==='judge' && !judgeOn && !isJudge) o.disabled = true;
      ts.appendChild(o);
    });
-   ts.value = isEntry ? 'entry' : 'slideshow';
+   ts.value = isEntry ? 'entry' : isJudge ? 'judge' : 'slideshow';
    ts.onchange = () => setScreenType(sc.name, ts.value);
    tdT.appendChild(ts); tr.appendChild(tdT);
+
+   if(isJudge){
+     // Judge-QR row: shows the join/scan QR; no category to load here. Judges score
+     // whatever photo is live on another (slideshow) screen.
+     const tdInfo = document.createElement('td'); tdInfo.dataset.label='Judges'; tdInfo.colSpan = 3;
+     tdInfo.innerHTML = 'Judge QR — judges scan to score the <b>live</b> photo';
+     tr.appendChild(tdInfo);
+     const tdS = document.createElement('td'); tdS.className='status'; tdS.dataset.label='Showing';
+     tdS.innerHTML = judgeOn ? '<span class="entryon">scan to score</span>' : '<span class="entryoff">scoring off</span>';
+     tr.appendChild(tdS);
+     const tdK = document.createElement('td'); tdK.dataset.label='Controls';
+     const g = document.createElement('div'); g.className='grp';
+     const ow = btn('⧉ Open window', () => openOutputWindow(sc.name)); ow.className='deskonly'; g.appendChild(ow);
+     const dsb = btn('🗑', () => deleteScreen(sc.name)); dsb.className='danger'; dsb.title='Delete this screen'; g.appendChild(dsb);
+     tdK.appendChild(g); tr.appendChild(tdK);
+     rows.appendChild(tr);
+     return;
+   }
 
    if(isEntry){
      // Entry-QR row: no category/orientation/load; show where entries land + open/close.
@@ -271,10 +376,15 @@ function render(){
    const g = document.createElement('div'); g.className='grp';
    const ow = btn('⧉ Open window', () => openOutputWindow(sc.name)); ow.className='deskonly';
    g.appendChild(ow);
-   g.appendChild(btn('◀ Prev', () => cmd(sc.name,'prev')));
-   g.appendChild(btn('Next ▶', () => cmd(sc.name,'next')));
-   g.appendChild(btn(sc.blackout ? 'Reveal' : 'Black', () => cmd(sc.name,'blackout')));
-   g.appendChild(btn('★ Make live', () => cmd(sc.name,'makelive')));
+   const navBtns = [
+     btn('◀ Prev', () => cmd(sc.name,'prev')),
+     btn('Next ▶', () => cmd(sc.name,'next')),
+     btn(sc.blackout ? 'Reveal' : 'Black', () => cmd(sc.name,'blackout')),
+     btn('★ Make live', () => cmd(sc.name,'makelive')),
+   ];
+   // Judge scoring on but not started: the slideshow is locked black until Start.
+   if(judgeLock) navBtns.forEach(b => { b.disabled = true; b.title = 'Start the judging session to present'; });
+   navBtns.forEach(b => g.appendChild(b));
    const dsb = btn('🗑', () => deleteScreen(sc.name)); dsb.className = 'danger'; dsb.title = 'Delete this screen';
    g.appendChild(dsb);
    tdK.appendChild(g); tr.appendChild(tdK);
@@ -308,6 +418,53 @@ function openSessionModal(mode, ss){
 function closeSessionModal(){ $('sessmodal').classList.remove('show'); }
 $('sm-cancel').onclick = closeSessionModal;
 $('sessmodal').addEventListener('click', e => { if(e.target === $('sessmodal')) closeSessionModal(); });
+
+// ---- Start judging session: confirm modal showing the session + the judge rules ----
+function yesno(v){ return v ? 'Yes' : 'No'; }
+function openJudgeStart(){
+ const ss = selectedSession();
+ if(!ss){ pjAlert('Select a session first.'); return; }
+ $('js-session').innerHTML = 'Session <b>#'+esc(ss.id)+'</b> — '+esc(ss.date) + (ss.description ? '<br>'+esc(ss.description) : '');
+ const agg = ss.judgeAggregation === 'total' ? 'Total' : 'Average';
+ let range = '—';
+ if(ss.judgeMin != null && ss.judgeMax != null){
+   range = ss.judgeMin + '–' + ss.judgeMax + (ss.judgeIncrement ? ' (steps of '+ss.judgeIncrement+')' : '');
+ }
+ const rules = [
+   ['Combine scores', agg],
+   ['Judges needed', ss.judgesNeeded || '—'],
+   ['Score range', range],
+   ['Alternate judge', yesno(ss.judgeAlternate)],
+   ['Auto-defer own photos', yesno(ss.judgeAutodetect)],
+   ['Anonymous scoring', yesno(ss.judgeAnonymize)],
+   ['Show photographer to judges', yesno(ss.judgeShowPhotographer)],
+ ];
+ $('js-rules').innerHTML = rules.map(([k,v]) => '<li><b>'+k+':</b> '+esc(String(v))+'</li>').join('');
+ const jd = state.judges || {};
+ const need = ss.judgesNeeded || 0, have = jd.primaries || 0;
+ $('js-warn').textContent = (need && have < need) ? ('Waiting for judges — '+have+' of '+need+' have joined.') : '';
+ $('js-go').disabled = !(need >= 1 && ss.judgeMin != null && ss.judgeMax != null && have >= need);
+ $('jstartmodal').style.display = 'flex';
+}
+function closeJudgeStart(){ $('jstartmodal').style.display = 'none'; }
+function doJudgeStart(){
+ const ss = selectedSession();
+ if(!ss) return;
+ post('/api/judge/start', {session: ss.id}).then(r => {
+   if(r.ok){ closeJudgeStart(); toast('Judging session started'); }
+   else r.text().then(t => pjAlert(t || 'Could not start the judging session.'));
+ });
+}
+$('jb-start').onclick = openJudgeStart;
+$('js-cancel').onclick = closeJudgeStart;
+$('js-go').onclick = doJudgeStart;
+$('jstartmodal').addEventListener('click', e => { if(e.target === $('jstartmodal')) closeJudgeStart(); });
+$('jb-stop').onclick = () => {
+ pjConfirm('Stop the judging session? The slideshow goes black and judges can’t score until you start again.',
+   {title:'Stop judging', okLabel:'Stop judging', danger:true}).then(ok => {
+   if(ok) post('/api/judge/stop', {}).then(r => { if(!r.ok) r.text().then(t => pjAlert(t)); else toast('Judging session stopped'); });
+ });
+};
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && $('sessmodal').classList.contains('show')) closeSessionModal(); });
 
 $('sm-save').onclick = async () => {
@@ -440,7 +597,7 @@ async function deleteScreen(name){
  });
 }
 
-$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout && sc.type !== 'entry') cmd(sc.name,'blackout'); }); };
+$('panicblack').onclick = () => { state.screens.forEach(sc => { if(!sc.blackout && sc.type !== 'entry' && sc.type !== 'judge') cmd(sc.name,'blackout'); }); };
 $('reviewbtn').onclick = () => location.href = '/review';
 
 // Re-render when the selected session changes so each screen's category menu

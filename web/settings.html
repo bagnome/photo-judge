@@ -68,6 +68,13 @@
       </div>
       <label class="sw"><input type="checkbox" id="lockScorekeeper"><span class="sl"></span></label>
     </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Judge scoring (judges score from their phones)</div>
+        <div class="d">Turn this on to let judges connect via a <b>Judge QR</b> screen and submit their own scores; the app combines them into each photo's score. Configure the rules per session on <b>Session Management</b>. While it's on, only one screen shows at a time.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="judgeScoringEnabled"><span class="sl"></span></label>
+    </div>
   </div>
 
   <div class="card">
@@ -192,7 +199,7 @@ const $ = id => document.getElementById(id);
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const enc = encodeURIComponent;
-const TOGGLES = ['lockScorekeeper','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
+const TOGGLES = ['lockScorekeeper','judgeScoringEnabled','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
 let state = null; // last GET response
 
 function toast(msg, kind){
@@ -207,6 +214,7 @@ function toast(msg, kind){
 function collect(){
  return {
    lockScorekeeper: $('lockScorekeeper').checked,
+   judgeScoringEnabled: $('judgeScoringEnabled').checked,
    singleLiveScreen: $('singleLiveScreen').checked,
    spreadPhotographers: $('spreadPhotographers').checked,
    activeLogo: state ? state.settings.activeLogo : '',
@@ -235,6 +243,7 @@ function apply(st){
  state = st;
  const s = st.settings;
  $('lockScorekeeper').checked = s.lockScorekeeper;
+ $('judgeScoringEnabled').checked = s.judgeScoringEnabled;
  $('singleLiveScreen').checked = s.singleLiveScreen;
  $('spreadPhotographers').checked = s.spreadPhotographers;
  $('lanAccess').checked = s.lanAccess;
