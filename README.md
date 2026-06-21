@@ -234,9 +234,28 @@ cd photo-judge
 go build -o photo-judge.exe .
 ```
 
-That produces a single ~9 MB `photo-judge.exe` with the web UI embedded — nothing
+That produces a single ~14 MB `photo-judge.exe` with the web UI embedded — nothing
 else needs to be copied alongside it for a fresh start. Because it's pure standard
 library, the build works with no network access once the toolchain is installed.
+
+> **If the terminal says `go` is not recognized**, Go is installed but its `bin`
+> folder isn't on your PATH. First find where Go lives — its `bin` folder is the one
+> containing `go.exe` (often `C:\Program Files\Go\bin`, or wherever you unpacked it).
+> Then, in **PowerShell** (replace `<GO_BIN>` with that folder):
+>
+> ```powershell
+> # Option A — prepend it for this terminal only, then build:
+> $env:Path = "<GO_BIN>;$env:Path"
+> go build -o photo-judge.exe .
+>
+> # Option B — call Go by its full path (no PATH change):
+> & "<GO_BIN>\go.exe" build -o photo-judge.exe .
+>
+> # Option C — add it to your PATH permanently (open a NEW terminal afterwards):
+> [Environment]::SetEnvironmentVariable("Path", $env:Path + ";<GO_BIN>", "User")
+> ```
+>
+> Once `go` works in a terminal, `(Get-Command go).Source` prints its full path.
 
 Cross-compiling for Windows from macOS/Linux:
 
