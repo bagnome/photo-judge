@@ -16,12 +16,48 @@
  #hint{position:fixed;bottom:12px;left:0;right:0;text-align:center;color:#3a3a3a;font-family:system-ui;font-size:13px}
  body.fs{cursor:none}
  body.fs #hint{display:none}
+ /* Entry-QR screen: join Wi-Fi, then scan to reach the entry form. */
+ #entry{display:none;color:#fff;font-family:system-ui,Segoe UI,sans-serif;text-align:center;width:92vw;max-width:1500px}
+ #entry .ehead{font-size:4vw;font-weight:700;line-height:1.1;margin-bottom:4vh}
+ #entry .esteps{display:flex;gap:5vw;justify-content:center;align-items:flex-start}
+ #entry .estep{display:flex;gap:1.4vw;align-items:flex-start;text-align:left;max-width:42vw}
+ #entry .enum{flex:none;width:3.4vw;height:3.4vw;min-width:42px;min-height:42px;border-radius:50%;
+   background:#2d6cdf;color:#fff;font-size:2vw;font-weight:700;display:flex;align-items:center;justify-content:center}
+ #entry .et{font-size:2.1vw;font-weight:600;margin:.3vw 0 1.4vh}
+ #entry .ed{font-size:1.5vw;color:#cdd2da;line-height:1.5;word-break:break-word}
+ #entry .ed b{color:#fff;font-variant-numeric:tabular-nums}
+ #entry .eqr{width:22vw;max-width:300px;background:#fff;border-radius:10px;padding:10px;margin-top:1vh;image-rendering:pixelated}
+ #entry #eclosed{margin-top:5vh;font-size:2.4vw;font-weight:600;color:#ff7676}
+ #entry #enolan{margin-top:4vh;font-size:1.6vw;color:#ffd27a}
 </style>
 </head>
 <body>
 <div id="stage">
  <img id="img" alt="">
  <div id="title"><img id="logo" alt=""><div class="cat" id="cat"></div><div class="ori" id="ori"></div></div>
+ <div id="entry">
+   <div class="ehead">Add your photos to the competition</div>
+   <div class="esteps">
+     <div class="estep">
+       <div class="enum">1</div>
+       <div class="ebody">
+         <div class="et">Join the Wi-Fi</div>
+         <div class="ed" id="wifiLine"></div>
+         <img id="wifiqr" class="eqr" alt="">
+       </div>
+     </div>
+     <div class="estep">
+       <div class="enum">2</div>
+       <div class="ebody">
+         <div class="et">Scan to enter your photos</div>
+         <img id="entryqr" class="eqr" alt="">
+         <div class="ed" id="entryUrlLine"></div>
+       </div>
+     </div>
+   </div>
+   <div id="eclosed">Entries are now closed.</div>
+   <div id="enolan">Turn on LAN access in Settings so devices can connect.</div>
+ </div>
 </div>
 <div id="hint">Click anywhere — or press <b>F</b> — for fullscreen on this monitor &nbsp;·&nbsp; screen: <span id="name"></span></div>
 
@@ -35,9 +71,76 @@ const title = document.getElementById('title');
 const logo = document.getElementById('logo');
 const cat = document.getElementById('cat');
 const ori = document.getElementById('ori');
+const entry = document.getElementById('entry');
 logo.onerror = () => { logo.style.display = 'none'; };
 
+const qrSrc = data => '/api/qr?data=' + encodeURIComponent(data);
+
+// showJudge reuses the entry two-step layout (Join Wi-Fi → Scan) with judge wording.
+function showJudge(v){
+ img.style.display = 'none';
+ title.style.display = 'none';
+ const steps = entry.querySelector('.esteps');
+ const closed = document.getElementById('eclosed');
+ const nolan = document.getElementById('enolan');
+ entry.querySelector('.ehead').textContent = 'Judges — score from your phone';
+ const ets = entry.querySelectorAll('.et');
+ ets[0].textContent = 'Join the Wi-Fi';
+ ets[1].textContent = 'Scan to score';
+ const wifiLine = document.getElementById('wifiLine'), wifiqr = document.getElementById('wifiqr');
+ if(v.wifiSSID){
+   wifiLine.innerHTML = 'Network: <b>' + esc(v.wifiSSID) + '</b>' + (v.wifiPassword ? '<br>Password: <b>' + esc(v.wifiPassword) + '</b>' : '');
+   if(v.wifiQR){ wifiqr.src = qrSrc(v.wifiQR); wifiqr.style.display = 'block'; } else wifiqr.style.display = 'none';
+ } else { wifiLine.textContent = 'Ask the host for the Wi-Fi name and password.'; wifiqr.style.display = 'none'; }
+ const entryqr = document.getElementById('entryqr'), urlLine = document.getElementById('entryUrlLine');
+ if(v.judgeUrl){ entryqr.src = qrSrc(v.judgeUrl); entryqr.style.display = 'block'; urlLine.innerHTML = 'or visit <b>' + esc(v.judgeUrl) + '</b>'; }
+ else { entryqr.style.display = 'none'; urlLine.textContent = ''; }
+ const on = v.judgeOn && !!v.judgeUrl;
+ steps.style.display = on ? 'flex' : 'none';
+ closed.textContent = 'Judge scoring is turned off.';
+ closed.style.display = (v.judgeUrl && !v.judgeOn) ? 'block' : 'none';
+ nolan.style.display = v.judgeUrl ? 'none' : 'block';
+ entry.style.display = 'block';
+}
+
+function showEntry(v){
+ img.style.display = 'none';
+ title.style.display = 'none';
+ const steps = entry.querySelector('.esteps');
+ const closed = document.getElementById('eclosed');
+ const nolan = document.getElementById('enolan');
+ closed.textContent = 'Entries are now closed.';
+ entry.querySelector('.ehead').textContent = 'Add your photos to the competition';
+ entry.querySelectorAll('.et')[1].textContent = 'Scan to enter your photos';
+ // Wi-Fi step
+ const wifiLine = document.getElementById('wifiLine'), wifiqr = document.getElementById('wifiqr');
+ if(v.wifiSSID){
+   wifiLine.innerHTML = 'Network: <b>' + esc(v.wifiSSID) + '</b>' +
+     (v.wifiPassword ? '<br>Password: <b>' + esc(v.wifiPassword) + '</b>' : '');
+   if(v.wifiQR){ wifiqr.src = qrSrc(v.wifiQR); wifiqr.style.display = 'block'; }
+   else wifiqr.style.display = 'none';
+ } else {
+   wifiLine.textContent = 'Ask the host for the Wi-Fi name and password.';
+   wifiqr.style.display = 'none';
+ }
+ // Entry-form step
+ const entryqr = document.getElementById('entryqr'), urlLine = document.getElementById('entryUrlLine');
+ if(v.entryUrl){
+   entryqr.src = qrSrc(v.entryUrl); entryqr.style.display = 'block';
+   urlLine.innerHTML = 'or visit <b>' + esc(v.entryUrl) + '</b>';
+ } else {
+   entryqr.style.display = 'none'; urlLine.textContent = '';
+ }
+ const open = v.entryOpen && !!v.entryUrl;
+ steps.style.display = open ? 'flex' : 'none';
+ closed.style.display = (v.entryUrl && !v.entryOpen) ? 'block' : 'none';
+ nolan.style.display = v.entryUrl ? 'none' : 'block';
+ entry.style.display = 'block';
+}
+
 function show(v){
+ if(v.mode !== 'entry' && v.mode !== 'judge') entry.style.display = 'none';
+ if(v.mode === 'judge'){ showJudge(v); return; }
  if(v.mode === 'photo'){
    title.style.display = 'none';
    img.onload = () => { img.style.display = 'block'; };
@@ -50,11 +153,15 @@ function show(v){
    cat.textContent = v.category;
    ori.textContent = v.orientation;
    title.style.display = 'block';
+ } else if(v.mode === 'entry'){
+   showEntry(v);
  } else { // black | idle
    img.style.display = 'none';
    title.style.display = 'none';
  }
 }
+
+function esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
 
 async function register(){
  await fetch('/api/screen/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name})});

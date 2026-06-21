@@ -84,12 +84,87 @@ type Session struct {
 	// alphabetically in the manager). Omitted from older session.json files, which
 	// load as an empty set.
 	InactiveCategories []string `json:"inactiveCategories,omitempty"`
+	// WinThreshold is the score at/above which a photo is a "winner" (eligible for the
+	// annual competition). nil = unset → this session has no winners. MaxPoints is the
+	// total a photo is scored out of (e.g. 11 of 15). Both are per-session settings,
+	// pointers so "unset" is distinct from 0. New sessions default to 11 / 15.
+	WinThreshold *float64 `json:"winThreshold,omitempty"`
+	MaxPoints    *float64 `json:"maxPoints,omitempty"`
+	// Solo operator mode: one person drives the slideshow from the Scoring page. These
+	// say which screen presents each orientation and which orientation a category shows
+	// first. SoloFirst is "Landscape" (default) or "Portrait". Per session, omitempty.
+	SoloEnabled         bool   `json:"soloEnabled,omitempty"`
+	SoloLandscapeScreen string `json:"soloLandscapeScreen,omitempty"`
+	SoloPortraitScreen  string `json:"soloPortraitScreen,omitempty"`
+	SoloFirst           string `json:"soloFirst,omitempty"`
+	// SoloEnd is what happens after the last category: "" = show "complete" and wait,
+	// "loop" = restart from the first category, "close" = black the monitors and end.
+	SoloEnd string `json:"soloEnd,omitempty"`
+	// Judge scoring config (per session). JudgeAggregation is "average" (default) or
+	// "total"; JudgesNeeded is how many scores make a photo "complete". Alternate enables
+	// a backup judge; Autodetect routes a photo by a judge to the alternate automatically;
+	// ShowPhotographer reveals the photographer to judges (off = impartial). Min/Max/
+	// Increment constrain the score box (pointers: nil = unset).
+	JudgeAggregation      string   `json:"judgeAggregation,omitempty"`
+	JudgesNeeded          int      `json:"judgesNeeded,omitempty"`
+	JudgeAnonymize        bool     `json:"judgeAnonymize,omitempty"`
+	JudgeAlternate        bool     `json:"judgeAlternate,omitempty"`
+	JudgeAutodetect       bool     `json:"judgeAutodetect,omitempty"`
+	JudgeShowPhotographer bool     `json:"judgeShowPhotographer,omitempty"`
+	JudgeMin              *float64 `json:"judgeMin,omitempty"`
+	JudgeMax              *float64 `json:"judgeMax,omitempty"`
+	JudgeIncrement        *float64 `json:"judgeIncrement,omitempty"`
+	// Presentation lifecycle (set when the operator runs a guided session from the
+	// console). StartedAt is stamped on the first Start; EndedAt is stamped on End and,
+	// once set, locks the session's scores (read-only). Both RFC3339, omitempty.
+	StartedAt string `json:"startedAt,omitempty"`
+	EndedAt   string `json:"endedAt,omitempty"`
 }
+
+// locked reports whether the session's scores are frozen because its judging/scoring
+// run has been ended.
+func (ss *Session) locked() bool { return ss != nil && ss.EndedAt != "" }
+
+// soloScreenFor returns the screen assigned to present the given orientation.
+func (ss *Session) soloScreenFor(orient string) string {
+	if orient == "Portrait" {
+		return ss.SoloPortraitScreen
+	}
+	return ss.SoloLandscapeScreen
+}
+
+// soloOrientations returns the two orientations in presentation order (the configured
+// first, then the other).
+func (ss *Session) soloOrientations() []string {
+	if ss.SoloFirst == "Portrait" {
+		return []string{"Portrait", "Landscape"}
+	}
+	return []string{"Landscape", "Portrait"}
+}
+
+// isWinner reports whether a photo's score (a free-text string) reaches this session's
+// win threshold. Only numeric scores can win, and only when a threshold is set.
+func (ss *Session) isWinner(score string) bool {
+	return ss != nil && scoreWins(ss.WinThreshold, score)
+}
+
+// scoreWins reports whether score (free text) reaches threshold. nil threshold or a
+// non-numeric score never wins. Shared by live sessions and archived ones.
+func scoreWins(threshold *float64, score string) bool {
+	if threshold == nil {
+		return false
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(score), 64)
+	return err == nil && v >= *threshold
+}
+
+func floatPtr(v float64) *float64 { return &v }
 
 // Screen is the live state of one output window. Position: 0 = title card,
 // 1..Count = photo n, Count+1 = end black. Blackout is an independent overlay.
 type Screen struct {
 	Name        string `json:"name"`
+	Type        string `json:"type"` // "slideshow" (default/"") | "entry" — shows the member-entry QR
 	SessionID   string `json:"sessionId"`
 	Category    string `json:"category"`
 	Orientation string `json:"orientation"`
@@ -103,13 +178,23 @@ type Screen struct {
 
 // View is what an output window should render right now.
 type View struct {
-	Mode        string `json:"mode"` // idle | black | title | photo
+	Mode        string `json:"mode"` // idle | black | title | photo | entry
 	Category    string `json:"category"`
 	Orientation string `json:"orientation"`
 	PhotoURL    string `json:"photoUrl"`
 	LogoURL     string `json:"logoUrl,omitempty"` // set on title views when a logo exists
 	Position    int    `json:"position"`
 	Count       int    `json:"count"`
+	// Entry-QR screens (Mode == "entry") carry the details the output window needs to
+	// render the join-Wi-Fi + scan-to-enter instructions. Omitted for normal modes.
+	EntryURL     string `json:"entryUrl,omitempty"`     // page competitors open (empty = LAN access off)
+	EntryOpen    bool   `json:"entryOpen,omitempty"`    // false = "entries are closed" banner
+	WifiSSID     string `json:"wifiSSID,omitempty"`     // network name to join (if known)
+	WifiPassword string `json:"wifiPassword,omitempty"` // network password (if known)
+	WifiQR       string `json:"wifiQR,omitempty"`       // WIFI: join string for a scannable QR
+	// Judge-QR screens (Mode == "judge"): page judges open + whether judge scoring is on.
+	JudgeURL string `json:"judgeUrl,omitempty"`
+	JudgeOn  bool   `json:"judgeOn,omitempty"`
 }
 
 // ---- SSE hub --------------------------------------------------------------
@@ -118,13 +203,19 @@ type hub struct {
 	mu       sync.Mutex
 	consoles map[chan []byte]bool
 	outputs  map[string]map[chan []byte]bool
+	entries  map[chan []byte]bool // landing + member-entry pages (role=entry)
+	judges   map[chan []byte]bool // judge phone pages (role=judge)
 }
 
 func newHub() *hub {
-	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}}
+	return &hub{consoles: map[chan []byte]bool{}, outputs: map[string]map[chan []byte]bool{}, entries: map[chan []byte]bool{}, judges: map[chan []byte]bool{}}
 }
 func (h *hub) addConsole(ch chan []byte)    { h.mu.Lock(); h.consoles[ch] = true; h.mu.Unlock() }
 func (h *hub) removeConsole(ch chan []byte) { h.mu.Lock(); delete(h.consoles, ch); h.mu.Unlock() }
+func (h *hub) addEntry(ch chan []byte)      { h.mu.Lock(); h.entries[ch] = true; h.mu.Unlock() }
+func (h *hub) removeEntry(ch chan []byte)   { h.mu.Lock(); delete(h.entries, ch); h.mu.Unlock() }
+func (h *hub) addJudge(ch chan []byte)      { h.mu.Lock(); h.judges[ch] = true; h.mu.Unlock() }
+func (h *hub) removeJudge(ch chan []byte)   { h.mu.Lock(); delete(h.judges, ch); h.mu.Unlock() }
 func (h *hub) addOutput(name string, ch chan []byte) {
 	h.mu.Lock()
 	if h.outputs[name] == nil {
@@ -154,6 +245,26 @@ func (h *hub) sendOutput(name string, data []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.outputs[name] {
+		select {
+		case ch <- data:
+		default:
+		}
+	}
+}
+func (h *hub) sendEntries(data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.entries {
+		select {
+		case ch <- data:
+		default:
+		}
+	}
+}
+func (h *hub) sendJudges(data []byte) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.judges {
 		select {
 		case ch <- data:
 		default:
@@ -195,6 +306,39 @@ type server struct {
 	// exportPageSize is the default page size for the export picker's session list,
 	// from photo-judge.properties (exportPageSize). Set once at startup.
 	exportPageSize int
+
+	// selectedSessionID is the session the operator console currently has selected.
+	// Tracked server-side so the Session Management page can open to it (guarded by mu).
+	selectedSessionID string
+
+	// solo is the active guided presentation run (nil = not running), driving the
+	// configured screens through each category's orientations. Shared by all presentation
+	// modes (guided/score-keeper/judge). runPaused suspends it so the operator can
+	// reconfigure screens without ending the run. Guarded by mu. See solo.go / presentation.go.
+	solo      *soloRun
+	runPaused bool
+
+	// Judge scoring state (guarded by mu). judgeActive gates a running judging session
+	// (locked to judgeSessionID): until it's started the slideshow stays black, the
+	// operator can't drive it, and judges can't score. judgeRoster tracks connected
+	// judges by name key; deferred/requested are transient per-photo flags keyed by
+	// "<target>|<judgeKey>". See judge.go.
+	judgeActive    bool
+	judgeSessionID string
+	judgeRoster    map[string]*judgeRosterEntry
+	judgeDeferred  map[string]bool
+	judgeRequested map[string]bool
+
+	// Member-entry state (guarded by mu). When entryOpen is true, competitors may
+	// submit photos to entrySessionID — the session locked in when the form was opened.
+	entryOpen      bool
+	entrySessionID string
+
+	// detectedWifiSSID/Password are the host's current Wi-Fi, best-effort detected at
+	// startup (netsh). Used as a fallback when the operator leaves the Settings Wi-Fi
+	// fields blank, and surfaced as placeholders on the Settings page.
+	detectedWifiSSID     string
+	detectedWifiPassword string
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -256,6 +400,18 @@ func applyOrder(dir string, files []string) []string {
 
 // buildView assumes s.mu is held. No disk IO (Count is precomputed at load).
 func (s *server) buildView(sc *Screen) View {
+	if sc.Type == "entry" {
+		return s.entryView()
+	}
+	if sc.Type == "judge" {
+		return s.judgeView()
+	}
+	// While a presentation mode is on but no guided run is active, the slideshow stays
+	// black — the operator can't present and nobody can score until they Start. Once a run
+	// is active the guided engine controls per-screen reveal/blackout (below).
+	if s.settings.presentationMode() && s.solo == nil {
+		return View{Mode: "black", Category: sc.Category, Orientation: sc.Orientation, Position: sc.Position, Count: sc.Count}
+	}
 	if sc.Category == "" {
 		return View{Mode: "idle"}
 	}
@@ -305,13 +461,21 @@ func (s *server) consoleSnapshot() []byte {
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
 	payload := struct {
-		Version      string     `json:"version"`
-		NewerVersion string     `json:"newerVersion,omitempty"`
-		Sessions     []*Session `json:"sessions"`
-		Categories   []string   `json:"categories"`
-		Screens      []*Screen  `json:"screens"`
-		Settings     Settings   `json:"settings"`
-	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings}
+		Version           string         `json:"version"`
+		NewerVersion      string         `json:"newerVersion,omitempty"`
+		Sessions          []*Session     `json:"sessions"`
+		Categories        []string       `json:"categories"`
+		Screens           []*Screen      `json:"screens"`
+		Settings          Settings       `json:"settings"`
+		EntryOpen         bool           `json:"entryOpen"`
+		EntrySessionID    string         `json:"entrySessionId,omitempty"`
+		PendingCount      int            `json:"pendingCount"`
+		SelectedSessionID string         `json:"selectedSessionId,omitempty"`
+		Solo              *soloView      `json:"solo,omitempty"`
+		Judges            map[string]any `json:"judges,omitempty"`
+	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
+		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID, s.soloViewLocked(),
+		s.judgeConsoleSnapshotLocked()}
 	data, _ := json.Marshal(payload)
 	return data
 }
@@ -431,13 +595,23 @@ func (s *server) createSession(date, description string) (*Session, error) {
 	// order and the inactive set — so the operator's setup carries forward. The very
 	// first session falls back to the categories.txt / built-in default seed.
 	var active, inactive []string
-	if latest := s.latestSession(); latest != nil {
+	// Scoring settings carry forward from the latest session; the very first session
+	// falls back to the club's usual 11-of-15 default.
+	win, max := floatPtr(11), floatPtr(15)
+	latest := s.latestSession()
+	if latest != nil {
 		active = append([]string{}, latest.Categories...)
 		inactive = append([]string{}, latest.InactiveCategories...)
+		win, max = latest.WinThreshold, latest.MaxPoints
 	} else {
 		active = append([]string{}, s.categories...)
 	}
-	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive}
+	ss := &Session{ID: id, Date: date, Description: strings.TrimSpace(description), Created: time.Now().Format(time.RFC3339), Categories: active, InactiveCategories: inactive, WinThreshold: win, MaxPoints: max}
+	if latest != nil { // carry the per-session presentation/judging config forward
+		ss.SoloEnabled, ss.SoloLandscapeScreen, ss.SoloPortraitScreen, ss.SoloFirst, ss.SoloEnd = latest.SoloEnabled, latest.SoloLandscapeScreen, latest.SoloPortraitScreen, latest.SoloFirst, latest.SoloEnd
+		ss.JudgeAggregation, ss.JudgesNeeded, ss.JudgeAnonymize, ss.JudgeAlternate, ss.JudgeAutodetect, ss.JudgeShowPhotographer = latest.JudgeAggregation, latest.JudgesNeeded, latest.JudgeAnonymize, latest.JudgeAlternate, latest.JudgeAutodetect, latest.JudgeShowPhotographer
+		ss.JudgeMin, ss.JudgeMax, ss.JudgeIncrement = latest.JudgeMin, latest.JudgeMax, latest.JudgeIncrement
+	}
 	base := filepath.Join(s.baseDir, "photos", id)
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
@@ -559,6 +733,124 @@ func (s *server) handleSessionEdit(w http.ResponseWriter, r *http.Request) {
 	log.Printf("session %s edited (date %s)", body.ID, body.Date)
 	s.pushConsole()
 	writeJSON(w, ss)
+}
+
+// handleSessionSettings updates a session's per-session settings from the Session
+// Management page: date, description, and the scoring fields (win threshold + total
+// points). Threshold/points come in as strings; blank clears them (nil → no winners).
+func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		ID, Date, Description, WinThreshold, MaxPoints              string
+		SoloEnabled                                                 bool
+		SoloLandscapeScreen, SoloPortraitScreen, SoloFirst, SoloEnd string
+		JudgeAggregation                                            string
+		JudgesNeeded                                                int
+		JudgeAnonymize, JudgeAlternate, JudgeAutodetect             bool
+		JudgeShowPhotographer                                       bool
+		JudgeMin, JudgeMax, JudgeIncrement                          string
+	}
+	if decode(r, &body) != nil || !safeName(body.ID) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	if !validDate(body.Date) {
+		http.Error(w, "date must be YYYY-MM-DD", 400)
+		return
+	}
+	win, err := parseOptFloat(body.WinThreshold)
+	if err != nil {
+		http.Error(w, "win threshold must be a number", 400)
+		return
+	}
+	max, err := parseOptFloat(body.MaxPoints)
+	if err != nil {
+		http.Error(w, "total points must be a number", 400)
+		return
+	}
+	jMin, e1 := parseOptFloat(body.JudgeMin)
+	jMax, e2 := parseOptFloat(body.JudgeMax)
+	jInc, e3 := parseOptFloat(body.JudgeIncrement)
+	if e1 != nil || e2 != nil || e3 != nil {
+		http.Error(w, "judge min/max/increment must be numbers", 400)
+		return
+	}
+	s.mu.Lock()
+	ss := s.sessionByID(body.ID)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "no such session", 404)
+		return
+	}
+	ss.Date = body.Date
+	ss.Description = strings.TrimSpace(body.Description)
+	ss.WinThreshold = win
+	ss.MaxPoints = max
+	ss.SoloEnabled = body.SoloEnabled
+	ss.SoloLandscapeScreen = strings.TrimSpace(body.SoloLandscapeScreen)
+	ss.SoloPortraitScreen = strings.TrimSpace(body.SoloPortraitScreen)
+	if body.SoloFirst == "Portrait" {
+		ss.SoloFirst = "Portrait"
+	} else {
+		ss.SoloFirst = "Landscape"
+	}
+	if body.SoloEnd == "loop" || body.SoloEnd == "close" {
+		ss.SoloEnd = body.SoloEnd
+	} else {
+		ss.SoloEnd = ""
+	}
+	if body.JudgeAggregation == "total" {
+		ss.JudgeAggregation = "total"
+	} else {
+		ss.JudgeAggregation = "average"
+	}
+	if body.JudgesNeeded < 0 {
+		body.JudgesNeeded = 0
+	}
+	ss.JudgesNeeded = body.JudgesNeeded
+	ss.JudgeAnonymize, ss.JudgeAlternate, ss.JudgeAutodetect = body.JudgeAnonymize, body.JudgeAlternate, body.JudgeAutodetect
+	ss.JudgeShowPhotographer = body.JudgeShowPhotographer
+	ss.JudgeMin, ss.JudgeMax, ss.JudgeIncrement = jMin, jMax, jInc
+	b, _ := json.MarshalIndent(ss, "", "  ")
+	werr := os.WriteFile(filepath.Join(s.baseDir, "photos", ss.ID, "session.json"), b, 0o644)
+	sort.Slice(s.sessions, func(i, j int) bool { return s.sessions[i].Date < s.sessions[j].Date })
+	s.mu.Unlock()
+	if werr != nil {
+		http.Error(w, werr.Error(), 500)
+		return
+	}
+	log.Printf("session %s settings saved (threshold=%v points=%v)", body.ID, body.WinThreshold, body.MaxPoints)
+	s.pushConsole()
+	writeJSON(w, ss)
+}
+
+// handleConsoleSession records the operator's currently selected session. It's the
+// app-wide current session: every operator page posts here when its session dropdown
+// changes, and opens to selectedSessionID (broadcast in the console snapshot) so the
+// choice sticks as the operator navigates between pages.
+func (s *server) handleConsoleSession(w http.ResponseWriter, r *http.Request) {
+	var body struct{ SessionID string }
+	if decode(r, &body) != nil {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	s.selectedSessionID = body.SessionID
+	s.mu.Unlock()
+	s.pushConsole()
+	w.WriteHeader(204)
+}
+
+// parseOptFloat parses an optional numeric field: blank → nil, otherwise a *float64.
+func parseOptFloat(s string) (*float64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 // ---- per-session category management --------------------------------------
@@ -975,16 +1267,23 @@ func (s *server) handleScreenLoad(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no such screen", 404)
 		return
 	}
-	files := s.photoFiles(body.SessionID, body.Category, body.Orientation)
-	sc.SessionID, sc.Category, sc.Orientation = body.SessionID, body.Category, body.Orientation
-	sc.Files = files
-	sc.Count = len(files)
-	sc.Position = 0 // selecting a category resets to the start (title card)
-	sc.Blackout = false
+	s.loadScreenLocked(sc, body.SessionID, body.Category, body.Orientation)
 	s.mu.Unlock()
 	s.pushScreen(body.Name)
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	w.WriteHeader(204)
+}
+
+// loadScreenLocked points a screen at a category/orientation: captures the ordered
+// file list and resets to the title card (Position 0), un-blacked. Assumes s.mu held.
+// Shared by the console's Load and the solo controller.
+func (s *server) loadScreenLocked(sc *Screen, sid, cat, orient string) {
+	sc.SessionID, sc.Category, sc.Orientation = sid, cat, orient
+	sc.Files = s.photoFiles(sid, cat, orient)
+	sc.Count = len(sc.Files)
+	sc.Position = 0 // selecting a category resets to the start (title card)
+	sc.Blackout = false
 }
 
 func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
@@ -1001,6 +1300,22 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		http.Error(w, "no such screen", 404)
 		return
+	}
+	// In a presentation mode the slideshow is driven by the guided run, not free-form: the
+	// table's nav is locked before Start (screens are black) and while a run is actively
+	// presenting (the console panel is the sole driver). It's only operable when the run is
+	// paused, so the operator can reconfigure screens.
+	if s.settings.presentationMode() && (sc.Type == "" || sc.Type == "slideshow") {
+		if s.solo == nil {
+			s.mu.Unlock()
+			http.Error(w, "start the presentation before driving the screens", http.StatusConflict)
+			return
+		}
+		if !s.runPaused {
+			s.mu.Unlock()
+			http.Error(w, "the presentation panel is driving — pause to reconfigure screens", http.StatusConflict)
+			return
+		}
 	}
 	switch body.Action {
 	case "next":
@@ -1025,10 +1340,11 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown action", 400)
 		return
 	}
-	// "Only one live screen" setting: revealing a screen blacks out all the others,
-	// so the rest never show at once (same effect as Make live, applied automatically).
+	// "Only one live screen" setting (forced on while a scoring mode is enabled, so there's
+	// a single scoring target): revealing a screen blacks out all the others, so the rest
+	// never show at once (same effect as Make live, applied automatically).
 	revealedOthers := false
-	if !sc.Blackout && s.settings.SingleLiveScreen {
+	if !sc.Blackout && (s.settings.SingleLiveScreen || s.settings.ScoreKeeperEnabled || s.settings.JudgeScoringEnabled) {
 		for n, other := range s.screens {
 			if n != sc.Name {
 				other.Blackout = true
@@ -1050,6 +1366,7 @@ func (s *server) handleScreenCmd(w http.ResponseWriter, r *http.Request) {
 		s.pushScreen(body.Name)
 	}
 	s.pushConsole()
+	s.pushJudge() // the live photo may have changed — refresh the judges' phones
 	w.WriteHeader(204)
 }
 
@@ -1093,7 +1410,13 @@ func (s *server) handlePhotosList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dir := s.photosDir(sid, cat, orient)
-	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir)})
+	s.mu.Lock()
+	var win, max *float64
+	if ss := s.sessionByID(sid); ss != nil {
+		win, max = ss.WinThreshold, ss.MaxPoints
+	}
+	s.mu.Unlock()
+	writeJSON(w, map[string]any{"files": s.photoFiles(sid, cat, orient), "names": loadNames(dir), "scores": loadScores(dir), "winThreshold": win, "maxPoints": max})
 }
 
 // handlePhotoName sets (or clears, when name is empty) the photographer associated
@@ -1132,6 +1455,13 @@ func (s *server) handlePhotoScore(w http.ResponseWriter, r *http.Request) {
 	}
 	if !safeName(body.Session) || !safeName(body.Category) || !safeName(body.Orientation) || !safeName(body.File) {
 		http.Error(w, "bad names", 400)
+		return
+	}
+	s.mu.Lock()
+	locked := s.sessionByID(body.Session).locked()
+	s.mu.Unlock()
+	if locked {
+		http.Error(w, "this session has ended — scores are locked", http.StatusConflict)
 		return
 	}
 	dir := s.photosDir(body.Session, body.Category, body.Orientation)
@@ -1601,6 +1931,21 @@ func (s *server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		s.h.addConsole(ch)
 		defer s.h.removeConsole(ch)
 		ch <- s.consoleSnapshot()
+	} else if role == "entry" {
+		// Landing + member-entry pages: get the entry-form state, refreshed whenever
+		// the operator opens/closes it or the locked session's details change.
+		s.h.addEntry(ch)
+		defer s.h.removeEntry(ch)
+		ch <- s.entryStateJSON()
+	} else if role == "judge" {
+		// Judge phones: presence is the live SSE connection (name + alternate from the
+		// query). The shared judging state is pushed; the page GETs its personal status.
+		key := normalizeNameKey(r.URL.Query().Get("name"))
+		alt := r.URL.Query().Get("alt") == "1"
+		s.judgeJoin(key, strings.TrimSpace(r.URL.Query().Get("name")), alt)
+		s.h.addJudge(ch)
+		defer func() { s.h.removeJudge(ch); s.judgeLeave(key) }()
+		ch <- s.judgeStateJSON()
 	} else {
 		name := r.URL.Query().Get("screen")
 		s.h.addOutput(name, ch)
@@ -1860,24 +2205,33 @@ func main() {
 	s.refreshLogo() // resolve the active logo (settings + logo\ contents)
 	s.loadScreens()
 	s.sweepImportTmp() // clear any leftover import staging from a previous run
+	s.detectWifi()     // best-effort host Wi-Fi (name/password) for entry instructions
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
+	// Root is the PUBLIC landing page (club logo + entry direction). The operator
+	// console lives at /console so competitors who reach the app never land on it.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
-		serveAsset(w, sub, "console.html")
+		serveAsset(w, sub, "landing.html")
 	})
+	mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "console.html") })
+	mux.HandleFunc("/entry", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "entry.html") })
+	mux.HandleFunc("/judge", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "judge.html") })
+	mux.HandleFunc("/review", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "review.html") })
 	mux.HandleFunc("/output", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "output.html") })
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "admin.html") })
 	mux.HandleFunc("/categories", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
+	mux.HandleFunc("/session", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "categories.html") })
 	mux.HandleFunc("/how-to", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
 	// Old link target — the Getting Started walkthrough is now the first tab of How To.
 	mux.HandleFunc("/getting-started", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "how-to.html") })
 	mux.HandleFunc("/score", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "score.html") })
 	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
+	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "stats.html") })
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "settings.html") })
 	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.HandleFunc("/modal.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "modal.js") })
@@ -1887,6 +2241,8 @@ func main() {
 	mux.HandleFunc("/api/report-version", s.handleReportVersion)
 	mux.HandleFunc("/api/session/create", s.handleSessionCreate)
 	mux.HandleFunc("/api/session/edit", s.handleSessionEdit)
+	mux.HandleFunc("/api/session/settings", s.handleSessionSettings)
+	mux.HandleFunc("/api/console/session", s.handleConsoleSession)
 	mux.HandleFunc("/api/session/delete", s.handleSessionDelete)
 	mux.HandleFunc("/api/session/archive", s.handleSessionArchive)
 	mux.HandleFunc("/api/session/pdf", s.handleSessionPDF)
@@ -1896,6 +2252,7 @@ func main() {
 	mux.HandleFunc("/api/archive/download", s.handleArchiveDownload)
 	mux.HandleFunc("/api/archive/pdf", s.handleArchivePDF)
 	mux.HandleFunc("/api/sessions/all", s.handleSessionsAll)
+	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/export", s.handleExport)
 	mux.HandleFunc("/api/import/preview", s.handleImportPreview)
 	mux.HandleFunc("/api/import/commit", s.handleImportCommit)
@@ -1910,11 +2267,40 @@ func main() {
 	mux.HandleFunc("/api/screen/delete", s.handleScreenDelete)
 	mux.HandleFunc("/api/screen/load", s.handleScreenLoad)
 	mux.HandleFunc("/api/screen/cmd", s.handleScreenCmd)
+	mux.HandleFunc("/api/screen/type", s.handleScreenType)
+	mux.HandleFunc("/api/solo/start", s.handleSoloStart)
+	mux.HandleFunc("/api/solo/advance", s.handleSoloAdvance)
+	mux.HandleFunc("/api/solo/back", s.handleSoloBack)
+	mux.HandleFunc("/api/solo/stop", s.handleSoloStop)
+	mux.HandleFunc("/api/presentation/start", s.handlePresentationStart)
+	mux.HandleFunc("/api/presentation/pause", s.handlePresentationPause)
+	mux.HandleFunc("/api/presentation/resume", s.handlePresentationResume)
+	mux.HandleFunc("/api/presentation/end", s.handlePresentationEnd)
+	mux.HandleFunc("/api/presentation/restart", s.handlePresentationRestart)
+	mux.HandleFunc("/api/judge/state", s.handleJudgeState)
+	mux.HandleFunc("/api/judge/submit", s.handleJudgeSubmit)
+	mux.HandleFunc("/api/judge/defer", s.handleJudgeDefer)
+	mux.HandleFunc("/api/judge/rescore", s.handleJudgeRescore)
+	mux.HandleFunc("/api/judge/board", s.handleJudgeBoard)
+	mux.HandleFunc("/api/judge/start", s.handleJudgeStart)
+	mux.HandleFunc("/api/judge/stop", s.handleJudgeStop)
+	mux.HandleFunc("/api/entry/state", s.handleEntryState)
+	mux.HandleFunc("/api/entry/open", s.handleEntryOpen)
+	mux.HandleFunc("/api/entry/close", s.handleEntryClose)
+	mux.HandleFunc("/api/entry/submit", s.handleEntrySubmit)
+	mux.HandleFunc("/api/entry/mine", s.handleEntryMine)
+	mux.HandleFunc("/api/entry/edit", s.handleEntryEdit)
+	mux.HandleFunc("/api/entry/remove", s.handleEntryRemove)
+	mux.HandleFunc("/api/entry/pending", s.handleEntryPending)
+	mux.HandleFunc("/api/entry/photo", s.handleEntryPhoto)
+	mux.HandleFunc("/api/entry/approve", s.handleEntryApprove)
+	mux.HandleFunc("/api/entry/reject", s.handleEntryReject)
 	mux.HandleFunc("/api/photo", s.handlePhoto)
 	mux.HandleFunc("/api/photos", s.handlePhotosList)
 	mux.HandleFunc("/api/logo", s.handleLogo)
 	mux.HandleFunc("/api/upload", s.handleUpload)
 	mux.HandleFunc("/api/order", s.handleOrderSet)
+	mux.HandleFunc("/api/order/randomize", s.handleOrderRandomize)
 	mux.HandleFunc("/api/photo/delete", s.handlePhotoDelete)
 	mux.HandleFunc("/api/photo/name", s.handlePhotoName)
 	mux.HandleFunc("/api/photo/score", s.handlePhotoScore)
@@ -1952,7 +2338,7 @@ func main() {
 	}
 	addr := host + ":" + port
 	loopAddr := "127.0.0.1:" + port // how a second launch / the local browser reaches us
-	reqURL := "http://" + loopAddr + "/"
+	reqURL := "http://" + loopAddr + "/console"
 
 	// Bind the port up front. If it's already taken, Photo Judge is almost certainly
 	// already running — hand the user off to that instance instead of dying with a
@@ -1981,7 +2367,7 @@ func main() {
 	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
 		s.port = strconv.Itoa(tcp.Port)
 	}
-	u := "http://127.0.0.1:" + s.port + "/"
+	u := "http://127.0.0.1:" + s.port + "/console"
 
 	srv := &http.Server{Handler: mux}
 	go func() {

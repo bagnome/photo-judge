@@ -19,17 +19,37 @@ const pdfHeaderMax = 90 // characters — kept short enough to stay within ~2 PD
 // Settings holds the operator-tunable options. LanAccess / ImportPhotographer /
 // ImportTitle are the SETTINGS side of a gate with the properties file.
 type Settings struct {
-	LockScorekeeper    bool   `json:"lockScorekeeper"`    // force the scoring page to follow the operator
-	SingleLiveScreen   bool   `json:"singleLiveScreen"`   // revealing a screen blacks out all the others
-	ActiveLogo         string `json:"activeLogo"`         // filename in logo\ to show on title cards
-	PDFHeader          string `json:"pdfHeader"`          // custom heading on the PDFs ("" = "Photo Judge")
-	LanAccess          bool   `json:"lanAccess"`          // gated by properties lanAccess
-	ImportPhotographer bool   `json:"importPhotographer"` // gated by properties importMetadata
-	ImportTitle        bool   `json:"importTitle"`        // gated by properties importMetadata
+	LockScorekeeper     bool   `json:"lockScorekeeper"`     // force the scoring page to follow the operator
+	SingleLiveScreen    bool   `json:"singleLiveScreen"`    // revealing a screen blacks out all the others
+	SpreadPhotographers bool   `json:"spreadPhotographers"` // when randomizing, keep a photographer's photos apart
+	JudgeScoringEnabled bool   `json:"judgeScoringEnabled"` // master switch: judges score from their phones
+	GuidedPresentation  bool   `json:"guidedPresentation"`  // console-driven guided slideshow, no scoring
+	ScoreKeeperEnabled  bool   `json:"scoreKeeperEnabled"`  // guided slideshow + inline score box on the console
+	ScorekeeperScreen   bool   `json:"scorekeeperScreen"`   // score/judge on the Scoring page (2nd operator) instead of inline on the console
+	ActiveLogo          string `json:"activeLogo"`          // filename in logo\ to show on title cards
+	PDFHeader           string `json:"pdfHeader"`           // custom heading on the PDFs ("" = "Photo Judge")
+	LanAccess           bool   `json:"lanAccess"`           // gated by properties lanAccess
+	ImportPhotographer  bool   `json:"importPhotographer"`  // gated by properties importMetadata
+	ImportTitle         bool   `json:"importTitle"`         // gated by properties importMetadata
+	// Member entries
+	EntriesEnabled          bool   `json:"entriesEnabled"`          // master switch for the whole entry feature
+	EntryRequireApproval    bool   `json:"entryRequireApproval"`    // when false, submissions are added straight to the session
+	MaxEntriesPerCompetitor int    `json:"maxEntriesPerCompetitor"` // 0 = unlimited
+	MaxEntriesPerCategory   int    `json:"maxEntriesPerCategory"`   // 0 = unlimited (per competitor)
+	WifiSSID                string `json:"wifiSSID"`                // network competitors join ("" = auto-detect)
+	WifiPassword            string `json:"wifiPassword"`            // password for that network
 }
 
 func defaultSettings() Settings {
-	return Settings{LanAccess: true, ImportPhotographer: true, ImportTitle: true}
+	return Settings{LanAccess: true, ImportPhotographer: true, ImportTitle: true, EntriesEnabled: true, EntryRequireApproval: true}
+}
+
+// presentationMode reports whether any console-driven presentation mode is on. When it
+// is, the operator drives a guided run from the console (Start/Pause/End) instead of
+// free-form screen control. Guided presentation is the no-scoring base; Score Keeper and
+// Judge scoring add inline scoring/judging and are mutually exclusive.
+func (st Settings) presentationMode() bool {
+	return st.GuidedPresentation || st.ScoreKeeperEnabled || st.JudgeScoringEnabled
 }
 
 func (s *server) settingsPath() string { return filepath.Join(s.baseDir, "settings.json") }
@@ -57,18 +77,38 @@ func (s *server) saveSettings() error {
 }
 
 func (s *server) sanitizeSettings() {
+	// Score Keeper and Judge scoring are mutually exclusive — if both arrive set (or are
+	// loaded that way from an old file), Judge scoring wins.
+	if s.settings.ScoreKeeperEnabled && s.settings.JudgeScoringEnabled {
+		s.settings.ScoreKeeperEnabled = false
+	}
 	h := strings.TrimSpace(s.settings.PDFHeader)
 	if len([]rune(h)) > pdfHeaderMax {
 		h = string([]rune(h)[:pdfHeaderMax])
 	}
 	s.settings.PDFHeader = h
+	if s.settings.MaxEntriesPerCompetitor < 0 {
+		s.settings.MaxEntriesPerCompetitor = 0
+	}
+	if s.settings.MaxEntriesPerCategory < 0 {
+		s.settings.MaxEntriesPerCategory = 0
+	}
+	s.settings.WifiSSID = strings.TrimSpace(s.settings.WifiSSID)
+	if len(s.settings.WifiSSID) > 64 {
+		s.settings.WifiSSID = s.settings.WifiSSID[:64]
+	}
+	if len(s.settings.WifiPassword) > 64 {
+		s.settings.WifiPassword = s.settings.WifiPassword[:64]
+	}
 }
 
 // Effective values combine the properties gate with the setting (properties false
 // wins). Callers hold s.mu (or run at startup).
-func (s *server) effLanAccess() bool          { return s.propsLanAccess && s.settings.LanAccess }
-func (s *server) effImportPhotographer() bool { return s.propsImportMetadata && s.settings.ImportPhotographer }
-func (s *server) effImportTitle() bool        { return s.propsImportMetadata && s.settings.ImportTitle }
+func (s *server) effLanAccess() bool { return s.propsLanAccess && s.settings.LanAccess }
+func (s *server) effImportPhotographer() bool {
+	return s.propsImportMetadata && s.settings.ImportPhotographer
+}
+func (s *server) effImportTitle() bool { return s.propsImportMetadata && s.settings.ImportTitle }
 
 // ---- logo library ---------------------------------------------------------
 
@@ -143,19 +183,31 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.settings = body
 		s.sanitizeSettings()
 		s.refreshLogo()
+		if !s.settings.EntriesEnabled {
+			s.entryOpen = false // turning the feature off closes any open entry form
+		}
+		if !s.settings.presentationMode() {
+			// Turning every presentation mode off tears down any active guided run so the
+			// screens return to normal free-form control.
+			s.solo, s.runPaused = nil, false
+			s.judgeActive, s.judgeSessionID = false, ""
+		}
 		_ = s.saveSettings()
 		s.mu.Unlock()
-		s.pushConsole()     // scoring page picks up lockScorekeeper, etc.
-		s.pushAllScreens()  // title cards may need the (possibly new) active logo
+		s.pushConsole()    // scoring page picks up lockScorekeeper, etc.
+		s.pushAllScreens() // title cards (and Entry-QR screens) may need new logo/Wi-Fi
+		s.pushEntry()      // entry/landing pages pick up new limits/Wi-Fi
 	}
 	s.mu.Lock()
 	resp := map[string]any{
-		"settings":            s.settings,
-		"logos":               s.listLogos(),
-		"propsLanAccess":      s.propsLanAccess,
-		"propsImportMetadata": s.propsImportMetadata,
-		"effLanAccess":        s.effLanAccess(),
-		"boundLanAccess":      s.lanAccess, // what the running server actually bound with
+		"settings":             s.settings,
+		"logos":                s.listLogos(),
+		"propsLanAccess":       s.propsLanAccess,
+		"propsImportMetadata":  s.propsImportMetadata,
+		"effLanAccess":         s.effLanAccess(),
+		"boundLanAccess":       s.lanAccess, // what the running server actually bound with
+		"detectedWifiSSID":     s.detectedWifiSSID,
+		"detectedWifiPassword": s.detectedWifiPassword,
 	}
 	s.mu.Unlock()
 	writeJSON(w, resp)

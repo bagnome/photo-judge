@@ -20,6 +20,13 @@
  .sep{color:#444}
  #empty{display:none;margin:40px 16px;padding:26px 30px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:640px;line-height:1.55}
  #empty.show{display:block}
+ /* Presentation modes are driven from the Console, so the on-screen scoring UI is hidden
+    here (physical-prints mode still works). */
+ #presnotice{display:none;margin:40px 16px;padding:26px 30px;border:1px solid #3a3e45;border-radius:8px;background:#23262c;color:#c9ccd1;max-width:640px;line-height:1.55}
+ #presnotice h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
+ body.presmode:not(.physmode) #presnotice{display:block}
+ body.presmode:not(.physmode) main.show{display:none}
+ body.presmode #solobar{display:none !important}
  #empty h2{margin:0 0 10px;font-size:16px;color:#e8e8e8}
  main{display:none;padding:16px;gap:20px;align-items:flex-start}
  main.show{display:flex}
@@ -27,6 +34,22 @@
  #stage{background:#000;border:1px solid #333;border-radius:8px;height:62vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
  #stage img{max-width:100%;max-height:100%;object-fit:contain;display:block}
  #stage .none{color:#555;font-size:14px}
+ #stage .card-msg{color:#cfd2d6;text-align:center;font-family:system-ui;padding:20px}
+ #stage .card-msg .cat{font-size:34px;font-weight:700;line-height:1.1}
+ #stage .card-msg .ori{font-size:15px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.22em;margin-top:10px}
+ #stage .card-msg .sub{font-size:14px;color:#8a9099;margin-top:14px}
+ #solobar{padding:11px 16px;gap:12px;align-items:center;flex-wrap:wrap;background:#1f2530;border-bottom:1px solid #2d6cdf}
+ #solobar button{font-size:15px;padding:9px 16px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer}
+ #solobar button:hover{background:#363a42}
+ #solobar button.primary{background:#2d6cdf;border-color:#2d6cdf;font-size:16px;padding:10px 24px;font-weight:600}
+ #solobar button.primary:hover{background:#3b78e6}
+ #solobar button.stop{background:#a83232;border-color:#a83232}
+ #solobar .muted{color:#8a9099;font-size:12.5px}
+ body.solo #op, body.solo #lockrow, body.solo #gotoop, body.solo #prev, body.solo #next{display:none}
+ body.solo #screenctrls label, body.solo #screen{display:none}
+ /* Judge mode: the scorekeeper is locked to the operator's live screen — hide the
+    Follow-screen picker (the slate still shows what's live). */
+ body.judge #screenctrls label, body.judge #screen{display:none}
  #nav{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
  #counter{font-variant-numeric:tabular-nums;color:#cdd;font-size:15px;min-width:120px;text-align:center}
  #lockrow{display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:14px;color:#cdd;cursor:pointer;user-select:none}
@@ -42,6 +65,20 @@
  #score{width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:10px;background:#2a2d33;border:1px solid #444;border-radius:6px;color:#fff}
  #score:focus{border-color:#2d6cdf;outline:none}
  #score.set{border-color:#2e7d46}
+ .winflag{background:#b8860b;color:#fff;font-size:12px;font-weight:600;padding:1px 8px;border-radius:10px;margin-left:6px;vertical-align:1px}
+ #judgeboard .jrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #2c2f35;font-size:14px}
+ #judgeboard .jname{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ #judgeboard .jtag{font-size:11px;color:#9aa0a6;background:#1b1d21;border:1px solid #3a3e45;border-radius:9px;padding:0 6px}
+ #judgeboard .jscore{font-variant-numeric:tabular-nums;font-weight:600;min-width:54px;text-align:right}
+ #judgeboard .jscore.none{color:#777;font-weight:400}
+ #judgeboard .jre{font-size:12px;padding:5px 9px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;cursor:pointer}
+ #judgeboard .jre:hover{background:#363a42}
+ #judgeboard .combined{margin-top:14px;font-size:15px;color:#cdd}
+ #judgeboard .combined b{font-size:22px;font-variant-numeric:tabular-nums;color:#fff}
+ #judgeboard .done{color:#79d28e;font-weight:600}
+ #judgeboard .pending{color:#ffd27a;font-weight:600}
+ #judgeboard .rescoreall{margin-top:14px;width:100%;font-size:13px;padding:8px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:6px;cursor:pointer}
+ body.judge #op, body.judge #lockrow, body.judge #gotoop, body.judge #scorefield{display:none}
  #scorehint{color:#777;font-size:12px;margin-top:6px}
  #op{padding:12px 14px;border-radius:7px;background:#22252b;border:1px solid #3a3e45;font-size:14px;line-height:1.4}
  #op .opwhat{font-weight:600;color:#cdd}
@@ -101,8 +138,21 @@
     <label>Category</label><select id="pcategory"></select>
   </span>
 </div>
+<div id="solobar" style="display:none">
+  <span id="soloinfo" class="slate"></span>
+  <span class="sep">|</span>
+  <button id="soloBack">◀ Back</button>
+  <button id="soloAdvance" class="primary">Advance ▶</button>
+  <button id="soloStop" class="stop">■ Stop</button>
+  <span id="soloHint" class="muted">Solo mode — you're driving the screens. → / Space advances, ← goes back.</span>
+</div>
 
 <div id="empty"></div>
+
+<div id="presnotice">
+  <h2>Scoring happens on the Console</h2>
+  A presentation mode is on, so the operator drives the show and enters scores (or runs the judge board) from the <a href="/console" style="color:#7fa9f0">Console</a>. Switch to <b>Physical prints</b> above to record printed entries here.
+</div>
 
 <div id="physical">
   <p class="pnote">Record physical prints judged this session — there's no image to show, so just type each print's title, photographer and score. A new row appears as you start the last one. <b>Tab</b> moves between fields; <b>Enter</b> goes to the next row.</p>
@@ -135,11 +185,12 @@
       <div class="lbl">Photographer</div>
       <div class="val muted" id="ph">—</div>
     </div>
-    <div class="field">
-      <div class="lbl">Score</div>
+    <div class="field" id="scorefield">
+      <div class="lbl">Score <span id="winflag" class="winflag" style="display:none"></span></div>
       <input id="score" type="text" inputmode="decimal" placeholder="—" autocomplete="off">
       <div id="scorehint">Press Enter to save · saved per photo.</div>
     </div>
+    <div id="judgeboard" style="display:none"></div>
   </div>
 </main>
 <div id="toasts"></div>
@@ -153,10 +204,22 @@ let screens = [];          // from the console stream
 let curName = null;        // which screen we're following
 let slateKey = '';         // session|category|orientation we last loaded photos for
 let files = [], names = {}, scores = {};
+let winThr = null, maxPts = null;  // this session's win threshold / total points (null = unset)
 let idx = 0;               // 1-based judge cursor into files (0 = nothing)
 let shownFn = null;        // filename currently rendered in the score box
 
 let mode = 'screen';       // 'screen' = follow a screen · 'physical' = print table
+let solo = null;           // st.solo — when active, this page drives the show
+let settings = {};         // st.settings — for judge mode etc.
+let selSessionId = '';     // st.selectedSessionId — the app-wide current session
+const soloActive = () => !!(solo && solo.active);
+const judgeOn = () => !!settings.judgeScoringEnabled;
+// presMode: any console-driven presentation mode is on, so on-screen scoring lives on the
+// Console and this page shows a notice (physical-prints mode still works here).
+const presMode = () => !!(settings.guidedPresentation || settings.scoreKeeperEnabled || settings.judgeScoringEnabled);
+// skScreen: a presentation mode is on AND the operator chose a separate scorekeeper screen,
+// so a 2nd operator scores here (the main operator drives from the Console).
+const skScreen = () => presMode() && !!settings.scorekeeperScreen;
 let sessions = [];         // from the console stream (for physical mode)
 let physAll = [];          // all physical prints for the selected session
 let psid = '', pcat = '';  // selected session id / category for physical mode
@@ -180,6 +243,34 @@ function curScreen(){ return screens.find(s => s.name === curName) || null; }
 function applyState(st){
  screens = st.screens || [];
  sessions = st.sessions || [];
+ solo = st.solo || null;
+ settings = st.settings || {};
+ selSessionId = st.selectedSessionId || '';
+ // The "driven from the Console" notice shows only when scoring is inline on the Console.
+ // With a separate scorekeeper screen, this page is the scoring surface (renderSolo + the
+ // score box / judge board render the live photo the operator is presenting).
+ document.body.classList.toggle('presmode', presMode() && !skScreen());
+ // Judge mode: the scorekeeper watches the live photo the judges are scoring, so follow
+ // the live slideshow screen automatically (single-live is forced while judge mode is on).
+ if(judgeOn() && !soloActive()){
+   const live = screens.find(sc => (!sc.type || sc.type === 'slideshow') && !sc.blackout && sc.position >= 1 && sc.position <= sc.count);
+   if(live) curName = live.name;
+ }
+ // Solo operator mode takes over: this page drives the live screen. Force on-screen
+ // mode, follow the active screen, and show the Advance/Back/Stop bar.
+ const soloOn = soloActive();
+ document.body.classList.toggle('solo', soloOn);
+ // The presentation is driven from the Console now, so this page never shows the drive bar
+ // while a presentation mode is on — the scorekeeper just follows + scores.
+ $('solobar').style.display = (soloOn && !presMode()) ? 'flex' : 'none';
+ if(soloOn){
+   if(mode !== 'screen'){
+     mode = 'screen';
+     $('modescreen').classList.add('active'); $('modephysical').classList.remove('active');
+     $('screenctrls').style.display = ''; $('physctrls').style.display = 'none'; $('physical').classList.remove('show');
+   }
+   curName = solo.screen;
+ }
  // The "lock scorekeeper to the operator" setting forces the lock on (and disables
  // the toggle); otherwise the scorekeeper controls it.
  const forceLock = !!(st.settings && st.settings.lockScorekeeper);
@@ -225,6 +316,8 @@ async function syncToScreen(){
    const r = await fetch('/api/photos?session='+enc(sc.sessionId)+'&category='+enc(sc.category)+'&orientation='+enc(sc.orientation));
    const j = await r.json();
    files = j.files || []; names = j.names || {}; scores = j.scores || {};
+   winThr = (typeof j.winThreshold === 'number') ? j.winThreshold : null;
+   maxPts = (typeof j.maxPoints === 'number') ? j.maxPoints : null;
    // Land on the operator's current photo if they're on one, else the first photo.
    idx = (sc.position >= 1 && sc.position <= files.length) ? sc.position : (files.length ? 1 : 0);
  }
@@ -245,7 +338,60 @@ function maybeFollow(){
  if(sc && !sc.blackout && sc.position >= 1 && sc.position <= files.length) idx = sc.position;
 }
 
+// clearScore resets the photo/score panel to an inert state (title/end cards have no
+// photo to score). pnLabel labels the "Photo" field (e.g. "Title card", "End").
+function clearScore(pnLabel){
+ $('pn').textContent = pnLabel; $('pn').className = 'val muted';
+ $('ph').textContent = '—'; $('ph').className = 'val muted';
+ const sIn = $('score'); sIn.value = ''; sIn.classList.remove('set'); sIn.disabled = true;
+ winInfo(null); shownFn = null;
+}
+
+// renderSolo mirrors the active screen on the score page: the title card, each photo
+// (with the score box), or the end card — exactly what the audience monitor shows.
+function renderSolo(){
+ const sc = curScreen();
+ const stage = $('stage');
+ if(solo.finished){
+   $('soloinfo').innerHTML = '✓ Presentation complete';
+   stage.innerHTML = '<div class="card-msg"><div class="cat">All done</div><div class="sub">Every category has been shown.</div></div>';
+   $('counter').textContent = 'Done'; clearScore('—'); renderOp(); return;
+ }
+ $('soloinfo').innerHTML = 'Solo · <b>' + esc(solo.category || '') + '</b> · ' + esc(solo.orientation || '')
+   + ' · segment ' + (solo.index + 1) + ' / ' + solo.total;
+ if(!sc || !sc.category){ stage.innerHTML = '<div class="none">Loading…</div>'; $('counter').textContent=''; clearScore('—'); return; }
+ const pos = sc.position, count = sc.count;
+ if(pos <= 0){
+   stage.innerHTML = '<div class="card-msg"><div class="cat">' + esc(sc.category) + '</div><div class="ori">' + esc(sc.orientation) + '</div><div class="sub">Title card</div></div>';
+   $('counter').textContent = 'Title'; clearScore('Title card'); renderOp(); return;
+ }
+ if(pos > count){
+   stage.innerHTML = '<div class="card-msg"><div class="cat">End of category</div><div class="sub">' + esc(sc.category) + ' — ' + esc(sc.orientation) + '</div></div>';
+   $('counter').textContent = 'End'; clearScore('End of category'); renderOp(); return;
+ }
+ // On a photo — show it and enable scoring (idx tracks the live position so saveScore targets it).
+ idx = pos;
+ const fn = files[pos - 1];
+ if(fn == null){ stage.innerHTML = '<div class="none">…</div>'; return; }
+ stage.innerHTML = '';
+ const img = document.createElement('img');
+ img.src = '/api/photo?session='+enc(sc.sessionId)+'&category='+enc(sc.category)+'&orientation='+enc(sc.orientation)+'&file='+enc(fn);
+ stage.appendChild(img);
+ $('counter').textContent = pos + ' / ' + count;
+ $('pn').textContent = stripExt(fn); $('pn').className = 'val';
+ const pn = names[fn] || '';
+ $('ph').textContent = pn || '—'; $('ph').className = 'val' + (pn ? '' : ' muted');
+ const sIn = $('score');
+ if(fn !== shownFn || document.activeElement !== sIn){
+   sIn.value = scores[fn] || ''; sIn.classList.toggle('set', !!scores[fn]);
+ }
+ sIn.disabled = false;
+ winInfo(fn); shownFn = fn; renderOp();
+}
+
 function render(){
+ updateJudgePanel(); // judge-mode board (replaces the manual score box when on)
+ if(soloActive()){ renderSolo(); return; }
  const sc = curScreen();
  maybeFollow();
  const locked = $('lock').checked;
@@ -258,6 +404,7 @@ function render(){
    $('pn').textContent = '—'; $('pn').className = 'val muted';
    $('ph').textContent = '—'; $('ph').className = 'val muted';
    $('score').value = ''; $('score').classList.remove('set'); $('score').disabled = true;
+   winInfo(null);
    shownFn = null;
    renderOp();
    return;
@@ -283,8 +430,20 @@ function render(){
    sIn.classList.toggle('set', !!scores[fn]);
  }
  sIn.disabled = false;
+ winInfo(fn);
  shownFn = fn;
  renderOp();
+}
+
+// winInfo refreshes the 🏆 winner flag and the score hint for the current photo,
+// based on this session's win threshold and total points.
+function winInfo(fn){
+ const wf = $('winflag');
+ const isWin = winThr != null && fn != null && scores[fn] != null && scores[fn] !== '' && parseFloat(scores[fn]) >= winThr;
+ wf.textContent = isWin ? '🏆 Winner' : '';
+ wf.style.display = isWin ? 'inline-block' : 'none';
+ $('scorehint').textContent = (maxPts != null ? 'Out of ' + maxPts + ' points · ' : '')
+   + 'Press Enter to save.' + (winThr != null ? ' Winner at ' + winThr + '+.' : '');
 }
 
 // renderOp describes where the operator is on the followed screen and highlights
@@ -310,6 +469,48 @@ function go(n){
  if(!files.length) return;
  idx = Math.min(Math.max(1, n), files.length);
  render();
+}
+
+// ---- judge mode: the scorekeeper watches each judge's score for the live photo ----
+async function updateJudgePanel(){
+ const on = judgeOn();
+ document.body.classList.toggle('judge', on);
+ $('judgeboard').style.display = on ? '' : 'none';
+ if(!on) return;
+ let b;
+ try { b = await (await fetch('/api/judge/board')).json(); } catch(e){ return; }
+ renderJudgeBoard(b);
+}
+
+function renderJudgeBoard(b){
+ const el = $('judgeboard');
+ if(b && !b.active){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">Judging hasn’t started — the operator starts it from the console once the judges have joined.</div>'; return; }
+ if(!b || !b.open){ el.innerHTML = '<div class="muted" style="padding:8px 0;color:#8a9099">No photo is live to judge yet — load a category and reveal a photo.</div>'; return; }
+ let n = 0;
+ const rows = (b.judges || []).map(j => {
+   const label = b.anonymize ? (j.alternate ? 'Alternate' : ('Judge ' + (++n))) : (j.name || (j.alternate ? 'Alternate' : 'Judge'));
+   let sc = '—', cls = 'jscore none';
+   if(j.deferred){ sc = 'deferred'; }
+   else if(j.requested){ sc = 're-scoring…'; }
+   else if(j.score){ sc = j.score; cls = 'jscore'; }
+   const tag = j.alternate ? '<span class="jtag">alt</span>' : (j.present ? '' : '<span class="jtag">away</span>');
+   return '<div class="jrow"><span class="jname">' + esc(label) + '</span>' + tag
+     + '<span class="' + cls + '">' + esc(sc) + '</span>'
+     + '<button class="jre" data-k="' + esc(j.key) + '">Rescore</button></div>';
+ }).join('') || '<div class="muted" style="padding:8px 0;color:#8a9099">No judges connected yet.</div>';
+ const done = b.needed ? ('<span class="' + (b.complete ? 'done' : 'pending') + '">' + b.counting + ' / ' + b.needed + (b.complete ? ' ✓' : '') + '</span>') : (b.counting + ' scored');
+ el.innerHTML = rows
+   + '<div class="combined">' + (b.aggregation === 'total' ? 'Total' : 'Average') + ': <b>' + esc(b.combined || '—') + '</b> &nbsp;·&nbsp; ' + done + '</div>'
+   + '<button class="rescoreall">🔁 Ask all judges to re-score</button>';
+ el.querySelectorAll('.jre').forEach(btn => btn.onclick = () => rescore(b, btn.dataset.k));
+ el.querySelector('.rescoreall').onclick = () => rescore(b, '');
+}
+
+async function rescore(b, judge){
+ const r = await post('/api/judge/rescore', {session:b.session, category:b.category, orientation:b.orientation, file:b.file, judge});
+ if(!r.ok){ toast('Could not request a re-score', 'del'); return; }
+ toast(judge ? 'Re-score requested' : 'Re-score requested for all judges');
+ updateJudgePanel();
 }
 
 async function saveScore(){
@@ -341,17 +542,41 @@ $('score').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDe
 $('score').addEventListener('change', saveScore);
 document.addEventListener('keydown', e => {
  if(mode !== 'screen') return;                  // physical mode has its own table keys
+ if(presMode()) return;                         // presentation modes are driven from the Console
  if(e.target === $('score')) return;            // typing a score, not navigating
+ if(soloActive()){                              // solo: arrows/space drive the live screen
+   if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); soloCmd('advance'); }
+   else if(e.key === 'ArrowLeft'){ e.preventDefault(); soloCmd('back'); }
+   return;
+ }
  if($('lock').checked) return;                  // locked to the operator — manual nav is off
  if(e.key === 'ArrowLeft') go(idx-1);
  else if(e.key === 'ArrowRight') go(idx+1);
 });
+
+// Solo controls drive the server-side presentation; the console push echoes back and
+// re-renders this page (and the output monitors) in lockstep.
+async function soloCmd(action){
+ const r = await post('/api/solo/' + action, {});
+ if(!r.ok){ toast('Could not ' + action + ': ' + (await r.text()), 'del'); return; }
+ if(action === 'advance'){
+   try {
+     const j = await r.json();
+     if(j.event === 'loop') toast('↻ Looped back to the start');
+     else if(j.event === 'close') toast('■ Presentation ended');
+   } catch(e){}
+ }
+}
+$('soloAdvance').onclick = () => soloCmd('advance');
+$('soloBack').onclick = () => soloCmd('back');
+$('soloStop').onclick = () => soloCmd('stop');
 
 // ---- physical prints --------------------------------------------------------
 // A spreadsheet-style table of printed entries that have no image file. Stored per
 // session; rows auto-extend as you type, Tab moves between fields, Enter to next row.
 function setMode(m){
  mode = m;
+ document.body.classList.toggle('physmode', m === 'physical');
  $('modescreen').classList.toggle('active', m === 'screen');
  $('modephysical').classList.toggle('active', m === 'physical');
  $('screenctrls').style.display = m === 'screen' ? '' : 'none';
@@ -371,8 +596,9 @@ function setMode(m){
 function updatePhysicalControls(){
  const ssel = $('psession'), prevS = ssel.value || psid;
  ssel.innerHTML = '';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); ssel.appendChild(o); });
  if(prevS && sessions.some(s => s.id === prevS)) ssel.value = prevS;
+ else if(selSessionId && sessions.some(s => s.id === selSessionId)) ssel.value = selSessionId; // the app-wide current session
  else if(sessions.length) ssel.value = sessions[sessions.length-1].id; // default: latest
  psid = ssel.value;
 
@@ -453,7 +679,7 @@ async function savePhysical(){
 
 $('modescreen').onclick = () => setMode('screen');
 $('modephysical').onclick = () => setMode('physical');
-$('psession').addEventListener('change', () => { updatePhysicalControls(); loadPhysical(); });
+$('psession').addEventListener('change', () => { post('/api/console/session', {sessionId: $('psession').value}); updatePhysicalControls(); loadPhysical(); });
 $('pcategory').addEventListener('change', renderPhysical);
 
 const es = new EventSource('/api/events?role=console');

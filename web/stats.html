@@ -1,0 +1,575 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Judge — Statistics</title>
+<style>
+ body{font-family:system-ui,Segoe UI,sans-serif;margin:0;background:#1b1d21;color:#e8e8e8}
+ header{background:#111;padding:10px 16px;font-weight:600;font-size:15px}
+ .intro{color:#8a9099;font-size:13px;padding:10px 16px 0;line-height:1.5}
+ .tabs{display:flex;gap:6px;padding:10px 16px 0}
+ .tabs button{font-size:14px;font-weight:600;padding:8px 18px;background:#23262c;color:#c9ccd1;border:1px solid #3a3e45;border-radius:6px;cursor:pointer}
+ .tabs button:hover{background:#2a2e35}
+ .tabs button.active{background:#2d6cdf;border-color:#2d6cdf;color:#fff}
+ .bar{padding:12px 16px;display:flex;gap:10px 14px;align-items:flex-end;flex-wrap:wrap;border-bottom:1px solid #333}
+ .f{display:flex;flex-direction:column;gap:4px}
+ .f label{color:#9aa0a6;font-size:12px}
+ input,button{font-size:14px;padding:8px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;max-width:100%}
+ button{cursor:pointer}
+ button:hover{background:#363a42}
+ .presets{display:flex;gap:6px;flex-wrap:wrap}
+ .presets button.active{background:#2d6cdf;border-color:#2d6cdf}
+ #mediumfilter.hide{display:none}
+ #content{padding:14px 16px 48px}
+ .empty{color:#777;font-size:14px;padding:28px 0}
+ .rangelabel{color:#9aa0a6;font-size:13px;margin:0 0 12px}
+ .cards{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+ .stat{background:#23262c;border:1px solid #3a3e45;border-radius:8px;padding:14px 18px;min-width:130px;flex:1 1 130px}
+ .stat .n{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+ .stat .l{color:#9aa0a6;font-size:12.5px;margin-top:4px;text-transform:uppercase;letter-spacing:.03em}
+ .legend{display:flex;gap:12px 16px;flex-wrap:wrap;margin:2px 0 14px}
+ .legend .li{display:flex;align-items:center;gap:6px;font-size:13px;color:#c9ccd1}
+ .legend .sw{width:13px;height:13px;border-radius:3px;flex:none}
+ .chart{background:#23262c;border:1px solid #3a3e45;border-radius:8px;margin:0 0 16px;overflow:hidden}
+ .chart h3{margin:0;padding:13px 16px 4px;font-size:14px;font-weight:600}
+ .chart .desc{color:#8a9099;font-size:12.5px;padding:0 16px 8px}
+ .scroll{overflow-x:auto;padding:4px 16px 14px}
+ .chart-svg{display:block}
+ .chart-svg .grid{stroke:#33373e;stroke-width:1}
+ .chart-svg .yl{fill:#8a9099;font-size:11px;text-anchor:end;font-family:system-ui}
+ .chart-svg .xlab{font:11px/1.15 system-ui,Segoe UI,sans-serif;color:#b8bec6;text-align:center;
+   overflow-wrap:break-word;box-sizing:border-box;padding:2px 1px 0;height:100%}
+ .chart-svg .xlab.sm{font-size:10px;line-height:1.1}
+ .chart-svg .xlab.dt{color:#cdd2da;font-weight:600}
+ .chart-svg rect{transition:opacity .1s}
+ .tablewrap{margin:0 0 18px}
+ .tablewrap h3{font-size:14px;font-weight:600;margin:0 0 8px}
+ .tcard{background:#23262c;border:1px solid #3a3e45;border-radius:8px;overflow-x:auto}
+ table{width:100%;border-collapse:collapse;font-size:13px}
+ th,td{padding:8px 12px;text-align:left;border-bottom:1px solid #2c2f35;white-space:nowrap}
+ th{color:#9aa0a6;font-weight:500;background:#23262c}
+ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+ tfoot td{font-weight:600;border-top:2px solid #3a3e45;border-bottom:none}
+ .sw-inline{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+ .muted{color:#8a9099}
+ @media (max-width:760px){
+   input,button{font-size:16px}
+   .f{flex:1 1 140px}
+ }
+</style>
+</head>
+<body>
+<header>Photo Judge — Statistics</header>
+<div class="intro">Entry counts across your competition history, including archived sessions. An entry is any <b>photo</b> or <b>physical print</b> in a session. Switch to <b>Winners</b> for entries that reached their session's points threshold, or <b>Compare</b> for digital vs physical. The time frame and the Show filter apply to the Entries and Winners views.</div>
+<div class="tabs">
+  <button data-tab="entries" class="active">Entries</button>
+  <button data-tab="winners">🏆 Winners</button>
+  <button data-tab="compare">⚖ Compare</button>
+</div>
+<div class="bar">
+  <div class="f"><label>Quick range</label>
+    <div class="presets" id="rangepresets">
+      <button data-preset="all">All time</button>
+      <button data-preset="ytd">This year</button>
+      <button data-preset="12m">Last 12 months</button>
+    </div>
+  </div>
+  <div class="f"><label>From</label><input type="date" id="from"></div>
+  <div class="f"><label>To</label><input type="date" id="to"></div>
+  <button id="apply">Apply</button>
+  <div class="f" id="mediumfilter"><label>Show</label>
+    <div class="presets">
+      <button data-medium="both" class="active">Both</button>
+      <button data-medium="digital">Digital</button>
+      <button data-medium="physical">Physical</button>
+    </div>
+  </div>
+</div>
+<div id="content"><div class="empty">Loading…</div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const enc = encodeURIComponent;
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Distinct, reasonably colour-blind-friendly palette. Categories are coloured by
+// their index in data.categories, so the same category keeps its colour across
+// every chart and the legend.
+const PALETTE = ['#2d6cdf','#e0683b','#33b07a','#c9a23b','#9b59b6','#e05b8a',
+                 '#3bb6c9','#8a9a3b','#d4564f','#5f6caf','#b07a4a','#46a0c4'];
+let CATS = [];
+const colorFor = c => { const i = CATS.indexOf(c); return PALETTE[(i < 0 ? 0 : i) % PALETTE.length]; };
+const catVal = (s, c) => { const e = (s.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const phCatVal = (p, c) => { const e = (p.byCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const winCatVal = (s, c) => { const e = (s.winnersByCategory || []).find(x => x.category === c); return e ? e.count : 0; };
+const GOLD = '#c9a23b', DIGITAL_C = '#2d6cdf', PHYSICAL_C = '#e0683b';
+let activeTab = 'entries', activeMedium = 'both', lastData = null;
+
+function isoLocal(d){ const z = new Date(d.getTime() - d.getTimezoneOffset()*60000); return z.toISOString().slice(0,10); }
+
+// Round a value up to a "nice" axis maximum (1,2,2.5,5,10 × 10ⁿ).
+function niceCeil(v){
+ if(v <= 0) return 1;
+ const p = Math.pow(10, Math.floor(Math.log10(v)));
+ const n = v / p;
+ const m = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+ return m * p;
+}
+
+const GEO = {padL:44, padR:14, padT:14, padB:62, plotH:240};
+
+function axisSvg(plotW, nm){
+ const {padL, padT, plotH} = GEO;
+ let g = '';
+ for(let t = 0; t <= 4; t++){
+   const val = nm * t / 4;
+   const yy = padT + plotH - (val / nm) * plotH;
+   g += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${(padL+plotW).toFixed(1)}" y2="${yy.toFixed(1)}" class="grid"/>`;
+   g += `<text x="${padL-7}" y="${(yy+4).toFixed(1)}" class="yl">${Math.round(val)}</text>`;
+ }
+ return g;
+}
+function rect(x, y, w, h, fill, opacity, title){
+ if(h <= 0) return '';
+ return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${fill}"`
+      + (opacity != null ? ` opacity="${opacity}"` : '') + ` rx="2">`
+      + (title ? `<title>${esc(title)}</title>` : '') + `</rect>`;
+}
+// A horizontal, centered x-axis label that wraps long text (categories, photographer
+// names) — drawn below the baseline via foreignObject so it never overlaps the bars.
+function labelBox(cx, top, width, height, text, cls, full){
+ const w = Math.max(width, 28), x = cx - w / 2;
+ return `<foreignObject x="${x.toFixed(1)}" y="${top}" width="${w.toFixed(1)}" height="${height}">`
+      + `<div xmlns="http://www.w3.org/1999/xhtml" class="xlab${cls ? ' ' + cls : ''}"`
+      + (full ? ` title="${esc(full)}"` : '') + `>${esc(text)}</div></foreignObject>`;
+}
+function wrapSvg(W, H, inner){
+ return `<div class="scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" class="chart-svg">${inner}</svg></div>`;
+}
+
+// Dates shared by more than one session in the current result get the session id
+// appended so the per-session bars/rows stay distinguishable.
+let DUP_DATES = new Set();
+const sessLabel = s => DUP_DATES.has(s.date) ? s.date + ' · #' + s.id : s.date;
+
+// Chart 1 — custom overlaid: a faint full-height bar = session total, with the
+// session's category counts drawn as side-by-side bars in front of it.
+function chartOverlaid(sess){
+ if(!sess.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
+ const groupW = 96, plotW = sess.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...sess.map(s => s.total)));
+ const yOf = v => padT + plotH - (v / nm) * plotH;
+ const base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ sess.forEach((s, i) => {
+   const gx = padL + i * groupW, inner = groupW - 22, x0 = gx + 11;
+   g += rect(x0, yOf(s.total), inner, base - yOf(s.total), '#475066', 0.5, `${s.date} · total ${s.total}`);
+   const present = CATS.filter(c => catVal(s, c) > 0);
+   const bw = inner / Math.max(present.length, 1);
+   present.forEach((c, j) => {
+     const v = catVal(s, c);
+     g += rect(x0 + j*bw + 1, yOf(v), Math.max(bw - 2, 1.5), base - yOf(v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
+   });
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Chart 2 — stacked: one bar per session, category segments stacked to the total.
+function chartStacked(sess){
+ if(!sess.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
+ const groupW = 84, plotW = sess.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...sess.map(s => s.total)));
+ const yOf = v => padT + plotH - (v / nm) * plotH;
+ const base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ sess.forEach((s, i) => {
+   const bw = Math.min(groupW - 16, 48), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   let acc = 0;
+   CATS.forEach(c => {
+     const v = catVal(s, c);
+     if(v <= 0) return;
+     g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
+     acc += v;
+   });
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Chart 3 — category totals across the whole range.
+function chartCategories(byCat){
+ if(!byCat.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 50;
+ const groupW = 104, plotW = byCat.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...byCat.map(c => c.count)));
+ const yOf = v => padT + plotH - (v / nm) * plotH;
+ const base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ byCat.forEach((c, i) => {
+   const bw = Math.min(groupW - 22, 58), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   g += rect(x0, yOf(c.count), bw, base - yOf(c.count), colorFor(c.category), null, `${c.category}: ${c.count}`);
+   g += labelBox(gx + groupW/2, base + 4, groupW, padB - 6, c.category, '', `${c.category}: ${c.count}`);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Chart 4 — photographer clusters: one cluster per session, one bar per photographer
+// within it, each bar stacked by category. Shows who entered the most each session and
+// their category mix. Photographer labelled under each bar; session date under the cluster.
+function chartPhotographerStacks(sess){
+ const rows = sess.filter(s => (s.byPhotographer || []).length);
+ if(!rows.length) return '';
+ const {padL, padR, padT, plotH} = GEO;
+ const bw = 38, innerGap = 8, clusterGap = 34, base = padT + plotH;
+ const nameH = 46, dateH = 30, padB = 6 + nameH + dateH + 6; // names wrap, then the date below
+ let maxv = 1;
+ rows.forEach(s => s.byPhotographer.forEach(p => { if(p.count > maxv) maxv = p.count; }));
+ const nm = niceCeil(maxv);
+ const yOf = v => padT + plotH - (v / nm) * plotH;
+ let cursor = padL;
+ const clusters = rows.map(s => {
+   const n = s.byPhotographer.length, w = n * bw + (n - 1) * innerGap;
+   const c = { s, x: cursor, w }; cursor += w + clusterGap; return c;
+ });
+ const plotW = Math.max(cursor - clusterGap - padL, 1), W = padL + plotW + padR, H = padT + plotH + padB;
+ let g = axisSvg(plotW, nm);
+ clusters.forEach(c => {
+   c.s.byPhotographer.forEach((p, j) => {
+     const x0 = c.x + j * (bw + innerGap);
+     let acc = 0;
+     CATS.forEach(cat => {
+       const v = phCatVal(p, cat);
+       if(v <= 0) return;
+       g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(cat), null, `${c.s.date} · ${p.name} · ${cat}: ${v}`);
+       acc += v;
+     });
+     g += labelBox(x0 + bw / 2, base + 4, bw + innerGap, nameH, p.name, 'sm', `${p.name} · ${p.count}`);
+   });
+   g += labelBox(c.x + c.w / 2, base + 4 + nameH, c.w + clusterGap - 6, dateH, sessLabel(c.s), 'dt', c.s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function legend(){
+ if(!CATS.length) return '';
+ return '<div class="legend">' + CATS.map(c =>
+   `<span class="li"><span class="sw" style="background:${colorFor(c)}"></span>${esc(c)}</span>`).join('') + '</div>';
+}
+
+function sessionTable(sess){
+ if(!sess.length) return '';
+ const heads = ['<th>Session</th>', '<th class="n">Total</th>'].concat(CATS.map(c =>
+   `<th class="n"><span class="sw-inline" style="background:${colorFor(c)}"></span>${esc(c)}</th>`));
+ const rows = sess.map(s => {
+   const idTag = DUP_DATES.has(s.date) ? ` <span class="muted">#${esc(s.id)}</span>` : '';
+   const label = esc(s.date) + idTag + (s.description ? ` <span class="muted">· ${esc(s.description)}</span>` : '');
+   const cells = CATS.map(c => { const v = catVal(s, c); return `<td class="n">${v || '<span class="muted">–</span>'}</td>`; });
+   return `<tr><td>${label}</td><td class="n">${s.total}</td>${cells.join('')}</tr>`;
+ });
+ const foot = '<tfoot><tr><td>All sessions</td><td class="n">'
+   + sess.reduce((a,s)=>a+s.total,0) + '</td>'
+   + CATS.map(c => `<td class="n">${sess.reduce((a,s)=>a+catVal(s,c),0)}</td>`).join('') + '</tr></tfoot>';
+ return '<div class="tablewrap"><h3>Entries by session</h3><div class="tcard"><table><thead><tr>'
+   + heads.join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody>' + foot + '</table></div></div>';
+}
+
+function categoryTable(byCat, grand, noun){
+ if(!byCat.length) return '';
+ noun = noun || 'Entries';
+ const rows = byCat.map(c => {
+   const pct = grand ? (100 * c.count / grand) : 0;
+   return `<tr><td><span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)}</td>`
+     + `<td class="n">${c.count}</td><td class="n">${pct.toFixed(1)}%</td></tr>`;
+ });
+ return '<div class="tablewrap"><h3>' + noun + ' by category</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Category</th><th class="n">' + noun + '</th><th class="n">Share</th></tr></thead>'
+   + '<tbody>' + rows.join('') + '</tbody>'
+   + `<tfoot><tr><td>Total</td><td class="n">${grand}</td><td class="n">100%</td></tr></tfoot>`
+   + '</table></div></div>';
+}
+
+function photographerTable(byPh, noun){
+ if(!byPh.length) return '';
+ noun = noun || 'Entries';
+ const rows = byPh.map(p => {
+   const breakdown = (p.byCategory || []).map(c =>
+     `<span class="sw-inline" style="background:${colorFor(c.category)}"></span>${esc(c.category)} ${c.count}`).join('&nbsp;&nbsp; ') || '<span class="muted">–</span>';
+   return `<tr><td>${esc(p.name)}</td><td class="n">${p.count}</td><td>${breakdown}</td></tr>`;
+ });
+ return '<div class="tablewrap"><h3>' + noun + ' by photographer</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Photographer</th><th class="n">' + noun + '</th><th>By category</th></tr></thead>'
+   + '<tbody>' + rows.join('') + '</tbody></table></div></div>';
+}
+
+function rangeLabel(d){
+ if(!d.from && !d.to) return 'All time';
+ if(d.from && d.to) return d.from + ' to ' + d.to;
+ if(d.from) return 'Since ' + d.from;
+ return 'Up to ' + d.to;
+}
+
+function render(d){
+ CATS = d.categories || [];
+ // Flag any date shared by 2+ sessions so labels can disambiguate with the session id.
+ // Use the complete session list (compare covers both media) when available.
+ const allSess = (d.compare && d.compare.bySession && d.compare.bySession.length) ? d.compare.bySession : (d.bySession || []);
+ const dateCounts = {};
+ allSess.forEach(s => { dateCounts[s.date] = (dateCounts[s.date] || 0) + 1; });
+ DUP_DATES = new Set(Object.keys(dateCounts).filter(k => dateCounts[k] > 1));
+ if(activeTab === 'compare') renderCompare(d);
+ else if(activeTab === 'winners') renderWinners(d);
+ else renderEntries(d);
+}
+
+const mediumNote = d => d.medium === 'digital' ? ' · digital only' : d.medium === 'physical' ? ' · physical prints only' : '';
+
+function renderEntries(d){
+ const t = d.totals || {};
+ if(!t.entries){
+   $('content').innerHTML = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>'
+     + '<div class="empty">No entries in this time frame. Add photos to a session, or widen the range.</div>';
+   return;
+ }
+ const cards = [
+   ['Entries', t.entries], ['Sessions', t.sessions],
+   ['Categories', t.categories], ['Photographers', t.photographers],
+ ].map(([l,n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+ const out = [];
+ out.push('<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d) + '</div>');
+ out.push('<div class="cards">' + cards + '</div>');
+ out.push(legend());
+ out.push('<div class="chart"><h3>Total &amp; category entries per session</h3>'
+   + '<div class="desc">Faint bar = the session total; the coloured bars in front are that session\'s categories, side by side.</div>'
+   + chartOverlaid(d.bySession) + '</div>');
+ out.push('<div class="chart"><h3>Category mix per session (stacked)</h3>'
+   + '<div class="desc">Each bar is a session; segments stack to the session total.</div>'
+   + chartStacked(d.bySession) + '</div>');
+ out.push('<div class="chart"><h3>Entries by category</h3>'
+   + '<div class="desc">Totals across the whole time frame.</div>'
+   + chartCategories(d.byCategory) + '</div>');
+ out.push('<div class="chart"><h3>Entries by photographer per session</h3>'
+   + '<div class="desc">Each cluster is a session; each bar a photographer, stacked by category.</div>'
+   + chartPhotographerStacks(d.bySession) + '</div>');
+ out.push(sessionTable(d.bySession));
+ out.push(categoryTable(d.byCategory, t.entries));
+ out.push(photographerTable(d.byPhotographer));
+ $('content').innerHTML = out.join('');
+}
+
+// A plain vertical bar chart over a list of {label, count}, one colour.
+function chartValueBars(items, fill){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 50;
+ const groupW = 92, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...items.map(i => i.count)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const bw = Math.min(groupW - 22, 50), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   g += rect(x0, yOf(it.count), bw, base - yOf(it.count), fill, null, `${it.label}: ${it.count}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, it.label, '', `${it.label}: ${it.count}`);
+ });
+ return wrapSvg(W, H, g);
+}
+
+// Winners per session, stacked by category (only sessions that had winners).
+function chartWinnersPerSession(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 44;
+ const groupW = 84, plotW = rows.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(...rows.map(s => s.winners)));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ rows.forEach((s, i) => {
+   const bw = Math.min(groupW - 16, 48), gx = padL + i * groupW, x0 = gx + (groupW - bw) / 2;
+   let acc = 0;
+   CATS.forEach(c => {
+     const v = winCatVal(s, c);
+     if(v <= 0) return;
+     g += rect(x0, yOf(acc + v), bw, yOf(acc) - yOf(acc + v), colorFor(c), null, `${s.date} · ${c}: ${v}`);
+     acc += v;
+   });
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, sessLabel(s), 'dt', s.description);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function winnerSessionTable(sess){
+ const rows = sess.filter(s => s.winners > 0);
+ if(!rows.length) return '';
+ const heads = ['<th>Session</th>', '<th class="n">Winners</th>'].concat(CATS.map(c =>
+   `<th class="n"><span class="sw-inline" style="background:${colorFor(c)}"></span>${esc(c)}</th>`));
+ const body = rows.map(s => {
+   const cells = CATS.map(c => { const v = winCatVal(s, c); return `<td class="n">${v || '<span class="muted">–</span>'}</td>`; });
+   const idTag = DUP_DATES.has(s.date) ? ` <span class="muted">#${esc(s.id)}</span>` : '';
+   return `<tr><td>${esc(s.date)}${idTag}</td><td class="n">${s.winners}</td>${cells.join('')}</tr>`;
+ });
+ return '<div class="tablewrap"><h3>Winners by session</h3><div class="tcard"><table><thead><tr>'
+   + heads.join('') + '</tr></thead><tbody>' + body.join('') + '</tbody></table></div></div>';
+}
+
+function renderWinners(d){
+ const t = d.totals || {};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + mediumNote(d)
+   + ' · a winner is an entry scoring at or above its session\'s threshold</div>';
+ if(!t.winners){
+   $('content').innerHTML = head + '<div class="empty">No winning entries in this time frame. '
+     + 'Winners need a session <b>win threshold</b> (set on Session Management) and scores that reach it.</div>';
+   return;
+ }
+ const winRate = t.entries ? Math.round(1000 * t.winners / t.entries) / 10 : 0;
+ const cards = [
+   ['Winning entries', t.winners], ['Win rate', winRate + '%'],
+   ['Winning photographers', t.winningPhotographers], ['Sessions', t.sessions],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+ const out = [head, '<div class="cards">' + cards + '</div>', legend()];
+ out.push('<div class="chart"><h3>Winners by photographer</h3>'
+   + '<div class="desc">Who has photos eligible for the annual competition.</div>'
+   + chartValueBars((d.winnersByPhotographer || []).map(p => ({label: p.name, count: p.count})), GOLD) + '</div>');
+ out.push('<div class="chart"><h3>Winners by category</h3>'
+   + '<div class="desc">Winning photos per category across the time frame.</div>'
+   + chartCategories(d.winnersByCategory) + '</div>');
+ out.push('<div class="chart"><h3>Winners per session</h3>'
+   + '<div class="desc">Each bar is a session; segments are its winning photos by category.</div>'
+   + chartWinnersPerSession(d.bySession) + '</div>');
+ out.push(photographerTable(d.winnersByPhotographer, 'Winners'));
+ out.push(categoryTable(d.winnersByCategory, t.winners, 'Winners'));
+ out.push(winnerSessionTable(d.bySession));
+ $('content').innerHTML = out.join('');
+}
+
+// Two bars per group (digital vs physical) — used by the Compare tab.
+function chartTwoSeries(items, labelFn, aFn, bFn){
+ if(!items.length) return '';
+ const {padL, padR, padT, plotH} = GEO, padB = 46;
+ const groupW = 88, plotW = items.length * groupW, W = padL + plotW + padR, H = padT + plotH + padB;
+ const nm = niceCeil(Math.max(1, ...items.map(i => Math.max(aFn(i), bFn(i)))));
+ const yOf = v => padT + plotH - (v / nm) * plotH, base = padT + plotH;
+ let g = axisSvg(plotW, nm);
+ items.forEach((it, i) => {
+   const gx = padL + i * groupW, bw = 26, gap = 6, totalW = bw * 2 + gap, x0 = gx + (groupW - totalW) / 2;
+   g += rect(x0, yOf(aFn(it)), bw, base - yOf(aFn(it)), DIGITAL_C, null, `${labelFn(it)} · digital: ${aFn(it)}`);
+   g += rect(x0 + bw + gap, yOf(bFn(it)), bw, base - yOf(bFn(it)), PHYSICAL_C, null, `${labelFn(it)} · physical: ${bFn(it)}`);
+   g += labelBox(gx + groupW / 2, base + 4, groupW, padB - 6, labelFn(it), '', null);
+ });
+ return wrapSvg(W, H, g);
+}
+
+function mediumLegend(){
+ return '<div class="legend">'
+   + `<span class="li"><span class="sw" style="background:${DIGITAL_C}"></span>Digital photos</span>`
+   + `<span class="li"><span class="sw" style="background:${PHYSICAL_C}"></span>Physical prints</span></div>`;
+}
+
+function compareTable(dig, phy){
+ const total = dig.entries + phy.entries, totWin = dig.winners + phy.winners;
+ const rate = (w, e) => e ? (Math.round(1000 * w / e) / 10).toFixed(1) + '%' : '–';
+ const share = e => total ? (100 * e / total).toFixed(1) + '%' : '–';
+ const row = (name, col, m) => `<tr><td><span class="sw-inline" style="background:${col}"></span>${name}</td>`
+   + `<td class="n">${m.entries}</td><td class="n">${share(m.entries)}</td><td class="n">${m.winners}</td><td class="n">${rate(m.winners, m.entries)}</td></tr>`;
+ return '<div class="tablewrap"><h3>Digital vs physical</h3><div class="tcard"><table>'
+   + '<thead><tr><th>Medium</th><th class="n">Entries</th><th class="n">Share</th><th class="n">Winners</th><th class="n">Win rate</th></tr></thead><tbody>'
+   + row('Digital photos', DIGITAL_C, dig) + row('Physical prints', PHYSICAL_C, phy)
+   + '</tbody><tfoot><tr><td>Total</td><td class="n">' + total + '</td><td class="n">100%</td>'
+   + '<td class="n">' + totWin + '</td><td class="n">' + rate(totWin, total) + '</td></tr></tfoot></table></div></div>';
+}
+
+function renderCompare(d){
+ const c = d.compare || {};
+ const dig = c.digital || {entries:0, winners:0}, phy = c.physical || {entries:0, winners:0};
+ const head = '<div class="rangelabel">Time frame: ' + esc(rangeLabel(d)) + ' · digital photos vs physical prints</div>';
+ if(!(dig.entries + phy.entries)){
+   $('content').innerHTML = head + '<div class="empty">No entries in this time frame.</div>';
+   return;
+ }
+ const cards = [
+   ['Digital entries', dig.entries], ['Physical entries', phy.entries],
+   ['Digital winners', dig.winners], ['Physical winners', phy.winners],
+ ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+ const out = [head, '<div class="cards">' + cards + '</div>', mediumLegend()];
+ out.push('<div class="chart"><h3>Entries by category — digital vs physical</h3>'
+   + '<div class="desc">Two bars per category: digital photos and physical prints.</div>'
+   + chartTwoSeries(c.byCategory || [], it => it.category, it => it.digital, it => it.physical) + '</div>');
+ out.push('<div class="chart"><h3>Entries per session — digital vs physical</h3>'
+   + '<div class="desc">Two bars per session, in date order.</div>'
+   + chartTwoSeries(c.bySession || [], it => sessLabel(it), it => it.digital, it => it.physical) + '</div>');
+ out.push(compareTable(dig, phy));
+ $('content').innerHTML = out.join('');
+}
+
+async function load(){
+ const p = new URLSearchParams();
+ if($('from').value) p.set('from', $('from').value);
+ if($('to').value)   p.set('to', $('to').value);
+ if(activeMedium !== 'both') p.set('medium', activeMedium);
+ $('content').innerHTML = '<div class="empty">Loading…</div>';
+ try {
+   const r = await fetch('/api/stats?' + p.toString());
+   if(!r.ok) throw new Error(await r.text());
+   lastData = await r.json();
+   render(lastData);
+ } catch(e){
+   $('content').innerHTML = '<div class="empty">Could not load statistics. ' + esc(e.message || '') + '</div>';
+ }
+}
+
+// The medium filter only applies to Entries/Winners; Compare always shows both.
+function syncMediumVisibility(){ $('mediumfilter').classList.toggle('hide', activeTab === 'compare'); }
+
+// Switch tabs without refetching — the cached payload has all three views' data.
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+ activeTab = b.dataset.tab;
+ document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('active', x === b));
+ syncMediumVisibility();
+ if(lastData) render(lastData);
+});
+
+function setActive(preset){
+ document.querySelectorAll('#rangepresets button').forEach(b =>
+   b.classList.toggle('active', b.dataset.preset === preset));
+}
+document.querySelectorAll('#rangepresets button').forEach(b => b.onclick = () => {
+ const today = new Date();
+ if(b.dataset.preset === 'all'){ $('from').value = ''; $('to').value = ''; }
+ else if(b.dataset.preset === 'ytd'){
+   $('from').value = today.getFullYear() + '-01-01';
+   $('to').value = isoLocal(today);
+ } else { // 12m
+   const back = new Date(today); back.setFullYear(back.getFullYear() - 1);
+   $('from').value = isoLocal(back);
+   $('to').value = isoLocal(today);
+ }
+ setActive(b.dataset.preset);
+ load();
+});
+$('apply').onclick = () => { setActive(''); load(); };
+['from','to'].forEach(id => $(id).addEventListener('change', () => setActive('')));
+
+// Medium filter (Both / Digital / Physical) — refetches with ?medium=.
+document.querySelectorAll('#mediumfilter button').forEach(b => b.onclick = () => {
+ activeMedium = b.dataset.medium;
+ document.querySelectorAll('#mediumfilter button').forEach(x => x.classList.toggle('active', x === b));
+ load();
+});
+
+// Optional ?tab=winners|compare deep-link (also lets the tab be bookmarked).
+const wantTab = new URLSearchParams(location.search).get('tab');
+if(wantTab === 'winners' || wantTab === 'compare'){
+ activeTab = wantTab;
+ document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === wantTab));
+}
+syncMediumVisibility();
+setActive('all');
+load();
+</script>
+<script src="/modal.js"></script>
+<script src="/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enter your photos — Photo Judge</title>
+<style>
+ :root{color-scheme:dark}
+ html,body{margin:0;min-height:100%}
+ body{background:#0f1115;color:#e8e8e8;font-family:system-ui,Segoe UI,sans-serif;
+   padding:22px 16px 40px;max-width:560px;margin:0 auto}
+ h1{font-size:21px;margin:0 0 4px}
+ .sub{color:#9aa0a6;font-size:14px;margin-bottom:22px}
+ .card{background:#191c22;border:1px solid #2a2e36;border-radius:12px;padding:18px;margin-bottom:16px}
+ label{display:block;font-size:13px;color:#b9bec6;margin:0 0 6px}
+ input[type=text],select{width:100%;box-sizing:border-box;font-size:16px;padding:12px;
+   background:#0f1115;color:#fff;border:1px solid #3a3e46;border-radius:9px;margin-bottom:14px}
+ input[type=file]{width:100%;box-sizing:border-box;font-size:15px;color:#cdd2da;margin-bottom:14px}
+ button{width:100%;font-size:17px;font-weight:600;padding:14px;border:none;border-radius:10px;
+   background:#2d6cdf;color:#fff;cursor:pointer}
+ button:disabled{background:#33384a;opacity:.55;cursor:not-allowed}
+ button.sec{background:transparent;color:#7fb2ff;font-weight:500;font-size:14px;padding:8px;margin-top:6px}
+ .quota{font-size:13.5px;color:#9aa0a6;margin-bottom:14px}
+ .banner{background:#2a2017;border:1px solid #5a4326;color:#ffd27a;border-radius:10px;
+   padding:16px;font-size:15px;text-align:center;line-height:1.5;margin-bottom:16px}
+ .err{color:#ff8585;font-size:13.5px;margin:-6px 0 12px;min-height:1px}
+ .hi{color:#fff}
+ .mine h2{font-size:15px;color:#b9bec6;margin:8px 0 10px}
+ /* One submitted entry */
+ .ent{position:relative;display:flex;gap:12px;background:#15181d;border:1px solid #262b33;
+   border-radius:11px;padding:11px;margin-bottom:10px}
+ .ent.rejected{border-color:#c0392b;box-shadow:0 0 0 1px #c0392b inset}
+ .ent.approved{border-color:#2e7d46}
+ .ent .thumb{width:74px;height:74px;flex:none;object-fit:cover;border-radius:8px;background:#0b0d10}
+ .ent .info{flex:1;min-width:0}
+ .ent .et{font-weight:600;font-size:15px;word-break:break-word}
+ .ent .ec{color:#8b9097;font-size:12.5px;margin-top:2px}
+ .ent .badge{display:inline-block;margin-top:7px;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:20px}
+ .badge.pending{background:#2b3340;color:#9fc0ff}
+ .badge.approved{background:#1f4030;color:#7fe0a6}
+ .badge.rejected{background:#3a1d1a;color:#ff9c8f}
+ .ent .corner{position:absolute;top:0;right:0;background:#c0392b;color:#fff;font-size:11px;
+   font-weight:700;padding:3px 9px;border-radius:0 11px 0 9px}
+ .ent .acts{display:flex;gap:8px;margin-top:9px}
+ .ent .acts button{width:auto;flex:1;font-size:13px;font-weight:600;padding:8px 10px;background:#23262c;border:1px solid #3a3e45}
+ .ent .acts button.rm{color:#ff8a7d;border-color:#5a2a25}
+ .editform{margin-top:10px}
+ .editform input,.editform select{font-size:14px;padding:9px}
+ .editform .er{display:flex;gap:8px}
+ .editform .er button{width:auto;flex:1;font-size:14px;padding:9px}
+ #nameStep,#entryStep{display:none}
+</style>
+</head>
+<body>
+<h1 id="head">Enter your photos</h1>
+<div class="sub" id="sub"></div>
+
+<div id="closedBanner" class="banner" style="display:none">
+ The entry form is closed right now. Please check with the meeting host.
+</div>
+
+<div id="nameStep" class="card">
+ <label>First name</label>
+ <input type="text" id="first" autocomplete="given-name" maxlength="60">
+ <label>Last name</label>
+ <input type="text" id="last" autocomplete="family-name" maxlength="60">
+ <div class="err" id="nameErr"></div>
+ <button id="nameGo">Continue</button>
+</div>
+
+<div id="entryStep">
+ <div class="card" id="addCard">
+   <div id="greet" class="quota"></div>
+   <div class="quota" id="quota"></div>
+   <label>Category</label>
+   <select id="cat"></select>
+   <label>Title</label>
+   <input type="text" id="title" maxlength="120" placeholder="(optional)">
+   <label>Photo (JPG or PNG)</label>
+   <input type="file" id="file" accept=".jpg,.jpeg,.png">
+   <div class="err" id="err"></div>
+   <button id="add">Add entry</button>
+   <button class="sec" id="changeName">Use a different name</button>
+ </div>
+ <div class="mine" id="mine"></div>
+</div>
+
+<script src="/modal.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let state = null;          // latest entry-form state (open/categories/limits) from SSE
+let mineData = null;       // latest /api/entry/mine (this competitor's entries + counts)
+let me = { first:'', last:'' };
+let editingId = null;      // id of the entry currently being edited inline
+
+try { me = JSON.parse(localStorage.getItem('pj-entry-name')) || me; } catch(_){}
+function esc(s){ const d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+
+function render(){
+ const open = state && state.open;
+ $('closedBanner').style.display = open ? 'none' : 'block';
+ $('sub').textContent = state && state.date ? (state.date + ' competition') : '';
+ const named = me.first && me.last;
+ $('nameStep').style.display = (open && !named) ? 'block' : 'none';
+ $('entryStep').style.display = named ? 'block' : 'none';
+ $('addCard').style.display = (open && named) ? 'block' : 'none';
+ if(named){ fillCats(); renderMine(); }
+}
+
+function fillCats(){
+ if(!state) return;
+ const sel = $('cat'); const cur = sel.value;
+ sel.innerHTML = '';
+ (state.categories || []).forEach(c => {
+   const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o);
+ });
+ if(cur) sel.value = cur;
+}
+
+function quotaText(){
+ if(!state) return '';
+ const per = state.limitPerCompetitor, cat = state.limitPerCategory;
+ const used = mineData ? mineData.total : 0;
+ const parts = [];
+ if(per > 0) parts.push(Math.max(0, per - used) + ' of ' + per + ' photos left');
+ else parts.push('No limit on total photos');
+ if(cat > 0) parts.push('up to ' + cat + ' per category');
+ return parts.join(' · ');
+}
+
+async function refreshMine(){
+ if(!(me.first && me.last)) return;
+ try {
+   const r = await fetch('/api/entry/mine?first='+encodeURIComponent(me.first)+'&last='+encodeURIComponent(me.last));
+   mineData = await r.json();
+   mineData._t = Date.now(); // cache-buster so replaced thumbnails refresh
+ } catch(_){ return; }
+ renderMine();
+}
+
+function renderMine(){
+ if(!state) return;
+ $('greet').innerHTML = 'Hi <span class="hi">'+esc(me.first)+'</span>! Add a photo below.';
+ $('quota').textContent = quotaText();
+ const per = state.limitPerCompetitor, used = mineData ? mineData.total : 0;
+ $('add').disabled = (per > 0 && used >= per);
+
+ const box = $('mine'); box.innerHTML = '';
+ const entries = (mineData && mineData.entries) || [];
+ if(!entries.length){ return; }
+ const h = document.createElement('h2'); h.textContent = 'Your entries'; box.appendChild(h);
+ const stamp = (mineData && mineData._t) || '';
+ entries.forEach(e => box.appendChild(entryCard(e, stamp)));
+}
+
+function statusLabel(s){ return s==='approved' ? 'Accepted' : s==='rejected' ? 'Rejected' : 'Awaiting review'; }
+
+function entryCard(e, stamp){
+ const card = document.createElement('div');
+ card.className = 'ent ' + e.status;
+ if(e.id === editingId){ card.appendChild(editForm(e)); return card; }
+ const editable = state.open && e.status !== 'approved';
+ card.innerHTML =
+   (e.status==='rejected' ? '<div class="corner">Rejected</div>' : '') +
+   '<img class="thumb" src="'+e.photoUrl+'&_='+stamp+'" alt="">' +
+   '<div class="info">' +
+     '<div class="et">'+esc(e.title || '(untitled)')+'</div>' +
+     '<div class="ec">'+esc(e.category)+' · '+esc(e.orientation)+'</div>' +
+     '<span class="badge '+e.status+'">'+statusLabel(e.status)+'</span>' +
+     '<div class="acts"></div>' +
+   '</div>';
+ const acts = card.querySelector('.acts');
+ if(editable){
+   const ed = document.createElement('button'); ed.textContent='Edit / replace';
+   ed.onclick = () => { editingId = e.id; renderMine(); };
+   const rm = document.createElement('button'); rm.className='rm'; rm.textContent='Remove';
+   rm.onclick = () => removeEntry(e);
+   acts.appendChild(ed); acts.appendChild(rm);
+ } else { acts.remove(); }
+ return card;
+}
+
+function editForm(e){
+ const wrap = document.createElement('div'); wrap.className='info editform';
+ wrap.innerHTML =
+   '<label>Category</label><select class="ecat"></select>' +
+   '<label>Title</label><input type="text" class="etitle" maxlength="120" placeholder="(optional)">' +
+   '<label>Replace photo (optional)</label><input type="file" class="efile" accept=".jpg,.jpeg,.png">' +
+   '<div class="err esaveerr"></div>' +
+   '<div class="er"><button class="save">Save</button><button class="sec cancel" style="flex:none">Cancel</button></div>';
+ const sel = wrap.querySelector('.ecat');
+ (state.categories||[]).forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
+ sel.value = e.category;
+ wrap.querySelector('.etitle').value = e.title || '';
+ wrap.querySelector('.cancel').onclick = () => { editingId = null; renderMine(); };
+ wrap.querySelector('.save').onclick = async (ev) => {
+   const btn = ev.target; btn.disabled = true;
+   const fd = new FormData();
+   fd.append('firstName', me.first); fd.append('lastName', me.last); fd.append('id', e.id);
+   fd.append('category', sel.value); fd.append('title', wrap.querySelector('.etitle').value.trim());
+   const f = wrap.querySelector('.efile').files[0]; if(f) fd.append('file', f);
+   try {
+     const r = await fetch('/api/entry/edit', { method:'POST', body: fd });
+     if(!r.ok){ wrap.querySelector('.esaveerr').textContent = await r.text(); btn.disabled=false; return; }
+     editingId = null; await refreshMine();
+   } catch(_){ wrap.querySelector('.esaveerr').textContent = 'Save failed — check your connection.'; btn.disabled=false; }
+ };
+ return wrap;
+}
+
+async function removeEntry(e){
+ if(!await pjConfirm('Remove your entry "'+(e.title||'untitled')+'"?', {title:'Remove entry', okLabel:'Remove', danger:true})) return;
+ try {
+   const r = await fetch('/api/entry/remove', {method:'POST', headers:{'Content-Type':'application/json'},
+     body: JSON.stringify({firstName:me.first, lastName:me.last, id:e.id})});
+   if(!r.ok){ await pjAlert(await r.text()); return; }
+   await refreshMine();
+ } catch(_){ await pjAlert('Could not remove the entry.'); }
+}
+
+$('nameGo').addEventListener('click', () => {
+ const f = $('first').value.trim(), l = $('last').value.trim();
+ if(!f || !l){ $('nameErr').textContent = 'Please enter your first and last name.'; return; }
+ me = { first:f, last:l };
+ try { localStorage.setItem('pj-entry-name', JSON.stringify(me)); } catch(_){}
+ $('nameErr').textContent = '';
+ render(); refreshMine();
+});
+$('changeName').addEventListener('click', () => {
+ me = { first:'', last:'' }; mineData = null; editingId = null;
+ try { localStorage.removeItem('pj-entry-name'); } catch(_){}
+ $('first').value=''; $('last').value='';
+ render();
+});
+
+$('add').addEventListener('click', async () => {
+ $('err').textContent = '';
+ const file = $('file').files[0];
+ if(!file){ $('err').textContent = 'Choose a photo first.'; return; }
+ const fd = new FormData();
+ fd.append('firstName', me.first); fd.append('lastName', me.last);
+ fd.append('category', $('cat').value); fd.append('title', $('title').value.trim());
+ fd.append('file', file);
+ $('add').disabled = true; $('add').textContent = 'Uploading…';
+ try {
+   const r = await fetch('/api/entry/submit', { method:'POST', body: fd });
+   if(!r.ok){ $('err').textContent = await r.text(); return; }
+   $('title').value = ''; $('file').value = '';
+   await refreshMine();
+ } catch(e){
+   $('err').textContent = 'Upload failed — check your Wi-Fi connection and try again.';
+ } finally {
+   $('add').textContent = 'Add entry';
+   const per = state.limitPerCompetitor, used = mineData ? mineData.total : 0;
+   $('add').disabled = (per > 0 && used >= per);
+ }
+});
+
+const es = new EventSource('/api/events?role=entry');
+es.onmessage = e => {
+ let st; try { st = JSON.parse(e.data); } catch(_){ return; }
+ const sessionChanged = state && st.sessionId !== state.sessionId;
+ state = st;
+ if(sessionChanged){ mineData = null; editingId = null; }
+ render();
+ refreshMine(); // any server-side change (approve/reject/etc.) refreshes our entries live
+};
+</script>
+</body>
+</html>

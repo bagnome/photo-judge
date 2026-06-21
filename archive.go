@@ -42,6 +42,10 @@ type ArchivedSession struct {
 	PhotoCount     int             `json:"photoCount"`
 	Photos         []ArchivedPhoto `json:"photos"`
 	PhysicalPrints []PhysicalPrint `json:"physicalPrints,omitempty"` // judged physical prints
+	// Scoring settings captured at archive time, so winners stay computable after the
+	// image files are gone (nil → this session had no winners).
+	WinThreshold *float64 `json:"winThreshold,omitempty"`
+	MaxPoints    *float64 `json:"maxPoints,omitempty"`
 }
 
 func (s *server) archivesDir() string { return filepath.Join(s.baseDir, "archives") }
@@ -73,6 +77,8 @@ func (s *server) buildArchive(ss *Session) ArchivedSession {
 		ArchivedDate: todayStr(),
 		ArchivedAt:   time.Now().Format(time.RFC3339),
 		Photos:       []ArchivedPhoto{},
+		WinThreshold: ss.WinThreshold,
+		MaxPoints:    ss.MaxPoints,
 	}
 	// Capture active categories (in display order) AND any deactivated ones, since
 	// a deactivated category can still hold photos and the whole folder is deleted.

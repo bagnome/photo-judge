@@ -107,7 +107,10 @@ that workflow.
   (`sunset.jpg` → `sunset (2).jpg`), other files skipped; drag thumbnails within a
   section to set display order (saved to `order.json`); remove a photo with an ×
   (recoverable soft-delete); and a per-photo text box to record the
-  **photographer's name** (saved to `names.json`).
+  **photographer's name** (saved to `names.json`). Randomize the display order for **one
+  category** or the **whole session** in a click, with an optional **Spread photographers**
+  setting that keeps the same photographer's photos apart; a **Random order on upload** toggle
+  scatters newly uploaded photos into random positions — all useful for unbiased judging.
 - **Named output windows ("screens")** — create as many as you like; each is
   persisted and restored on relaunch (with a blank category, so a photo can never
   appear before you choose one). Auto-placed on a chosen monitor via the Window
@@ -123,9 +126,29 @@ that workflow.
   live indicator of which photo the operator is on, a highlight when both are on the
   same photo, and a **Jump to operator's photo** shortcut. Scores are saved per photo
   and surface as a badge on the Upload / Reorder grid and pre-filled in the score-sheet
-  PDF. A separate **Physical prints** mode records printed entries that have no image
+  PDF. A photo reaching the session's **win threshold** also gets a **🏆 winner** badge on
+  the grid and the Scoring page. A separate **Physical prints** mode records printed entries that have no image
   file — a spreadsheet-style table of title / photographer / score per category that
   auto-extends as you type (Tab between fields, Enter for the next row).
+- **Judge scoring** — let the judges score from their own phones instead of a scorekeeper
+  typing. Turn on **Judge scoring** in Settings and set a screen to **Judge QR**; judges scan it,
+  enter their name (and whether they're the **alternate**), and submit a score for the live photo.
+  The app combines the scores (**average** or **total**) into the photo's score, and the Scoring
+  page shows each judge's score, the combined value, and how many of the needed judges are in —
+  with per-judge and all-judges **re-score** requests. A judge can **defer** a photo (e.g. their
+  own) to the alternate, optionally auto-detected by photographer name. The rules — combine mode,
+  judges needed, score range + step, anonymize, alternate, auto-defer — are set per session on
+  **Session Management**.
+- **Solo operator mode** — for nights with only one volunteer. Enabled per session on
+  **Session Management** (pick which screen presents Landscape vs Portrait and which
+  orientation shows first, then **Start**), it lets one person run the whole show from the
+  **Scoring** page: a single **Advance** steps the live monitor forward (title → photos → end
+  card), then automatically switches to the other orientation's monitor for the same category
+  and moves on to the next category — in the session's category order. The idle monitor goes
+  black; the scorekeeper sees the title and end cards mirrored on their screen and scores each
+  photo inline. **Back** reverses, **Stop** ends it; **→/Space** advance and **←** back on the
+  keyboard. You choose what happens after the last category: wait on a "complete" screen, loop
+  back to the start, or black out and end.
 - **Printable score sheet (PDF)** — one click downloads a single-column scoring form
   for the selected session: a section per category (in the session's category order),
   Landscape before Portrait, one row per photo in display order with the photo name
@@ -142,22 +165,58 @@ that workflow.
   code** button renders a scannable code (a small standard-library-only QR encoder, no
   third-party dependency) to open the control page on a phone instantly. The judges'
   output windows stay on the host machine.
+- **Member entries** — let competitors add their own photos at the last minute from their
+  phones. Switch any output screen's **type** (a dropdown on its console row) to **Entry QR**:
+  the screen then shows how to join the host's Wi-Fi (name + password — auto-detected or set
+  on the Settings page — and a scannable join code) and a QR/URL to the **entry page**. A
+  competitor enters their first and last name, then uploads JPG/PNG photos into a chosen
+  category with a title. Entries lock to the session selected when the form is opened and
+  stop on **Close Entry Form**. Submissions wait in the **Review entries** queue (`/review`)
+  for the operator to **approve** (sorting each into the right category/orientation to
+  reorder normally) or **reject**. A competitor sees their submissions as thumbnails with a
+  live status (Awaiting review / Accepted / **Rejected**, the latter outlined red) and can
+  edit, re-upload, or remove any not-yet-accepted entry. A submitted JPEG gets its title and
+  photographer written into its EXIF. Optional per-competitor and per-category limits — which
+  count every photo by a photographer's name for the session (so the same name can't bypass
+  them from another device), a master on/off switch, and a toggle to skip review and add
+  submissions straight into the session, are all set on the Settings page. The app's public **landing page** (the root URL) shows the club logo and,
+  when entries are open, points competitors to the form and the session date — while the
+  operator console (now at **`/console`**, where the exe opens) stays off the public surface.
 - **Session archiving** — when a competition night is over, archive its session: the
   photo metadata (titles, photographers, scores, categories, orientations, dates) is saved
   to `archives\<id>.json` and the **photo image files are permanently deleted** to reclaim
   space. The session becomes read-only and leaves the console; archived sessions are
   browsable on the **Archived Sessions** page (search by date range / session ID /
   photographer / title) and downloadable as JSON.
-- **Mobile-friendly** — every control page (console, Upload/Reorder, Manage categories,
+- **Statistics page** — entry counts across your competition history, **including archived
+  sessions** (an entry is any photo in a session). Filter by time frame — **All time** /
+  **This year** / **Last 12 months** presets, or a custom date range — to see summary cards
+  (entries, sessions, categories, photographers) and breakdowns **by session**, **by
+  category** (with each category's share), and **by photographer**. Four hand-drawn SVG
+  charts visualise it: a custom **overlaid** chart (a faint per-session total bar with that
+  session's categories drawn side by side in front), a **stacked** per-session chart, a
+  **category totals** chart, and a **photographer-per-session** chart (one cluster per
+  session, one bar per photographer, stacked by category). Entries include **physical
+  prints** as well as digital photos, with a **Show** filter (Both / Digital / Physical). A
+  **Winners** tab covers entries that reached their session's threshold (same kind of cards,
+  tables, and charts), and a **Compare** tab puts digital vs physical side by side.
+  Standard-library only — no charting library.
+- **Session Management** — a per-session settings page (in the operator nav) with the
+  session's **date & description**, its **scoring** settings (win threshold + total points,
+  default 11 of 15), the **solo operator** setup (above), and the per-session **category**
+  manager. It opens to the session selected on the console without changing that selection,
+  and is built to gain more per-session settings over time.
+- **Mobile-friendly** — every control page (console, Upload/Reorder, Session Management,
   Scoring, How To) is responsive and touch-friendly, so it works from a phone or
   tablet: the console's screen table becomes one card per screen, panes stack, tap targets
   grow, and photo reordering works by touch via a drag grip (pointer events). Pairs with
   LAN remote control above.
 - **Settings page** — one place for app-wide options: lock the scorekeeper to the
   operator, allow only one live screen at a time, a logo library (upload/choose/delete the
-  title-card logo), a custom PDF header, LAN access, and per-field photo-metadata import.
-  Saved to `settings.json`; the LAN and metadata toggles are gated by `photo-judge.properties`
-  (a `false` there wins).
+  title-card logo), a custom PDF header, LAN access, per-field photo-metadata import,
+  member-entry limits (per competitor and per category), and the Wi-Fi name/password shown on
+  the Entry-QR screen. Saved to `settings.json`; the LAN and metadata toggles are gated by
+  `photo-judge.properties` (a `false` there wins).
 - **Consistent in-app dialogs** — confirmations, prompts, and messages use the app's own
   dark modals (matching the QR-code dialog) instead of the browser's plain pop-ups, with a
   red action button for destructive choices; **Enter** confirms and **Esc** cancels.
@@ -175,9 +234,28 @@ cd photo-judge
 go build -o photo-judge.exe .
 ```
 
-That produces a single ~9 MB `photo-judge.exe` with the web UI embedded — nothing
+That produces a single ~14 MB `photo-judge.exe` with the web UI embedded — nothing
 else needs to be copied alongside it for a fresh start. Because it's pure standard
 library, the build works with no network access once the toolchain is installed.
+
+> **If the terminal says `go` is not recognized**, Go is installed but its `bin`
+> folder isn't on your PATH. First find where Go lives — its `bin` folder is the one
+> containing `go.exe` (often `C:\Program Files\Go\bin`, or wherever you unpacked it).
+> Then, in **PowerShell** (replace `<GO_BIN>` with that folder):
+>
+> ```powershell
+> # Option A — prepend it for this terminal only, then build:
+> $env:Path = "<GO_BIN>;$env:Path"
+> go build -o photo-judge.exe .
+>
+> # Option B — call Go by its full path (no PATH change):
+> & "<GO_BIN>\go.exe" build -o photo-judge.exe .
+>
+> # Option C — add it to your PATH permanently (open a NEW terminal afterwards):
+> [Environment]::SetEnvironmentVariable("Path", $env:Path + ";<GO_BIN>", "User")
+> ```
+>
+> Once `go` works in a terminal, `(Get-Command go).Source` prints its full path.
 
 Cross-compiling for Windows from macOS/Linux:
 
@@ -241,9 +319,10 @@ suggesting you close and reopen Photo Judge to update.
 ### Typical run, start to finish
 
 1. **Create / pick a session** (by date) on the console.
-2. **Set up categories** *(optional)* — *Manage categories* → activate/deactivate,
-   reorder, or add this session's categories. A new session already inherits the last
-   one's setup, so you can usually skip this.
+2. **Set up the session** *(optional)* — *Session Management* → adjust this session's
+   date/description, its scoring (win threshold + total points), and its categories
+   (activate/deactivate, reorder, add). A new session already inherits the last one's
+   setup, so you can usually skip this.
 3. **Upload photos** — *Upload / Reorder* page → choose session and category →
    drag images in (each is auto-filed as Landscape or Portrait by its shape) → drag
    thumbnails within a section to set the order.
@@ -256,7 +335,7 @@ suggesting you close and reopen Photo Judge to update.
 
 > The default categories (seeded into the first session) are: Pictorial, Wildlife,
 > Altered Reality, Portraiture, Macro, "Landscapes, Cityscapes, and Travel", Black and
-> White. After that, manage each session's categories in **Manage categories** (no
+> White. After that, manage each session's categories in **Session Management** (no
 > restart needed); `categories.txt` only seeds the very first session.
 
 A full end-user walkthrough (for the operator who runs the show, not the developer)
@@ -293,11 +372,22 @@ new sessions — copy to the local drive for an event).
 | `web/modal.js` | Shared in-app dialogs (alert/confirm/prompt replacements) for every page |
 | `portation.go` | Session import/export — `.pjs`/`.pjss` zip bundles, preview & commit |
 | `web/portation.js` | The console's Import / Export wizard (export picker + import preview) |
-| `web/output.html` | Judge-facing output window (black-by-default display) |
+| `entries.go` | Member entries — entry form state, submit/review queue, limits, Wi-Fi detection |
+| `exifwrite.go` | Writes a submitted JPEG's title/photographer into its EXIF (round-trips with `metadata.go`) |
+| `web/landing.html` | Public landing page (root URL) — logo + entry direction |
+| `web/entry.html` | Competitor entry page (name + upload, no console links) |
+| `web/review.html` | Operator review queue for pending member entries |
+| `web/output.html` | Judge-facing output window (black-by-default display; Entry-QR mode) |
 | `web/admin.html` | Upload / reorder page |
-| `web/categories.html` | Category manager (per-session) page |
-| `web/score.html` | Scoring page (follow a screen, record scores) |
+| `web/categories.html` | Session Management page (per-session settings + category manager; served at `/session`) |
+| `web/score.html` | Scoring page (follow a screen, record scores; drives solo operator mode) |
+| `solo.go` | Solo operator mode — segment sequencing + screen driving (start/advance/back/stop) |
+| `judge.go` | Judge scoring — Judge-QR view, per-judge scores (judgescores.json), combine + the judges board |
+| `web/judge.html` | Judge phone page — score the live photo, defer to the alternate |
 | `web/archived.html` | Archived Sessions page (search / view / download archives) |
+| `randomize.go` | Randomize photo order (one category or whole session) + the spread-photographers shuffle |
+| `stats.go` | Statistics — aggregate entries by session / category / photographer over a date range |
+| `web/stats.html` | Statistics page (time-frame filter, tables, hand-drawn SVG charts) |
 | `web/how-to.html` | How To page — tabbed step-by-step guides (Getting started is the first tab) |
 | `getting-started-images/` | Screenshots for the How To guides (embedded into the exe) |
 | `categories.txt` | First-session category seed (one per line) |
@@ -336,8 +426,9 @@ ahead of `main`.
   fix, or a small addition. A `patch/` branch off `main` bumps `main`'s **4th** digit
   (e.g. `1.2.3.0` → `1.2.3.1`); it counts patches to the **current** release, so it
   **resets to `0`** at the next release. `development` keeps its 4th digit at `0` (it
-  isn't a shipped release yet) — port the same fix into `development` as a `fix/` so it
-  doesn't regress at the next release.
+  isn't a shipped release yet) — port the same fix into `development` too, **keeping
+  `development`'s current version (no bump)**, since it's already counted as a patch on
+  the current release; this just stops it regressing at the next release.
 - **A release** is a `development` → `main` PR. `main` takes `development`'s
   MAJOR.RELEASE.FEATURES and its PATCH **resets to `0`** (a fresh release has no patches
   yet). `development` then rolls to the next RELEASE with FEATURES back to `0` (PATCH
@@ -361,7 +452,7 @@ main 1.1.0.0   development 1.2.0.0
 |--------|--------------|-------------|----------------|
 | `feature/*` | `development` | `development` | +1 **FEATURES** (3rd) |
 | `fix/*` | `development` | `development` | +1 **FEATURES** (3rd) — a dev-side fix is a change in the next release |
-| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main` (resets to `0` each release); also port the fix to `development` via a `fix/` |
+| `patch/*` | `main` | `main` | +1 **PATCH** (4th) on `main` (resets to `0` each release); also port the fix into `development`, keeping its current version (no bump) |
 | `docs/*` | `development` | `development` | none |
 | `chore/*` | `development` | `development` | none |
 
@@ -377,8 +468,8 @@ on the operator console, and logged at startup. Release history is kept in
   it unchanged.
 - **Patch → `main`:** in a `patch/` PR off `main`, bump the **PATCH** (4th) digit of
   `main`'s `VERSION` (e.g. `1.2.3.0` → `1.2.3.1`). After it merges, tag `main` with the
-  patched version (and port the fix into `development` via a `fix/` so it doesn't
-  regress at the next release):
+  patched version (and port the fix into `development`, keeping its current version —
+  no bump — so it doesn't regress at the next release):
 
   ```sh
   git checkout main && git pull

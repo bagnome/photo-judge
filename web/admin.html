@@ -26,6 +26,10 @@
  #guide .k{color:#e8e8e8;font-weight:600}
  #guide code{background:#1b1d21;padding:1px 5px;border-radius:3px;font-size:12px}
  #guide .muted{color:#8a9099;font-size:13px;margin-top:12px}
+ .orderbar{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:6px 16px 0;padding:10px 12px;background:#23262c;border:1px solid #3a3e45;border-radius:8px}
+ .orderbar .rndtog{display:flex;gap:8px;align-items:center;color:#cdd;font-size:13px;cursor:pointer;user-select:none}
+ .orderbar .rndtog input{margin:0;cursor:pointer}
+ .orderbar .d{color:#8a9099;font-size:12px}
  .sec{padding:0 16px}
  .sectitle{font-size:14px;color:#cdd;font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:8px}
  .sectitle .cnt{color:#777;font-weight:400;font-size:12px}
@@ -39,6 +43,7 @@
  .tile .fn{font-size:11px;padding:5px 7px;color:#aab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .tile .idx{position:absolute;top:4px;left:4px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;font-weight:600;padding:1px 6px;border-radius:10px}
  .tile .score{position:absolute;top:84px;left:4px;background:#2e7d46;color:#fff;font-size:11px;font-weight:600;padding:1px 7px;border-radius:10px}
+ .tile .win{position:absolute;top:84px;right:4px;background:#b8860b;color:#fff;font-size:12px;line-height:1.3;padding:1px 6px;border-radius:10px}
  .tile .del{position:absolute;top:4px;right:4px;width:22px;height:22px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
  .tile .del:hover{background:#a83232}
  .tile .nm{padding:0 7px 7px}
@@ -92,6 +97,15 @@
   </div>
   <input type="file" id="fileinput" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" style="display:none">
 
+  <div class="orderbar">
+    <label class="rndtog" title="New photos are dropped in at random positions instead of added to the end">
+      <input type="checkbox" id="randomUpload"> Random order on upload
+    </label>
+    <button id="randomizebtn">🔀 Randomize this category</button>
+    <button id="randomizesessionbtn">🔀 Randomize whole session</button>
+    <span class="d">Shuffles the display order — handy for unbiased judging. Spread photographers in <b>Settings</b>.</span>
+  </div>
+
   <div class="sec">
     <div class="sectitle">Landscape <span class="cnt" id="cnt-Landscape"></span></div>
     <div class="grid" id="grid-Landscape"></div>
@@ -110,6 +124,7 @@ const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'applicat
 const ORIENTS = ['Landscape','Portrait'];
 let sessions = [], pendingSession = null;
 let sect = { Landscape:{files:[],names:{},scores:{}}, Portrait:{files:[],names:{},scores:{}} };
+let winThr = null;  // this session's win threshold (null = no winners); from /api/photos
 
 function toast(msg, kind){
  const t = document.createElement('div');
@@ -138,9 +153,14 @@ function applyState(st){
  sessions = st.sessions || [];
  const ssel = $('session'), scur = ssel.value;
  ssel.innerHTML = '';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
- if(pendingSession && sessions.some(s => s.id === pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
- else if(scur) ssel.value = scur;
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); ssel.appendChild(o); });
+ const ids = sessions.map(s => s.id);
+ // The selected session is shared app-wide (the server's selectedSessionId). Keep the
+ // user's pick on this page if they've made one; otherwise open to the app-wide session.
+ if(pendingSession && ids.includes(pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
+ else if(scur && ids.includes(scur)) ssel.value = scur;
+ else if(st.selectedSessionId && ids.includes(st.selectedSessionId)) ssel.value = st.selectedSessionId;
+ else if(ids.length) ssel.value = ids[ids.length-1]; // nothing persisted — latest
 
  populateCategories();
  refreshGrid();
@@ -188,6 +208,7 @@ async function refreshGrid(){
    const r = await fetch('/api/photos?session='+enc(c.session)+'&category='+enc(c.category)+'&orientation='+o);
    const j = await r.json();
    sect[o] = {files: j.files || [], names: j.names || {}, scores: j.scores || {}};
+   winThr = (typeof j.winThreshold === 'number') ? j.winThreshold : null;
  }));
  renderAll();
 }
@@ -220,6 +241,9 @@ function renderSection(orient){
    t.append(grip, img, badge, cap, del, nm);
    const sc = data.scores[fn];
    if(sc){ const sb = document.createElement('div'); sb.className = 'score'; sb.textContent = '★ '+sc; sb.title = 'Judge score'; t.appendChild(sb); }
+   if(winThr != null && sc != null && sc !== '' && parseFloat(sc) >= winThr){
+     const wb = document.createElement('div'); wb.className = 'win'; wb.textContent = '🏆'; wb.title = 'Winner — meets the '+winThr+'-point threshold'; t.appendChild(wb);
+   }
    // Desktop: native HTML5 drag-and-drop — grab the tile, drop it on another to reorder.
    t.addEventListener('dragstart', e => {
      if(e.target.closest('input,button')){ e.preventDefault(); return; } // typing / delete, not reordering
@@ -299,10 +323,45 @@ function endTileDrag(){
  saveOrder(d.orient);
 }
 
-async function saveOrder(orient){
+async function saveOrder(orient, silent){
  const c = ctx();
  const r = await post('/api/order', {session:c.session, category:c.category, orientation:orient, order:sect[orient].files});
+ if(silent) return r.ok;
  if(r.ok) toast('Order saved'); else toast('Could not save order', 'del');
+ return r.ok;
+}
+
+// scatterNew drops just-uploaded files into random positions among the existing order
+// (existing photos keep their relative order). Used when "Random order on upload" is on.
+function scatterNew(orient, newFiles){
+ const isNew = new Set(newFiles);
+ const base = sect[orient].files.filter(f => !isNew.has(f)); // existing, in order
+ newFiles.forEach(f => { base.splice(Math.floor(Math.random() * (base.length + 1)), 0, f); });
+ sect[orient].files = base;
+}
+
+// randomizeAll shuffles the current category (both orientations) on the server, which
+// honors the "spread photographers" Setting, then refreshes the grid.
+async function randomizeAll(){
+ const c = ctx();
+ if(!c.category){ pjAlert('Pick a category first.'); return; }
+ const total = ORIENTS.reduce((n, o) => n + sect[o].files.length, 0);
+ if(total < 2){ toast('Add at least two photos to randomize.'); return; }
+ const r = await post('/api/order/randomize', {session:c.session, category:c.category});
+ if(!r.ok){ toast('Could not randomize: '+(await r.text()), 'del'); return; }
+ await refreshGrid();
+ toast('🔀 Category order randomized');
+}
+
+// randomizeSession shuffles EVERY category in the session in one click.
+async function randomizeSession(){
+ const c = ctx();
+ if(!c.session){ pjAlert('Select a session first.'); return; }
+ if(!await pjConfirm('Randomize the photo order of every category in this session?', {title:'Randomize whole session', okLabel:'Randomize'})) return;
+ const r = await post('/api/order/randomize', {session:c.session});
+ if(!r.ok){ toast('Could not randomize: '+(await r.text()), 'del'); return; }
+ await refreshGrid();
+ toast('🔀 Whole session randomized');
 }
 
 async function savePhotographer(orient, fn, input){
@@ -342,6 +401,15 @@ function uploadFiles(list){
    const L = saved.filter(x => x.orientation === 'Landscape').length;
    const P = saved.length - L;
    let msg = saved.length+' photo(s) uploaded — '+L+' landscape, '+P+' portrait';
+   // When "Random order on upload" is on, scatter the new photos into random positions.
+   let randomized = false;
+   if($('randomUpload').checked && saved.length){
+     const byOrient = {};
+     saved.forEach(x => { (byOrient[x.orientation] = byOrient[x.orientation] || []).push(x.file); });
+     for(const o of Object.keys(byOrient)){ scatterNew(o, byOrient[o]); renderSection(o); await saveOrder(o, true); }
+     randomized = true;
+   }
+   if(randomized) msg += ' · placed in random order';
    if(j.skipped && j.skipped.length) msg += ' · '+j.skipped.length+' skipped (not an image)';
    toast(msg);
  });
@@ -366,8 +434,16 @@ $('newbtn').onclick = async () => {
  toast('Session #'+s.id+' ('+s.date+') created');
 };
 
-$('session').addEventListener('change', () => { populateCategories(); refreshGrid(); });
+$('session').addEventListener('change', () => { post('/api/console/session', {sessionId: $('session').value}); populateCategories(); refreshGrid(); });
 $('category').addEventListener('change', refreshGrid);
+
+// Random-order controls. The toggle's state is remembered per browser.
+try { $('randomUpload').checked = localStorage.getItem('pj-random-upload') === '1'; } catch(_){}
+$('randomUpload').addEventListener('change', () => {
+ try { localStorage.setItem('pj-random-upload', $('randomUpload').checked ? '1' : '0'); } catch(_){}
+});
+$('randomizebtn').onclick = randomizeAll;
+$('randomizesessionbtn').onclick = randomizeSession;
 
 const drop = $('drop'), fi = $('fileinput');
 drop.onclick = () => fi.click();

@@ -7,11 +7,12 @@
 // detected from the URL. Standard library only on the server side; no framework here.
 (function () {
   var PAGES = [
-    { href: '/',                icon: '🎛️', label: 'Console' },
+    { href: '/console',         icon: '🎛️', label: 'Console' },
     { href: '/admin',           icon: '🖼️', label: 'Upload / Reorder' },
-    { href: '/categories',      icon: '🗂️', label: 'Manage categories' },
+    { href: '/session',         icon: '🗂️', label: 'Session Management' },
     { href: '/score',           icon: '🏆', label: 'Scoring' },
     { href: '/archived',        icon: '🗄️', label: 'Archived Sessions' },
+    { href: '/stats',           icon: '📊', label: 'Statistics' },
     { href: '/settings',        icon: '⚙️', label: 'Settings' },
     { href: '/how-to', icon: '📖', label: 'How To' }
   ];

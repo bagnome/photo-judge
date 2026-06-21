@@ -13,6 +13,141 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **Guided, console-driven presentation for scoring nights (phase 1).** When a presentation mode is
+  on, the operator runs the whole show from the **Console** instead of free-form screen control, to
+  reduce mistakes and streamline scoring. Three Settings toggles share one engine: **Guided
+  presentation** (a guided slideshow, no scoring), **Score Keeper mode** (guided slideshow + an
+  inline score box on the Console), and **Judge scoring** (guided slideshow + the judge board inline).
+  Score Keeper and Judge scoring are **mutually exclusive**. A **Start / Pause / End** bar appears on
+  the Console: until you Start, the monitors stay black and the screen-table nav is locked; after
+  Start a panel below the table shows the current photo with one **Prev/Next** that steps it across
+  screens & categories (the old Solo engine), with inline scoring or the judge board beside it.
+  **Pause** suspends the run so you can reconfigure screens; **End** locks the session's scores
+  (read-only). The Solo screen config moved to a **Presentation** section on Session Management (the
+  old per-session "Solo mode" Enable/Start/Stop are gone — presenting now starts from the Console),
+  and the Scoring page shows a "driven from the Console" notice for these modes (physical-prints
+  scoring still works there).
+- **Guided presentation — phase 2.** When the show reaches the last photo, the Console **prompts the
+  operator to End the session** and lock in the scores. A **Restart** button (while running or after
+  End) re-opens the session for a fresh run — it **erases all of that session's scores** after a
+  warning (use it to redo a night). Sessions that have been ended show **"✓ judged"** in the session
+  dropdowns, and Session Management shows the **start/end times** under the Presentation card.
+- **Optional separate scorekeeper screen.** A new Settings toggle — **"Use a separate scorekeeper
+  screen"** — lets a **second operator** enter scores (or watch the judge board) on the **Scoring**
+  page while the main operator drives the show from the Console. Off (default), scoring stays inline
+  on the Console; on, the Console panel just shows the photo + Prev/Next and the scoring happens on
+  the Scoring page, which follows the live photo automatically.
+- **The selected session sticks across the app.** Pick a session on any operator page — Console,
+  Upload / Reorder, Session Management, or the Scoring page's physical-prints mode — and the others
+  open to that same session as you navigate, instead of resetting to the earliest one. (The choice
+  is shared via the server; changing it on one page updates the rest.)
+- **Judge scoring (phase 1)** — judges score from their own phones. Turn on **Judge scoring** in
+  Settings, then set a screen's type to **Judge QR**: judges scan it, enter their name (and tick
+  if they're the **alternate**), and submit a score for whatever photo is live — the app combines
+  the scores into the photo's score (**average** or **total**). The **Scoring page** becomes a live
+  board of each judge's score, the combined value, and an *N / needed* indicator, with **Rescore**
+  (per judge) and **Ask all to re-score** buttons. Conflicts are handled: a judge can **defer** a
+  photo (e.g. their own) to the **alternate**, and an optional **auto-defer** matches the
+  photographer's name to a judge automatically. Per-session config lives on **Session Management**
+  (combine by average/total, judges needed, score range + step, anonymize, alternate, auto-defer,
+  show-photographer-to-judges), inherited by new sessions. While judge scoring is on, only one
+  screen shows at a time. A judging session is an explicit thing you **Start** and **Stop** from the
+  console: until you start it the slideshow stays **black**, the operator can't drive it, and judges
+  can't score. **Start** is gated — the session must have **judges needed** and a **score range**
+  set, and **all needed judges must have joined** first — and pops a confirmation showing the
+  session and its rules; a strip below the action bar shows **how many judges have joined**. The
+  Scoring page is **locked to the operator's live screen** while judging. (Named presets and a
+  per-judge breakdown on the PDF/archive are planned for a follow-up.)
+- **Randomize a whole session at once**, and a **spread-photographers** option. The Upload /
+  Reorder page now has a **🔀 Randomize whole session** button (alongside the per-category one)
+  that reshuffles every category's display order in a single click. A new Settings toggle —
+  **Spread photographers when randomizing** — makes the shuffle try to keep the same
+  photographer's photos from landing next to each other (when the mix allows). Both randomize
+  buttons run on the server and honor the setting.
+- **Solo operator mode.** When only one person is available, they can run the whole night from
+  the **Scoring page**: a single **Advance** button steps the live output forward
+  (title → photos → end card), then **auto-switches to the other orientation's monitor** for the
+  same category and rolls on to the next category — following the per-session category order. The
+  idle monitor goes **black**, and the scorekeeper sees the **title and end cards** mirrored on
+  their own screen and scores each photo inline (🏆 winner flag and all). **Back** steps in
+  reverse (across segment boundaries onto the previous end card); **Stop** blacks the monitors.
+  Keyboard: **→ / Space** advance, **←** back. Configured per session on **Session Management**
+  (enable + which screen presents Landscape vs Portrait + which orientation shows first + what
+  happens at the end: **wait** on a "complete" screen, **loop** back to the start, or **black out
+  & end**), where you also **Start** the run. New sessions inherit the setup.
+- **Per-session scoring settings + "winning" photos.** Each session now has a **win
+  threshold** and a **total points** (defaults **11 of 15**); a photo scoring at or above
+  the threshold is a **winner** (eligible for the club's separate annual competition). A
+  blank threshold means that session has no winners. New sessions inherit the latest
+  session's settings. Winners surface everywhere:
+  - **Statistics** gains a **Winners** tab (alongside **Entries**): winner summary cards
+    (winning entries, win rate, winning photographers), and winners **by photographer**, **by
+    category**, and **per session** (tables + charts). Archived sessions are included via the
+    threshold saved at archive time. Tabs are deep-linkable (`/stats?tab=winners`).
+  - **Digital + physical, and a Compare tab.** Statistics now counts **physical prints** as
+    entries alongside digital photos, with a **Show** filter (Both / Digital / Physical) on the
+    Entries and Winners views, and a third **Compare** tab (`/stats?tab=compare`) putting digital
+    vs physical side by side (summary cards, grouped per-category and per-session bar charts, and
+    a win-rate table).
+  - A **🏆 badge** marks winning photos on the **Upload / Reorder** grid and the **Scoring**
+    page (which also shows the score is out of the session's total points).
+  - The **archive** records each session's threshold, flags winning photos (and prints) with
+    a 🏆, and shows a winners count per archived session.
+- **Session Management page** — the old **Manage categories** page (now at `/session`) becomes
+  the home for per-session settings: a **Session details** card (date + description), a
+  **Scoring** card (win threshold + total points), and the existing category manager. It opens
+  to the session currently selected on the console **without** changing the console's selection,
+  and is built so future per-session settings (e.g. judge scoring) drop in as new cards.
+- **Statistics page** (`/stats`, in the operator nav) — entry counts across your
+  competition history, **including archived sessions** (their counts come from the saved
+  archive metadata, since the image files are deleted on archive). An entry is any photo in
+  a session (operator-uploaded or member-submitted). A time-frame filter (**All time** /
+  **This year** / **Last 12 months** presets plus a custom **from–to** range, by session
+  date) drives summary cards (entries, sessions, categories, photographers) and three
+  breakdown tables: by session (with a per-category matrix and totals), by category (with
+  each category's share), and by photographer (with their per-category split; same-name
+  photographers share a tally and un-named photos bucket as **Unattributed**). Four
+  hand-drawn SVG charts visualise it: a **custom overlaid** chart (a faint per-session total
+  bar with that session's category counts drawn side by side in front), a **stacked**
+  per-session chart, a **category totals** chart, and a **photographer-per-session** chart
+  (one cluster per session, one bar per photographer, stacked by category) — all sharing one
+  colour legend. Stdlib only; no charting library.
+- **Randomize photo order** — on the Upload / Reorder page, a **🔀 Randomize order now**
+  button shuffles each orientation's display order for the selected category (handy for
+  unbiased judging), and a **Random order on upload** toggle drops newly-uploaded photos into
+  random positions instead of appending them to the end. The toggle is remembered per browser.
+- **Member entries** — competitors can add their own photos at the last minute from their
+  phones, under operator control. Each output screen now has a **type**, switched from a
+  dropdown on its row in the console: **Slideshow** (the normal display) or **Entry QR**.
+  An Entry-QR screen shows competitors how to join the host's Wi-Fi (network name +
+  password, auto-detected or set on the Settings page, with a scannable join code) and a
+  QR/URL to the new entry page. There a competitor enters their first and last name
+  (required), then uploads JPG/PNG photos into a chosen category with a title. Entries are
+  locked to the session selected when the form is opened and stop when the operator clicks
+  **Close Entry Form**. Submissions wait in a new **Review entries** queue (`/review`),
+  where the operator approves each — sorting it into the right category/orientation folder
+  to reorder normally — or rejects it. Per-competitor and per-category entry limits
+  (each optionally **Unlimited**) are set on the Settings page; a pending entry counts
+  toward a limit and rejecting it frees the slot. Member entries can be turned off entirely
+  with a Settings master switch, and the review step itself can be turned off (a Settings
+  toggle) so submissions are added straight into the session.
+  - A competitor sees their submitted photos as thumbnails on the entry page with a live
+    status (**Awaiting review** / **Accepted** / **Rejected**); a rejected photo stays
+    visible, outlined in red, and can be edited, re-uploaded, or removed (until it's
+    accepted) — all updating live without a refresh.
+  - Limits count **every photo by a photographer's name across the whole session**,
+    including photos an operator added directly, so the same name can't exceed a limit by
+    submitting from another device/browser.
+  - A submitted **JPEG carries its title and photographer in its EXIF metadata**
+    (ImageDescription / Artist), so the file is self-describing.
+
+### Changed
+- **The app now opens to a public landing page at the root URL** (club logo, plus a link
+  to the entry form and the session date when entries are open) instead of the operator
+  console. The console moved to **`/console`** — which is where launching the exe now
+  opens — and competitor-facing pages never link back to it.
+
 ## [1.3.13.2] - 2026-06-15 — "Crater Lake"
 
 ### Fixed

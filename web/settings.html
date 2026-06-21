@@ -25,8 +25,14 @@
  .sw input:checked + .sl{background:#2d6cdf}
  .sw input:checked + .sl::before{transform:translateX(20px);background:#fff}
  .sw input:disabled + .sl{opacity:.45;cursor:not-allowed}
- input[type=text]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
- input[type=text]:focus{border-color:#2d6cdf;outline:none}
+ input[type=text],input[type=password]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
+ input[type=text]:focus,input[type=password]:focus,input[type=number]:focus{border-color:#2d6cdf;outline:none}
+ input[type=number]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:90px}
+ input:disabled{opacity:.45}
+ .num{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+ .num .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#b9bec6}
+ .fldlbl{font-size:13px;color:#b9bec6;margin:0 0 6px}
+ .pwrow{display:flex;gap:8px}.pwrow input{flex:1}
  .counter{color:#777;font-size:12px;margin-top:5px}
  button{font-size:14px;padding:8px 12px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;cursor:pointer}
  button:hover{background:#363a42}
@@ -62,6 +68,34 @@
       </div>
       <label class="sw"><input type="checkbox" id="lockScorekeeper"><span class="sl"></span></label>
     </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Guided presentation</div>
+        <div class="d">Run the show as a <b>guided slideshow driven from the Console</b>: one Start/Pause/End and a single Prev/Next that steps the photo across screens &amp; categories. No scoring — just presenting. Set which screen shows each orientation on <b>Session Management</b>.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="guidedPresentation"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Score Keeper mode</div>
+        <div class="d">The guided presentation plus an <b>inline score box on the Console</b> for the live photo, so one operator presents and scores in one place. <span id="sknote"></span></div>
+      </div>
+      <label class="sw"><input type="checkbox" id="scoreKeeperEnabled"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Judge scoring (judges score from their phones)</div>
+        <div class="d">Turn this on to let judges connect via a <b>Judge QR</b> screen and submit their own scores; the app combines them into each photo's score. Configure the rules per session on <b>Session Management</b>. The show is driven from the Console with the judge board inline. <span id="jsnote"></span></div>
+      </div>
+      <label class="sw"><input type="checkbox" id="judgeScoringEnabled"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Use a separate scorekeeper screen</div>
+        <div class="d">With <b>Score Keeper</b> or <b>Judge scoring</b> on, let a <b>second operator</b> enter scores (or watch the judge board) on the <b>Scoring</b> page while the main operator drives the show from the Console. Off = score inline on the Console.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="scorekeeperScreen"><span class="sl"></span></label>
+    </div>
   </div>
 
   <div class="card">
@@ -72,6 +106,13 @@
         <div class="d">Revealing a screen automatically blacks out all the others, so two monitors never show at once.</div>
       </div>
       <label class="sw"><input type="checkbox" id="singleLiveScreen"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Spread photographers when randomizing</div>
+        <div class="d">When you randomize photo order on the Upload / Reorder page, try to keep the same photographer's photos from landing next to each other (when the mix allows).</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="spreadPhotographers"><span class="sl"></span></label>
     </div>
   </div>
 
@@ -120,6 +161,57 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Member entries</h2>
+    <div class="sub">Let competitors submit their own photos from the Entry-QR screen. Limits count every photo by a photographer's name for the session (including ones an operator added), so the same name can't go over by using another device. Leave a box as "Unlimited" to allow any number.</div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Enable member entries</div>
+        <div class="d">Master switch. When off, screens can't be set to Entry QR and the entry form is closed.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="entriesEnabled"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Require approval before adding entries</div>
+        <div class="d">On: submissions wait in the Review queue for you to approve. Off: each photo is added straight into the session.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="entryRequireApproval"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Total entries per competitor</div>
+        <div class="d">The most photos one competitor can submit across all categories.</div>
+      </div>
+      <div class="num">
+        <input type="number" id="maxPer" min="1" step="1">
+        <label class="chk"><input type="checkbox" id="unlimPer"> Unlimited</label>
+      </div>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Entries per category (per competitor)</div>
+        <div class="d">The most a competitor can submit into any single category.</div>
+      </div>
+      <div class="num">
+        <input type="number" id="maxCat" min="1" step="1">
+        <label class="chk"><input type="checkbox" id="unlimCat"> Unlimited</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Wi-Fi for entries</h2>
+    <div class="sub">Shown on the Entry-QR screen so competitors can join the network before scanning. Leave blank to use the host computer's current Wi-Fi (auto-detected). The password appears on that screen, so only fill this in for a network you're happy to share.</div>
+    <div class="fldlbl">Network name (SSID)</div>
+    <input type="text" id="wifiSSID" maxlength="64" autocomplete="off" placeholder="Auto-detect">
+    <div class="fldlbl" style="margin-top:12px">Password</div>
+    <div class="pwrow">
+      <input type="password" id="wifiPassword" maxlength="64" autocomplete="off" placeholder="Auto-detect">
+      <button type="button" id="wifiShow">Show</button>
+    </div>
+  </div>
+
 </div>
 <div id="toasts"></div>
 
@@ -128,7 +220,7 @@ const $ = id => document.getElementById(id);
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const enc = encodeURIComponent;
-const TOGGLES = ['lockScorekeeper','singleLiveScreen','lanAccess','importPhotographer','importTitle'];
+const TOGGLES = ['lockScorekeeper','guidedPresentation','scoreKeeperEnabled','judgeScoringEnabled','scorekeeperScreen','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
 let state = null; // last GET response
 
 function toast(msg, kind){
@@ -143,12 +235,23 @@ function toast(msg, kind){
 function collect(){
  return {
    lockScorekeeper: $('lockScorekeeper').checked,
+   guidedPresentation: $('guidedPresentation').checked,
+   scoreKeeperEnabled: $('scoreKeeperEnabled').checked,
+   judgeScoringEnabled: $('judgeScoringEnabled').checked,
+   scorekeeperScreen: $('scorekeeperScreen').checked,
    singleLiveScreen: $('singleLiveScreen').checked,
+   spreadPhotographers: $('spreadPhotographers').checked,
    activeLogo: state ? state.settings.activeLogo : '',
    pdfHeader: $('pdfHeader').value,
    lanAccess: $('lanAccess').checked,
    importPhotographer: $('importPhotographer').checked,
-   importTitle: $('importTitle').checked
+   importTitle: $('importTitle').checked,
+   entriesEnabled: $('entriesEnabled').checked,
+   entryRequireApproval: $('entryRequireApproval').checked,
+   maxEntriesPerCompetitor: $('unlimPer').checked ? 0 : (parseInt($('maxPer').value,10) || 0),
+   maxEntriesPerCategory: $('unlimCat').checked ? 0 : (parseInt($('maxCat').value,10) || 0),
+   wifiSSID: $('wifiSSID').value,
+   wifiPassword: $('wifiPassword').value
  };
 }
 
@@ -164,12 +267,35 @@ function apply(st){
  state = st;
  const s = st.settings;
  $('lockScorekeeper').checked = s.lockScorekeeper;
+ $('guidedPresentation').checked = s.guidedPresentation;
+ $('scoreKeeperEnabled').checked = s.scoreKeeperEnabled;
+ $('judgeScoringEnabled').checked = s.judgeScoringEnabled;
+ $('scorekeeperScreen').checked = s.scorekeeperScreen;
+ // Score Keeper and Judge scoring are mutually exclusive — disable each while the other
+ // is on, with a hint, so they can never both be checked.
+ $('scoreKeeperEnabled').disabled = s.judgeScoringEnabled;
+ $('judgeScoringEnabled').disabled = s.scoreKeeperEnabled;
+ $('sknote').innerHTML = s.judgeScoringEnabled ? '<span class="warn">Turn off Judge scoring to use this.</span>' : '';
+ $('jsnote').innerHTML = s.scoreKeeperEnabled ? '<span class="warn">Turn off Score Keeper mode to use this.</span>' : '';
  $('singleLiveScreen').checked = s.singleLiveScreen;
+ $('spreadPhotographers').checked = s.spreadPhotographers;
  $('lanAccess').checked = s.lanAccess;
  $('importPhotographer').checked = s.importPhotographer;
  $('importTitle').checked = s.importTitle;
+ $('entriesEnabled').checked = s.entriesEnabled;
+ $('entryRequireApproval').checked = s.entryRequireApproval;
  if(document.activeElement !== $('pdfHeader')){ $('pdfHeader').value = s.pdfHeader || ''; }
  $('pdfcount').textContent = ($('pdfHeader').value || '').length;
+
+ // Member-entry limits: 0 = unlimited (the checkbox), otherwise the number.
+ applyLimit('maxPer', 'unlimPer', s.maxEntriesPerCompetitor);
+ applyLimit('maxCat', 'unlimCat', s.maxEntriesPerCategory);
+ if(document.activeElement !== $('wifiSSID')){ $('wifiSSID').value = s.wifiSSID || ''; }
+ if(document.activeElement !== $('wifiPassword')){ $('wifiPassword').value = s.wifiPassword || ''; }
+ $('wifiSSID').placeholder = st.detectedWifiSSID ? (st.detectedWifiSSID + '  (detected)') : 'Auto-detect';
+ $('wifiPassword').placeholder = st.detectedWifiSSID
+   ? (st.detectedWifiPassword ? (st.detectedWifiPassword + '  (detected)') : '(open network — no password)')
+   : 'Auto-detect';
 
  // properties-file gates: a false there forces the matching setting off.
  const lanForced = !st.propsLanAccess;
@@ -187,6 +313,20 @@ function apply(st){
    : 'When a photo has the matching info embedded, fill it in automatically on upload.';
 
  renderLogos(st);
+}
+
+function applyLimit(numId, chkId, val){
+ const unlimited = !(val > 0);
+ if(document.activeElement !== $(numId)){ $(numId).value = unlimited ? '' : val; }
+ $(chkId).checked = unlimited;
+ $(numId).disabled = unlimited;
+}
+
+function onUnlim(numId, chkId){
+ const num = $(numId);
+ if($(chkId).checked){ num.disabled = true; }
+ else { num.disabled = false; if(!num.value || parseInt(num.value,10) < 1) num.value = 1; num.focus(); }
+ save();
 }
 
 function renderLogos(st){
@@ -234,6 +374,16 @@ $('logofile').onchange = async () => {
 TOGGLES.forEach(id => $(id).addEventListener('change', save));
 $('pdfHeader').addEventListener('input', () => { $('pdfcount').textContent = $('pdfHeader').value.length; });
 $('pdfHeader').addEventListener('change', save);
+
+// Member-entry limits + Wi-Fi
+['maxPer','maxCat','wifiSSID','wifiPassword'].forEach(id => $(id).addEventListener('change', save));
+$('unlimPer').addEventListener('change', () => onUnlim('maxPer','unlimPer'));
+$('unlimCat').addEventListener('change', () => onUnlim('maxCat','unlimCat'));
+$('wifiShow').onclick = () => {
+ const p = $('wifiPassword');
+ if(p.type === 'password'){ p.type = 'text'; $('wifiShow').textContent = 'Hide'; }
+ else { p.type = 'password'; $('wifiShow').textContent = 'Show'; }
+};
 
 async function load(){
  try { const r = await fetch('/api/settings'); apply(await r.json()); }
