@@ -172,6 +172,40 @@ func TestLifecyclePersistAndInherit(t *testing.T) {
 	}
 }
 
+func TestPresentationRestart(t *testing.T) {
+	s, ss := presFixture(t, "score")
+	cat := ss.Categories[0]
+	postJSON(t, s.handlePresentationStart, map[string]string{"sessionId": ss.ID})
+	if rr := postJSON(t, s.handlePhotoScore, map[string]string{
+		"session": ss.ID, "category": cat, "orientation": "Landscape", "file": "a.jpg", "score": "7",
+	}); rr.Code != 204 {
+		t.Fatalf("score: %d", rr.Code)
+	}
+	postJSON(t, s.handlePresentationEnd, map[string]string{"sessionId": ss.ID})
+	if !ss.locked() {
+		t.Fatal("should be locked after end")
+	}
+	// Restart erases the scores and re-opens the session for a fresh run.
+	if rr := postJSON(t, s.handlePresentationRestart, map[string]string{"sessionId": ss.ID}); rr.Code != 204 {
+		t.Fatalf("restart: %d %s", rr.Code, rr.Body.String())
+	}
+	if ss.EndedAt != "" || ss.StartedAt == "" {
+		t.Fatalf("restart should clear EndedAt + set StartedAt: started=%q ended=%q", ss.StartedAt, ss.EndedAt)
+	}
+	if s.solo == nil {
+		t.Fatal("restart should start a fresh run")
+	}
+	if got := loadScores(s.photosDir(ss.ID, cat, "Landscape"))["a.jpg"]; got != "" {
+		t.Fatalf("restart should erase scores, got %q", got)
+	}
+	// Scoring works again now the lock is cleared.
+	if rr := postJSON(t, s.handlePhotoScore, map[string]string{
+		"session": ss.ID, "category": cat, "orientation": "Landscape", "file": "a.jpg", "score": "9",
+	}); rr.Code != 204 {
+		t.Fatalf("score after restart = %d want 204", rr.Code)
+	}
+}
+
 func TestPresentationGuards(t *testing.T) {
 	s, ss := presFixture(t, "guided")
 	// Mode on, no run: the slideshow is black and the table nav is locked.

@@ -588,7 +588,7 @@ function setMode(m){
 function updatePhysicalControls(){
  const ssel = $('psession'), prevS = ssel.value || psid;
  ssel.innerHTML = '';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); ssel.appendChild(o); });
  if(prevS && sessions.some(s => s.id === prevS)) ssel.value = prevS;
  else if(selSessionId && sessions.some(s => s.id === selSessionId)) ssel.value = selSessionId; // the app-wide current session
  else if(sessions.length) ssel.value = sessions[sessions.length-1].id; // default: latest

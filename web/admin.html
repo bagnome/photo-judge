@@ -153,7 +153,7 @@ function applyState(st){
  sessions = st.sessions || [];
  const ssel = $('session'), scur = ssel.value;
  ssel.innerHTML = '';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); ssel.appendChild(o); });
  const ids = sessions.map(s => s.id);
  // The selected session is shared app-wide (the server's selectedSessionId). Keep the
  // user's pick on this page if they've made one; otherwise open to the app-wide session.
