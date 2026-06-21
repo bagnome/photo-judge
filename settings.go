@@ -23,6 +23,8 @@ type Settings struct {
 	SingleLiveScreen    bool   `json:"singleLiveScreen"`    // revealing a screen blacks out all the others
 	SpreadPhotographers bool   `json:"spreadPhotographers"` // when randomizing, keep a photographer's photos apart
 	JudgeScoringEnabled bool   `json:"judgeScoringEnabled"` // master switch: judges score from their phones
+	GuidedPresentation  bool   `json:"guidedPresentation"`  // console-driven guided slideshow, no scoring
+	ScoreKeeperEnabled  bool   `json:"scoreKeeperEnabled"`  // guided slideshow + inline score box on the console
 	ActiveLogo          string `json:"activeLogo"`          // filename in logo\ to show on title cards
 	PDFHeader           string `json:"pdfHeader"`           // custom heading on the PDFs ("" = "Photo Judge")
 	LanAccess           bool   `json:"lanAccess"`           // gated by properties lanAccess
@@ -39,6 +41,14 @@ type Settings struct {
 
 func defaultSettings() Settings {
 	return Settings{LanAccess: true, ImportPhotographer: true, ImportTitle: true, EntriesEnabled: true, EntryRequireApproval: true}
+}
+
+// presentationMode reports whether any console-driven presentation mode is on. When it
+// is, the operator drives a guided run from the console (Start/Pause/End) instead of
+// free-form screen control. Guided presentation is the no-scoring base; Score Keeper and
+// Judge scoring add inline scoring/judging and are mutually exclusive.
+func (st Settings) presentationMode() bool {
+	return st.GuidedPresentation || st.ScoreKeeperEnabled || st.JudgeScoringEnabled
 }
 
 func (s *server) settingsPath() string { return filepath.Join(s.baseDir, "settings.json") }
@@ -66,6 +76,11 @@ func (s *server) saveSettings() error {
 }
 
 func (s *server) sanitizeSettings() {
+	// Score Keeper and Judge scoring are mutually exclusive — if both arrive set (or are
+	// loaded that way from an old file), Judge scoring wins.
+	if s.settings.ScoreKeeperEnabled && s.settings.JudgeScoringEnabled {
+		s.settings.ScoreKeeperEnabled = false
+	}
 	h := strings.TrimSpace(s.settings.PDFHeader)
 	if len([]rune(h)) > pdfHeaderMax {
 		h = string([]rune(h)[:pdfHeaderMax])
@@ -169,6 +184,12 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		s.refreshLogo()
 		if !s.settings.EntriesEnabled {
 			s.entryOpen = false // turning the feature off closes any open entry form
+		}
+		if !s.settings.presentationMode() {
+			// Turning every presentation mode off tears down any active guided run so the
+			// screens return to normal free-form control.
+			s.solo, s.runPaused = nil, false
+			s.judgeActive, s.judgeSessionID = false, ""
 		}
 		_ = s.saveSettings()
 		s.mu.Unlock()
