@@ -13,6 +13,8 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.4.11.0] - 2026-06-21 — "Denali"
+
 ### Added
 - **Guided, console-driven presentation for scoring nights (phase 1).** When a presentation mode is
   on, the operator runs the whole show from the **Console** instead of free-form screen control, to
@@ -377,7 +379,11 @@ Initial release.
 - `1.x.x` version scheme: a `VERSION` file embedded into the exe, shown on the
   operator console and logged at startup.
 
-[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.2.3.0...HEAD
+[Unreleased]: https://github.com/bagnome/photo-judge/compare/v1.4.11.0...HEAD
+[1.4.11.0]: https://github.com/bagnome/photo-judge/compare/v1.3.13.2...v1.4.11.0
+[1.3.13.2]: https://github.com/bagnome/photo-judge/compare/v1.3.13.1...v1.3.13.2
+[1.3.13.1]: https://github.com/bagnome/photo-judge/compare/v1.3.13.0...v1.3.13.1
+[1.3.13.0]: https://github.com/bagnome/photo-judge/compare/v1.2.3.0...v1.3.13.0
 [1.2.3.0]: https://github.com/bagnome/photo-judge/compare/v1.1.0...v1.2.3.0
 [1.1.0]: https://github.com/bagnome/photo-judge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/bagnome/photo-judge/releases/tag/v1.0.0
