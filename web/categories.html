@@ -107,6 +107,7 @@
         <option value="close" title="After the last category, both monitors black out and the run ends automatically.">Black out &amp; end</option>
       </select></div>
     <div id="sm-solo-noscreens" class="hint" style="display:none;color:#ffd27a">No screens yet — create them on the <a href="/console" style="color:#7fa9f0">Console</a> first.</div>
+    <div id="pres-status" class="hint" style="display:none"></div>
     <div class="frow">
       <button id="saveSolo" class="primary">Save presentation</button>
     </div>
@@ -191,7 +192,7 @@ function applyState(st){
  soloState = st.solo || null;
  const sel=$('session'), cur=sel.value;
  sel.innerHTML='';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o); });
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); sel.appendChild(o); });
  const ids = sessions.map(s=>s.id);
  // The selected session is shared app-wide (the server's selectedSessionId). Keep the
  // user's pick on this page if they've made one; otherwise open to the app-wide session.
@@ -263,6 +264,12 @@ function fillSettings(){
  $('jm-alt').checked = !!ss.judgeAlternate;
  $('jm-auto').checked = !!ss.judgeAutodetect;
  $('jm-photog').checked = !!ss.judgeShowPhotographer;
+ // Presentation lifecycle status (when the session has been run).
+ const psEl = $('pres-status');
+ const fmt = t => { try { return new Date(t).toLocaleString(); } catch(e){ return t; } };
+ if(ss.endedAt){ psEl.style.display=''; psEl.innerHTML = '■ <b>Ended</b> '+esc(fmt(ss.endedAt))+' — scores are locked. Use <b>Restart</b> on the Console to re-open (erases scores).'; }
+ else if(ss.startedAt){ psEl.style.display=''; psEl.innerHTML = '● <b>Started</b> '+esc(fmt(ss.startedAt))+' — running or paused.'; }
+ else { psEl.style.display='none'; psEl.innerHTML=''; }
 }
 
 // Save all per-session settings at once (every card posts the full set, so none

@@ -8,6 +8,9 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -108,6 +111,82 @@ func (s *server) handlePresentationResume(w http.ResponseWriter, r *http.Request
 		sc.Blackout = n != live
 	}
 	names := s.allScreenNamesLocked()
+	s.mu.Unlock()
+	for _, n := range names {
+		s.pushScreen(n)
+	}
+	s.pushJudge()
+	s.pushConsole()
+	w.WriteHeader(204)
+}
+
+// eraseScoresLocked deletes every score sidecar (combined + per-judge) across the
+// session's category folders and clears its transient judge state. Assumes s.mu held.
+func (s *server) eraseScoresLocked(ss *Session) {
+	cats := append(append([]string{}, ss.Categories...), ss.InactiveCategories...)
+	for _, cat := range cats {
+		for _, or := range []string{"Landscape", "Portrait"} {
+			dir := s.photosDir(ss.ID, cat, or)
+			_ = os.Remove(filepath.Join(dir, "scores.json"))
+			_ = os.Remove(filepath.Join(dir, "judgescores.json"))
+		}
+	}
+	prefix := ss.ID + "|"
+	for k := range s.judgeDeferred {
+		if strings.HasPrefix(k, prefix) {
+			delete(s.judgeDeferred, k)
+		}
+	}
+	for k := range s.judgeRequested {
+		if strings.HasPrefix(k, prefix) {
+			delete(s.judgeRequested, k)
+		}
+	}
+}
+
+// handlePresentationRestart re-opens a session for a fresh run, erasing every score so the
+// night can be judged again. Allowed during or after a run (an archived session isn't in
+// the live list, so it can't be selected here).
+func (s *server) handlePresentationRestart(w http.ResponseWriter, r *http.Request) {
+	var body struct{ SessionID string }
+	if decode(r, &body) != nil || !safeName(body.SessionID) {
+		http.Error(w, "bad request", 400)
+		return
+	}
+	s.mu.Lock()
+	if !s.settings.presentationMode() {
+		s.mu.Unlock()
+		http.Error(w, "turn on a presentation mode in Settings first", http.StatusConflict)
+		return
+	}
+	ss := s.sessionByID(body.SessionID)
+	if ss == nil {
+		s.mu.Unlock()
+		http.Error(w, "no such session", 404)
+		return
+	}
+	segs := s.buildSoloSegments(ss)
+	if len(segs) == 0 {
+		s.mu.Unlock()
+		http.Error(w, "nothing to present — assign a screen on Session Management and make sure the categories have photos", 400)
+		return
+	}
+	if s.settings.JudgeScoringEnabled {
+		s.ensureJudgeMaps()
+		if code, msg := s.judgeStartGateLocked(ss); code != 0 {
+			s.mu.Unlock()
+			http.Error(w, msg, code)
+			return
+		}
+	}
+	s.eraseScoresLocked(ss)
+	ss.StartedAt, ss.EndedAt = time.Now().Format(time.RFC3339), ""
+	_ = s.saveSession(ss)
+	s.solo, s.runPaused = &soloRun{sessionID: ss.ID, segments: segs}, false
+	if s.settings.JudgeScoringEnabled {
+		s.judgeActive, s.judgeSessionID = true, ss.ID
+	}
+	names := s.soloShowLocked(0, false)
 	s.mu.Unlock()
 	for _, n := range names {
 		s.pushScreen(n)

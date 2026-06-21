@@ -217,6 +217,9 @@ const judgeOn = () => !!settings.judgeScoringEnabled;
 // presMode: any console-driven presentation mode is on, so on-screen scoring lives on the
 // Console and this page shows a notice (physical-prints mode still works here).
 const presMode = () => !!(settings.guidedPresentation || settings.scoreKeeperEnabled || settings.judgeScoringEnabled);
+// skScreen: a presentation mode is on AND the operator chose a separate scorekeeper screen,
+// so a 2nd operator scores here (the main operator drives from the Console).
+const skScreen = () => presMode() && !!settings.scorekeeperScreen;
 let sessions = [];         // from the console stream (for physical mode)
 let physAll = [];          // all physical prints for the selected session
 let psid = '', pcat = '';  // selected session id / category for physical mode
@@ -243,7 +246,10 @@ function applyState(st){
  solo = st.solo || null;
  settings = st.settings || {};
  selSessionId = st.selectedSessionId || '';
- document.body.classList.toggle('presmode', presMode());
+ // The "driven from the Console" notice shows only when scoring is inline on the Console.
+ // With a separate scorekeeper screen, this page is the scoring surface (renderSolo + the
+ // score box / judge board render the live photo the operator is presenting).
+ document.body.classList.toggle('presmode', presMode() && !skScreen());
  // Judge mode: the scorekeeper watches the live photo the judges are scoring, so follow
  // the live slideshow screen automatically (single-live is forced while judge mode is on).
  if(judgeOn() && !soloActive()){
@@ -254,7 +260,9 @@ function applyState(st){
  // mode, follow the active screen, and show the Advance/Back/Stop bar.
  const soloOn = soloActive();
  document.body.classList.toggle('solo', soloOn);
- $('solobar').style.display = soloOn ? 'flex' : 'none';
+ // The presentation is driven from the Console now, so this page never shows the drive bar
+ // while a presentation mode is on — the scorekeeper just follows + scores.
+ $('solobar').style.display = (soloOn && !presMode()) ? 'flex' : 'none';
  if(soloOn){
    if(mode !== 'screen'){
      mode = 'screen';
@@ -346,7 +354,7 @@ function renderSolo(){
  const stage = $('stage');
  if(solo.finished){
    $('soloinfo').innerHTML = '✓ Presentation complete';
-   stage.innerHTML = '<div class="card-msg"><div class="cat">All done</div><div class="sub">Every category has been shown. Press <b>Stop</b> to finish.</div></div>';
+   stage.innerHTML = '<div class="card-msg"><div class="cat">All done</div><div class="sub">Every category has been shown.</div></div>';
    $('counter').textContent = 'Done'; clearScore('—'); renderOp(); return;
  }
  $('soloinfo').innerHTML = 'Solo · <b>' + esc(solo.category || '') + '</b> · ' + esc(solo.orientation || '')
@@ -588,7 +596,7 @@ function setMode(m){
 function updatePhysicalControls(){
  const ssel = $('psession'), prevS = ssel.value || psid;
  ssel.innerHTML = '';
- sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
+ sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); ssel.appendChild(o); });
  if(prevS && sessions.some(s => s.id === prevS)) ssel.value = prevS;
  else if(selSessionId && sessions.some(s => s.id === selSessionId)) ssel.value = selSessionId; // the app-wide current session
  else if(sessions.length) ssel.value = sessions[sessions.length-1].id; // default: latest

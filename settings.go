@@ -25,6 +25,7 @@ type Settings struct {
 	JudgeScoringEnabled bool   `json:"judgeScoringEnabled"` // master switch: judges score from their phones
 	GuidedPresentation  bool   `json:"guidedPresentation"`  // console-driven guided slideshow, no scoring
 	ScoreKeeperEnabled  bool   `json:"scoreKeeperEnabled"`  // guided slideshow + inline score box on the console
+	ScorekeeperScreen   bool   `json:"scorekeeperScreen"`   // score/judge on the Scoring page (2nd operator) instead of inline on the console
 	ActiveLogo          string `json:"activeLogo"`          // filename in logo\ to show on title cards
 	PDFHeader           string `json:"pdfHeader"`           // custom heading on the PDFs ("" = "Photo Judge")
 	LanAccess           bool   `json:"lanAccess"`           // gated by properties lanAccess

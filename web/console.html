@@ -161,6 +161,7 @@
   <button id="jb-start" class="primary">▶ Start</button>
   <button id="jb-pause" style="display:none">⏸ Pause</button>
   <button id="jb-resume" class="primary" style="display:none">▶ Resume</button>
+  <button id="jb-restart" style="display:none">↻ Restart</button>
   <button id="jb-end" class="danger" style="display:none">■ End</button>
   <div id="jb-names" class="jb-names"></div>
 </div>
@@ -178,6 +179,7 @@
   <div class="pv-body">
     <div id="pv-stage" class="pv-stage"></div>
     <div id="pv-side" class="pv-side">
+      <div id="pv-sidehint" class="pv-hint" style="display:none"></div>
       <div id="pv-score" style="display:none">
         <div class="pv-lbl">Score <span id="pv-winflag" class="winflag" style="display:none"></span></div>
         <input id="pv-scoreinput" type="text" inputmode="decimal" placeholder="—" autocomplete="off">
@@ -239,6 +241,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp
 function selectedSession(){ return state.sessions.find(s => s.id === currentSession()); }
 let runLock = false; // a presentation mode is on but no run is active → block slideshow control
 let pvTarget = null;  // {session,category,orientation,file} of the live photo in the panel
+let pvFinished = false; // tracks the finished transition so the "end the session?" prompt fires once
 
 function statusText(sc){
  if(sc.blackout) return '<span class="blk">BLACK</span>';
@@ -261,7 +264,7 @@ function render(){
  const sel = $('session'); const cur = sel.value;
  sel.innerHTML = '';
  state.sessions.forEach(s => {
-   const o = document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o);
+   const o = document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'+(s.endedAt?'  ✓ judged':''); sel.appendChild(o);
  });
  const ids = state.sessions.map(s=>s.id);
  if(pendingSelect && ids.includes(pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
@@ -299,9 +302,11 @@ function render(){
  } else {
    jbar.classList.add('show');
    jbar.classList.toggle('live', running && !paused);
+   const ended = !running && !!(selSession && selSession.endedAt);
    const st = $('jb-state');
    st.className = 'jb-state ' + (running && !paused ? 'on' : 'off');
-   st.textContent = running ? (paused ? '⏸ Paused — reconfigure screens, then Resume' : '● Presenting') : '○ Not started';
+   st.textContent = running ? (paused ? '⏸ Paused — reconfigure screens, then Resume' : '● Presenting')
+     : ended ? '■ Ended — scores locked' : '○ Not started';
    // Judge-only: joined count + connected-judge tags.
    const jdata = state.judges || null;
    const needed = selSession ? (selSession.judgesNeeded||0) : 0;
@@ -316,15 +321,17 @@ function render(){
    } else {
      $('jb-joined').style.display='none'; $('jb-names').style.display='none';
    }
-   const bStart=$('jb-start'), bPause=$('jb-pause'), bResume=$('jb-resume'), bEnd=$('jb-end');
-   bStart.style.display = running ? 'none' : '';
+   const bStart=$('jb-start'), bPause=$('jb-pause'), bResume=$('jb-resume'), bRestart=$('jb-restart'), bEnd=$('jb-end');
+   bStart.style.display = (!running && !ended) ? '' : 'none';
    bPause.style.display = (running && !paused) ? '' : 'none';
    bResume.style.display = (running && paused) ? '' : 'none';
    bEnd.style.display = running ? '' : 'none';
-   if(!running){
+   // Restart (erases scores, re-opens) is offered while running/paused or after End.
+   bRestart.style.display = (running || ended) ? '' : 'none';
+   bRestart.textContent = ended ? '↻ Restart (re-open)' : '↻ Restart';
+   if(!running && !ended){
      let ready = true, why = 'Start the presentation';
      if(!selSession){ ready=false; why='Select a session first'; }
-     else if(selSession.endedAt){ ready=false; why='This session has ended — its scores are locked'; }
      else if(isJudgeMode){
        const rangeSet = selSession.judgeMin != null && selSession.judgeMax != null;
        if(needed < 1){ ready=false; why='Set “judges needed” on Session Management first'; }
@@ -516,6 +523,14 @@ $('jb-end').onclick = () => {
    if(ok) post('/api/presentation/end', {}).then(r => { if(!r.ok) r.text().then(t=>pjAlert(t)); else toast('Session ended — scores locked'); });
  });
 };
+$('jb-restart').onclick = () => {
+ const ss = selectedSession();
+ if(!ss){ pjAlert('Select a session first.'); return; }
+ pjConfirm('Restart session #'+esc(ss.id)+'? This erases ALL scores for the session and starts the presentation over from the first photo.',
+   {title:'Restart session', okLabel:'Restart — erase scores', danger:true}).then(ok => {
+   if(ok) post('/api/presentation/restart', {sessionId: ss.id}).then(r => { if(!r.ok) r.text().then(t=>pjAlert(t)); else toast('Restarted — scores cleared'); });
+ });
+};
 
 // ---- Start-judging confirm modal (judge mode): shows the session + the judge rules ----
 function yesno(v){ return v ? 'Yes' : 'No'; }
@@ -553,10 +568,19 @@ $('jstartmodal').addEventListener('click', e => { if(e.target === $('jstartmodal
 function updatePreview(){
  const run = state.solo || null;
  const pv = $('preview');
- if(!run){ pv.classList.remove('show'); pvTarget = null; return; }
+ if(!run){ pv.classList.remove('show'); pvTarget = null; pvFinished = false; return; }
  pv.classList.add('show');
  const ss = state.sessions.find(s => s.id === run.sessionId) || {};
  const paused = !!run.paused, locked = !!run.locked;
+ // When every photo has been shown, offer to End the session (lock the scores). Fires once
+ // per finished transition; the operator can decline and keep stepping/End manually.
+ if(run.finished && !pvFinished){
+   pvFinished = true;
+   pjConfirm('That’s the last photo — every category has been shown. End the session now to lock in the scores?',
+     {title:'End the session?', okLabel:'End — lock scores', danger:true}).then(ok => {
+     if(ok) post('/api/presentation/end', {}).then(r => { if(!r.ok) r.text().then(t=>pjAlert(t)); else toast('Session ended — scores locked'); });
+   });
+ } else if(!run.finished){ pvFinished = false; }
  const onPhoto = run.position >= 1 && run.position <= run.count;
  $('pv-info').innerHTML = '<b>'+esc(run.category||'')+'</b> · '+esc(run.orientation||'')
    + ' · segment '+(run.index+1)+' / '+run.total + (paused ? ' · <span class="pv-paused">paused</span>' : '');
@@ -574,11 +598,19 @@ function updatePreview(){
  }
  $('pv-prev').disabled = paused;
  $('pv-next').disabled = paused;
- // Inline scoring (Score Keeper) or the judge board (Judge mode).
+ // Inline scoring (Score Keeper) or the judge board (Judge mode) — unless a separate
+ // scorekeeper screen is in use, in which case the second operator scores on /score.
  const isJudgeMode = !!(state.settings && state.settings.judgeScoringEnabled);
  const isScoreMode = !!(state.settings && state.settings.scoreKeeperEnabled);
- const sbox = $('pv-score'), board = $('pv-board');
- if(isScoreMode){
+ const sepScreen = !!(state.settings && state.settings.scorekeeperScreen) && (isScoreMode || isJudgeMode);
+ const sbox = $('pv-score'), board = $('pv-board'), hint = $('pv-sidehint');
+ hint.style.display = 'none';
+ if(sepScreen){
+   sbox.style.display='none'; board.style.display='none'; pvTarget = null;
+   hint.style.display=''; hint.textContent = isJudgeMode
+     ? 'The judge board is on the Scoring page (separate scorekeeper screen).'
+     : 'Scores are entered on the Scoring page (separate scorekeeper screen).';
+ } else if(isScoreMode){
    board.style.display='none';
    sbox.style.display = onPhoto ? '' : 'none';
    if(onPhoto){

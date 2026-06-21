@@ -2276,6 +2276,7 @@ func main() {
 	mux.HandleFunc("/api/presentation/pause", s.handlePresentationPause)
 	mux.HandleFunc("/api/presentation/resume", s.handlePresentationResume)
 	mux.HandleFunc("/api/presentation/end", s.handlePresentationEnd)
+	mux.HandleFunc("/api/presentation/restart", s.handlePresentationRestart)
 	mux.HandleFunc("/api/judge/state", s.handleJudgeState)
 	mux.HandleFunc("/api/judge/submit", s.handleJudgeSubmit)
 	mux.HandleFunc("/api/judge/defer", s.handleJudgeDefer)

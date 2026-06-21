@@ -27,8 +27,17 @@ not yet released.
   (read-only). The Solo screen config moved to a **Presentation** section on Session Management (the
   old per-session "Solo mode" Enable/Start/Stop are gone — presenting now starts from the Console),
   and the Scoring page shows a "driven from the Console" notice for these modes (physical-prints
-  scoring still works there). (Phase 2 will add a Restart-that-erases-scores, surfaced start/end
-  times, and a "judged" marker on the session dropdowns.)
+  scoring still works there).
+- **Guided presentation — phase 2.** When the show reaches the last photo, the Console **prompts the
+  operator to End the session** and lock in the scores. A **Restart** button (while running or after
+  End) re-opens the session for a fresh run — it **erases all of that session's scores** after a
+  warning (use it to redo a night). Sessions that have been ended show **"✓ judged"** in the session
+  dropdowns, and Session Management shows the **start/end times** under the Presentation card.
+- **Optional separate scorekeeper screen.** A new Settings toggle — **"Use a separate scorekeeper
+  screen"** — lets a **second operator** enter scores (or watch the judge board) on the **Scoring**
+  page while the main operator drives the show from the Console. Off (default), scoring stays inline
+  on the Console; on, the Console panel just shows the photo + Prev/Next and the scoring happens on
+  the Scoring page, which follows the live photo automatically.
 - **The selected session sticks across the app.** Pick a session on any operator page — Console,
   Upload / Reorder, Session Management, or the Scoring page's physical-prints mode — and the others
   open to that same session as you navigate, instead of resetting to the earliest one. (The choice
