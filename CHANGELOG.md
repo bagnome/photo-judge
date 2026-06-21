@@ -33,6 +33,11 @@ not yet released.
   End) re-opens the session for a fresh run — it **erases all of that session's scores** after a
   warning (use it to redo a night). Sessions that have been ended show **"✓ judged"** in the session
   dropdowns, and Session Management shows the **start/end times** under the Presentation card.
+- **Optional separate scorekeeper screen.** A new Settings toggle — **"Use a separate scorekeeper
+  screen"** — lets a **second operator** enter scores (or watch the judge board) on the **Scoring**
+  page while the main operator drives the show from the Console. Off (default), scoring stays inline
+  on the Console; on, the Console panel just shows the photo + Prev/Next and the scoring happens on
+  the Scoring page, which follows the live photo automatically.
 - **The selected session sticks across the app.** Pick a session on any operator page — Console,
   Upload / Reorder, Session Management, or the Scoring page's physical-prints mode — and the others
   open to that same session as you navigate, instead of resetting to the earliest one. (The choice

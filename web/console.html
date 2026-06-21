@@ -179,6 +179,7 @@
   <div class="pv-body">
     <div id="pv-stage" class="pv-stage"></div>
     <div id="pv-side" class="pv-side">
+      <div id="pv-sidehint" class="pv-hint" style="display:none"></div>
       <div id="pv-score" style="display:none">
         <div class="pv-lbl">Score <span id="pv-winflag" class="winflag" style="display:none"></span></div>
         <input id="pv-scoreinput" type="text" inputmode="decimal" placeholder="—" autocomplete="off">
@@ -597,11 +598,19 @@ function updatePreview(){
  }
  $('pv-prev').disabled = paused;
  $('pv-next').disabled = paused;
- // Inline scoring (Score Keeper) or the judge board (Judge mode).
+ // Inline scoring (Score Keeper) or the judge board (Judge mode) — unless a separate
+ // scorekeeper screen is in use, in which case the second operator scores on /score.
  const isJudgeMode = !!(state.settings && state.settings.judgeScoringEnabled);
  const isScoreMode = !!(state.settings && state.settings.scoreKeeperEnabled);
- const sbox = $('pv-score'), board = $('pv-board');
- if(isScoreMode){
+ const sepScreen = !!(state.settings && state.settings.scorekeeperScreen) && (isScoreMode || isJudgeMode);
+ const sbox = $('pv-score'), board = $('pv-board'), hint = $('pv-sidehint');
+ hint.style.display = 'none';
+ if(sepScreen){
+   sbox.style.display='none'; board.style.display='none'; pvTarget = null;
+   hint.style.display=''; hint.textContent = isJudgeMode
+     ? 'The judge board is on the Scoring page (separate scorekeeper screen).'
+     : 'Scores are entered on the Scoring page (separate scorekeeper screen).';
+ } else if(isScoreMode){
    board.style.display='none';
    sbox.style.display = onPhoto ? '' : 'none';
    if(onPhoto){
