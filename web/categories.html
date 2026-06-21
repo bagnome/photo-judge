@@ -71,7 +71,7 @@
 <header>Photo Judge — Session Management</header>
 <div class="bar">
   <label>Session</label><select id="session"></select>
-  <span class="note">Per-session settings. Opens to the session selected on the console; changing it here won't move the console. A new session inherits the latest session's setup.</span>
+  <span class="note">Per-session settings. The selected session is shared across the app, so the page you go to next opens to the same one. A new session inherits the latest session's setup.</span>
 </div>
 
 <div id="guide"></div>
@@ -178,7 +178,6 @@ let sessions = [];
 let detail = {active:[], inactive:[], used:[]};
 let selActive = null, selInactive = null;
 let loadedFor = null;            // session id whose detail is currently shown
-let seededFromConsole = false;   // have we defaulted to the console's selected session yet?
 let screens = [];                // output screens, for the solo-mode assignment dropdowns
 let soloState = null;            // st.solo — the active solo run, if any
 
@@ -198,13 +197,12 @@ function applyState(st){
  const sel=$('session'), cur=sel.value;
  sel.innerHTML='';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; sel.appendChild(o); });
- if(cur && sessions.some(s=>s.id===cur)) sel.value=cur;
- // Open to the session the console currently has selected — but only once, then leave
- // the choice to the user (and never push our selection back to the console).
- if(!seededFromConsole && st.selectedSessionId && sessions.some(s=>s.id===st.selectedSessionId)){
-   sel.value = st.selectedSessionId;
-   seededFromConsole = true;
- }
+ const ids = sessions.map(s=>s.id);
+ // The selected session is shared app-wide (the server's selectedSessionId). Keep the
+ // user's pick on this page if they've made one; otherwise open to the app-wide session.
+ if(cur && ids.includes(cur)) sel.value=cur;
+ else if(st.selectedSessionId && ids.includes(st.selectedSessionId)) sel.value=st.selectedSessionId;
+ else if(ids.length) sel.value=ids[ids.length-1]; // nothing persisted — latest
  populateScreenSelects();
  updateView();
  updateSolo();
@@ -392,7 +390,8 @@ function moveSel(dir){
 $('actUp').onclick = () => moveSel(-1);
 $('actDown').onclick = () => moveSel(1);
 
-$('session').addEventListener('change', loadDetail);
+// Persist the pick as the app-wide selected session, then load this page's detail.
+$('session').addEventListener('change', () => { post('/api/console/session', {sessionId: sid()}); loadDetail(); });
 $('saveDetails').onclick = saveSettings;
 $('saveScoring').onclick = saveSettings;
 $('saveSolo').onclick = saveSettings;

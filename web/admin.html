@@ -154,8 +154,13 @@ function applyState(st){
  const ssel = $('session'), scur = ssel.value;
  ssel.innerHTML = '';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
- if(pendingSession && sessions.some(s => s.id === pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
- else if(scur) ssel.value = scur;
+ const ids = sessions.map(s => s.id);
+ // The selected session is shared app-wide (the server's selectedSessionId). Keep the
+ // user's pick on this page if they've made one; otherwise open to the app-wide session.
+ if(pendingSession && ids.includes(pendingSession)){ ssel.value = pendingSession; pendingSession = null; }
+ else if(scur && ids.includes(scur)) ssel.value = scur;
+ else if(st.selectedSessionId && ids.includes(st.selectedSessionId)) ssel.value = st.selectedSessionId;
+ else if(ids.length) ssel.value = ids[ids.length-1]; // nothing persisted — latest
 
  populateCategories();
  refreshGrid();
@@ -429,7 +434,7 @@ $('newbtn').onclick = async () => {
  toast('Session #'+s.id+' ('+s.date+') created');
 };
 
-$('session').addEventListener('change', () => { populateCategories(); refreshGrid(); });
+$('session').addEventListener('change', () => { post('/api/console/session', {sessionId: $('session').value}); populateCategories(); refreshGrid(); });
 $('category').addEventListener('change', refreshGrid);
 
 // Random-order controls. The toggle's state is remembered per browser.

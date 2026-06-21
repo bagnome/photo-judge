@@ -199,6 +199,7 @@ let shownFn = null;        // filename currently rendered in the score box
 let mode = 'screen';       // 'screen' = follow a screen · 'physical' = print table
 let solo = null;           // st.solo — when active, this page drives the show
 let settings = {};         // st.settings — for judge mode etc.
+let selSessionId = '';     // st.selectedSessionId — the app-wide current session
 const soloActive = () => !!(solo && solo.active);
 const judgeOn = () => !!settings.judgeScoringEnabled;
 let sessions = [];         // from the console stream (for physical mode)
@@ -226,6 +227,7 @@ function applyState(st){
  sessions = st.sessions || [];
  solo = st.solo || null;
  settings = st.settings || {};
+ selSessionId = st.selectedSessionId || '';
  // Judge mode: the scorekeeper watches the live photo the judges are scoring, so follow
  // the live slideshow screen automatically (single-live is forced while judge mode is on).
  if(judgeOn() && !soloActive()){
@@ -570,6 +572,7 @@ function updatePhysicalControls(){
  ssel.innerHTML = '';
  sessions.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.date+'  (#'+s.id+')'; ssel.appendChild(o); });
  if(prevS && sessions.some(s => s.id === prevS)) ssel.value = prevS;
+ else if(selSessionId && sessions.some(s => s.id === selSessionId)) ssel.value = selSessionId; // the app-wide current session
  else if(sessions.length) ssel.value = sessions[sessions.length-1].id; // default: latest
  psid = ssel.value;
 
@@ -650,7 +653,7 @@ async function savePhysical(){
 
 $('modescreen').onclick = () => setMode('screen');
 $('modephysical').onclick = () => setMode('physical');
-$('psession').addEventListener('change', () => { updatePhysicalControls(); loadPhysical(); });
+$('psession').addEventListener('change', () => { post('/api/console/session', {sessionId: $('psession').value}); updatePhysicalControls(); loadPhysical(); });
 $('pcategory').addEventListener('change', renderPhysical);
 
 const es = new EventSource('/api/events?role=console');
