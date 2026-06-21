@@ -14,6 +14,10 @@ not yet released.
 ## [Unreleased]
 
 ### Added
+- **The selected session sticks across the app.** Pick a session on any operator page — Console,
+  Upload / Reorder, Session Management, or the Scoring page's physical-prints mode — and the others
+  open to that same session as you navigate, instead of resetting to the earliest one. (The choice
+  is shared via the server; changing it on one page updates the rest.)
 - **Judge scoring (phase 1)** — judges score from their own phones. Turn on **Judge scoring** in
   Settings, then set a screen's type to **Judge QR**: judges scan it, enter their name (and tick
   if they're the **alternate**), and submit a score for whatever photo is live — the app combines

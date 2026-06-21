@@ -810,9 +810,10 @@ func (s *server) handleSessionSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, ss)
 }
 
-// handleConsoleSession records which session the operator console currently has
-// selected, so the Session Management page can open to it (without the reverse —
-// that page never changes the console's selection).
+// handleConsoleSession records the operator's currently selected session. It's the
+// app-wide current session: every operator page posts here when its session dropdown
+// changes, and opens to selectedSessionID (broadcast in the console snapshot) so the
+// choice sticks as the operator navigates between pages.
 func (s *server) handleConsoleSession(w http.ResponseWriter, r *http.Request) {
 	var body struct{ SessionID string }
 	if decode(r, &body) != nil {

@@ -207,9 +207,10 @@ function render(){
  });
  const ids = state.sessions.map(s=>s.id);
  if(pendingSelect && ids.includes(pendingSelect)){ sel.value=pendingSelect; pendingSelect=null; }
- else if(cur && ids.includes(cur)){ sel.value = cur; }
- else if(cur && ids.length){ sel.value = ids[ids.length-1]; } // prior session was archived/deleted — fall back to the latest remaining
- // else: initial load (browser picks the first) or no sessions left (unselected)
+ else if(cur && ids.includes(cur)){ sel.value = cur; } // keep the user's current pick on this page
+ else if(state.selectedSessionId && ids.includes(state.selectedSessionId)){ sel.value = state.selectedSessionId; } // open to the app-wide current session
+ else if(ids.length){ sel.value = ids[ids.length-1]; } // nothing persisted (or it was archived/deleted) — fall back to the latest
+ // else: no sessions left (unselected)
  syncSelectedSession();
 
  // Categories offered for loading = the selected session's active slate (per-session).
