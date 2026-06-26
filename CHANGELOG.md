@@ -13,6 +13,18 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.4.11.1] - 2026-06-26 — "Denali"
+
+### Fixed
+- **Importing a session into a fresh app no longer errors with "Cannot read properties of
+  null (reading 'length')".** The console state snapshot sent to the browser serialized
+  empty session/screen/category lists as JSON `null` instead of `[]`, so an app with no
+  screens yet (e.g. a brand-new copy right after importing a `.pjs`/`.pjss`) crashed the
+  console's `render()` when it read `state.screens.length`. The server now always sends
+  empty arrays, and the console defensively normalizes these fields before use. The same
+  app on a machine that already had screens was unaffected, which is why it only showed up
+  on a fresh install.
+
 ## [1.4.11.0] - 2026-06-21 — "Denali"
 
 ### Added

@@ -455,11 +455,23 @@ func (s *server) pushScreen(name string) {
 func (s *server) consoleSnapshot() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var screens []*Screen
+	// Empty (not nil) slices so these serialize as [] rather than JSON null. The console
+	// frontend dereferences state.sessions/.screens/.categories as arrays (e.g.
+	// state.screens.length), so a fresh app with no sessions/screens yet would otherwise
+	// crash render() — e.g. right after an import onto an app that has no screens.
+	screens := []*Screen{}
 	for _, sc := range s.screens {
 		screens = append(screens, sc)
 	}
 	sort.Slice(screens, func(i, j int) bool { return screens[i].Name < screens[j].Name })
+	sessions := s.sessions
+	if sessions == nil {
+		sessions = []*Session{}
+	}
+	categories := s.categories
+	if categories == nil {
+		categories = []string{}
+	}
 	payload := struct {
 		Version           string         `json:"version"`
 		NewerVersion      string         `json:"newerVersion,omitempty"`
@@ -473,7 +485,7 @@ func (s *server) consoleSnapshot() []byte {
 		SelectedSessionID string         `json:"selectedSessionId,omitempty"`
 		Solo              *soloView      `json:"solo,omitempty"`
 		Judges            map[string]any `json:"judges,omitempty"`
-	}{appVersion, s.newerVersion, s.sessions, s.categories, screens, s.settings,
+	}{appVersion, s.newerVersion, sessions, categories, screens, s.settings,
 		s.entryOpen, s.entrySessionID, s.pendingCount(s.entrySessionID), s.selectedSessionID, s.soloViewLocked(),
 		s.judgeConsoleSnapshotLocked()}
 	data, _ := json.Marshal(payload)

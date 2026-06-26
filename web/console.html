@@ -252,6 +252,12 @@ function statusText(sc){
 }
 
 function render(){
+ // Defensive: a server push (state = JSON.parse(...)) replaces these wholesale, and an
+ // empty collection can arrive as JSON null. render() treats them as arrays, so normalize
+ // before any .forEach/.length/.map below.
+ if(!state.sessions) state.sessions = [];
+ if(!state.screens) state.screens = [];
+ if(!state.categories) state.categories = [];
  if(state.version) $('version').textContent = 'v' + state.version;
  const ub = $('updatebanner');
  if(state.newerVersion){
