@@ -2,6 +2,11 @@
 *.exe
 *.exe~
 
+# Code-signing certificates — never commit. The signing key lives in the Windows
+# cert store (see build.ps1), not the repo; `build.ps1 -ExportCert` emits a public .cer.
+*.cer
+*.pfx
+
 # Runtime data and user content, created/managed by the app at run time
 /photos/
 /logo/
