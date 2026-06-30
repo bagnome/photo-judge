@@ -29,6 +29,9 @@
  input[type=text]:focus,input[type=password]:focus,input[type=number]:focus{border-color:#2d6cdf;outline:none}
  input[type=number]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:90px}
  input:disabled{opacity:.45}
+ /* member-entry options greyed out while the master switch is off */
+ .entry-dep.off{opacity:.4}
+ .entry-dep.off .num .chk{color:#8a9099}
  .num{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
  .num .chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#b9bec6}
  .fldlbl{font-size:13px;color:#b9bec6;margin:0 0 6px}
@@ -171,14 +174,14 @@
       </div>
       <label class="sw"><input type="checkbox" id="entriesEnabled"><span class="sl"></span></label>
     </div>
-    <div class="row">
+    <div class="row entry-dep">
       <div class="txt">
         <div class="t">Require approval before adding entries</div>
         <div class="d">On: submissions wait in the Review queue for you to approve. Off: each photo is added straight into the session.</div>
       </div>
       <label class="sw"><input type="checkbox" id="entryRequireApproval"><span class="sl"></span></label>
     </div>
-    <div class="row">
+    <div class="row entry-dep">
       <div class="txt">
         <div class="t">Total entries per competitor</div>
         <div class="d">The most photos one competitor can submit across all categories.</div>
@@ -188,7 +191,7 @@
         <label class="chk"><input type="checkbox" id="unlimPer"> Unlimited</label>
       </div>
     </div>
-    <div class="row">
+    <div class="row entry-dep">
       <div class="txt">
         <div class="t">Entries per category (per competitor)</div>
         <div class="d">The most a competitor can submit into any single category.</div>
@@ -200,7 +203,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card entry-dep" id="wifiCard">
     <h2>Wi-Fi for entries</h2>
     <div class="sub">Shown on the Entry-QR screen so competitors can join the network before scanning. Leave blank to use the host computer's current Wi-Fi (auto-detected). The password appears on that screen, so only fill this in for a network you're happy to share.</div>
     <div class="fldlbl">Network name (SSID)</div>
@@ -290,6 +293,7 @@ function apply(st){
  // Member-entry limits: 0 = unlimited (the checkbox), otherwise the number.
  applyLimit('maxPer', 'unlimPer', s.maxEntriesPerCompetitor);
  applyLimit('maxCat', 'unlimCat', s.maxEntriesPerCategory);
+ syncEntries(); // grey out the dependent options when the master switch is off
  if(document.activeElement !== $('wifiSSID')){ $('wifiSSID').value = s.wifiSSID || ''; }
  if(document.activeElement !== $('wifiPassword')){ $('wifiPassword').value = s.wifiPassword || ''; }
  $('wifiSSID').placeholder = st.detectedWifiSSID ? (st.detectedWifiSSID + '  (detected)') : 'Auto-detect';
@@ -313,6 +317,19 @@ function apply(st){
    : 'When a photo has the matching info embedded, fill it in automatically on upload.';
 
  renderLogos(st);
+}
+
+// When member entries are off, disable and grey out every dependent option (approval,
+// per-competitor limits, and the entry Wi-Fi card). The master switch stays live.
+function syncEntries(){
+ const on = $('entriesEnabled').checked;
+ $('entryRequireApproval').disabled = !on;
+ $('unlimPer').disabled = !on;
+ $('unlimCat').disabled = !on;
+ $('maxPer').disabled = !on || $('unlimPer').checked;
+ $('maxCat').disabled = !on || $('unlimCat').checked;
+ ['wifiSSID','wifiPassword','wifiShow'].forEach(id => $(id).disabled = !on);
+ document.querySelectorAll('.entry-dep').forEach(el => el.classList.toggle('off', !on));
 }
 
 function applyLimit(numId, chkId, val){
@@ -372,6 +389,7 @@ $('logofile').onchange = async () => {
 };
 
 TOGGLES.forEach(id => $(id).addEventListener('change', save));
+$('entriesEnabled').addEventListener('change', syncEntries); // grey out deps immediately
 $('pdfHeader').addEventListener('input', () => { $('pdfcount').textContent = $('pdfHeader').value.length; });
 $('pdfHeader').addEventListener('change', save);
 

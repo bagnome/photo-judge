@@ -351,9 +351,11 @@ function render(){
  }
  updatePreview();
 
- // Review-entries badge (pending count across the locked entry session).
+ // Review-entries button + badge — hidden entirely when member entries are off.
+ const entriesEnabled = !!(state.settings && state.settings.entriesEnabled);
+ $('reviewbtn').style.display = entriesEnabled ? '' : 'none';
  const pb = $('pendbadge');
- if(state.pendingCount > 0){ pb.textContent = state.pendingCount; pb.style.display=''; }
+ if(entriesEnabled && state.pendingCount > 0){ pb.textContent = state.pendingCount; pb.style.display=''; }
  else pb.style.display='none';
 
  // Screen rows
@@ -370,14 +372,16 @@ function render(){
 
    const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
 
-   // Type dropdown (Entry QR / Judge QR disabled when those features are off in Settings)
+   // Type dropdown. Entry QR is hidden entirely when member entries are off; Judge QR
+   // stays listed but disabled when judge scoring is off. (A screen already set to a
+   // type keeps its option so the dropdown still reflects the current value.)
    const entriesOn = !!(state.settings && state.settings.entriesEnabled);
    const judgeOn = !!(state.settings && state.settings.judgeScoringEnabled);
    const tdT = document.createElement('td'); tdT.dataset.label='Type';
    const ts = document.createElement('select');
    [['slideshow','Slideshow'],['entry','Entry QR'],['judge','Judge QR']].forEach(([v,l]) => {
+     if(v==='entry' && !entriesOn && !isEntry) return; // hide Entry QR when entries off
      const o=document.createElement('option'); o.value=v; o.textContent=l;
-     if(v==='entry' && !entriesOn && !isEntry) o.disabled = true;
      if(v==='judge' && !judgeOn && !isJudge) o.disabled = true;
      ts.appendChild(o);
    });
