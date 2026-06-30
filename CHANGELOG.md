@@ -13,6 +13,21 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.4.11.2] - 2026-06-30 — "Denali"
+
+### Fixed
+- **The sidebar "share this address / QR code" now opens the operator console.** When the
+  landing page took over the root path (`/`), the bare LAN URL shared in the menu started
+  dropping a second machine on the landing page instead of the console. The shared address
+  and QR code now point at `…/console` so the operator console opens directly.
+
+### Changed
+- **Turning off "Enable member entries" now hides and disables everything tied to entries.**
+  With the master switch off, the dependent options on Settings (require-approval, the
+  per-competitor limits, and the Wi-Fi-for-entries card) are greyed out and disabled, the
+  Console's **Review entries** button is hidden, and **Entry QR** is removed from the screen
+  Type dropdown — so the feature can't be half-configured while it's switched off.
+
 ## [1.4.11.1] - 2026-06-26 — "Denali"
 
 ### Fixed
