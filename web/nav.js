@@ -172,8 +172,11 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') modal.classList.remove('show'); });
 
   // ---- remote-access info (only when LAN access is on) --------------------
+  // The shared address/QR points at the operator console (/console). The console
+  // moved off the root path when the landing page took over "/", so the bare LAN
+  // URL no longer lands there — append /console so a second machine opens it directly.
   fetch('/api/netinfo').then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
-    var urls = (info && info.urls) || [];
+    var urls = ((info && info.urls) || []).map(function (u) { return u + '/console'; });
     if (!urls.length) return;             // lanAccess off → no remote section
     urlLink.textContent = urls[0];
     urlLink.href = urls[0];
