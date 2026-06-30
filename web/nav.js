@@ -183,4 +183,24 @@
     remote.classList.add('show');
     qrBtn.addEventListener('click', function () { openModal(urls); });
   }).catch(function () {});
+
+  // ---- hide the Scoring link when there's nothing to score ----------------
+  // The Scoring page is only used by Score Keeper mode and Judge scoring. With both
+  // off, drop it from the menu — UNLESS the currently selected session has physical
+  // prints recorded, since those are also scored on that page.
+  function hideScoreLink() {
+    var link = nav.querySelector('.pjnav-links a[href="/score"]');
+    if (link) link.style.display = 'none';
+  }
+  fetch('/api/state').then(function (r) { return r.ok ? r.json() : null; }).then(function (st) {
+    var s = (st && st.settings) || {};
+    if (s.scoreKeeperEnabled || s.judgeScoringEnabled) return; // a scoring mode is on → keep it
+    var sid = st && st.selectedSessionId;
+    if (!sid) { hideScoreLink(); return; }                     // no session → nothing to score
+    // Keep the link only if that session has physical prints on file.
+    fetch('/api/session/physical?session=' + encodeURIComponent(sid))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (p) { if (!p || !p.prints || !p.prints.length) hideScoreLink(); })
+      .catch(function () {});
+  }).catch(function () {});
 })();
