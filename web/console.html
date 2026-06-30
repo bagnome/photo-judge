@@ -372,17 +372,17 @@ function render(){
 
    const tdN = document.createElement('td'); tdN.dataset.label='Screen'; tdN.textContent = sc.name; tr.appendChild(tdN);
 
-   // Type dropdown. Entry QR is hidden entirely when member entries are off; Judge QR
-   // stays listed but disabled when judge scoring is off. (A screen already set to a
-   // type keeps its option so the dropdown still reflects the current value.)
+   // Type dropdown. Entry QR is hidden when member entries are off; Judge QR is hidden
+   // when judge scoring is off. (A screen already set to a type keeps its option so the
+   // dropdown still reflects the current value even if that feature is now off.)
    const entriesOn = !!(state.settings && state.settings.entriesEnabled);
    const judgeOn = !!(state.settings && state.settings.judgeScoringEnabled);
    const tdT = document.createElement('td'); tdT.dataset.label='Type';
    const ts = document.createElement('select');
    [['slideshow','Slideshow'],['entry','Entry QR'],['judge','Judge QR']].forEach(([v,l]) => {
      if(v==='entry' && !entriesOn && !isEntry) return; // hide Entry QR when entries off
+     if(v==='judge' && !judgeOn && !isJudge) return;   // hide Judge QR when judge scoring off
      const o=document.createElement('option'); o.value=v; o.textContent=l;
-     if(v==='judge' && !judgeOn && !isJudge) o.disabled = true;
      ts.appendChild(o);
    });
    ts.value = isEntry ? 'entry' : isJudge ? 'judge' : 'slideshow';
