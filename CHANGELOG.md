@@ -13,6 +13,17 @@ not yet released.
 
 ## [Unreleased]
 
+## [1.4.11.3] - 2026-06-30 — "Denali"
+
+### Changed
+- **Screen Type dropdown and the Scoring menu link now hide when their feature is off.**
+  On the Console, **Judge QR** is removed from a screen's Type dropdown when **Judge
+  scoring** is off (matching how **Entry QR** already hides when member entries are off; a
+  screen already set to that type keeps its option). And the **Scoring** link in the side
+  menu is hidden when **both** Score Keeper mode and Judge scoring are off — unless the
+  selected session has **physical prints** recorded, since those are also scored on that
+  page (the page itself stays reachable directly at `/score`).
+
 ## [1.4.11.2] - 2026-06-30 — "Denali"
 
 ### Fixed
