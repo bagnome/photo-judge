@@ -230,12 +230,13 @@
     <div class="row">
       <div class="txt">
         <div class="t">Detail level</div>
-        <div class="d">How much to capture. <b>Errors + events</b> keeps only the app's own notable events and any errors. <b>Requests + events + errors</b> adds a line per meaningful request. <b>Everything</b> also logs high-frequency traffic (live updates, status polls, image fetches) — biggest and noisiest.</div>
+        <div class="d">How much to capture. <b>Errors + events</b> keeps only the app's own notable events and any errors. <b>Requests + events + errors</b> adds a line per meaningful request. <b>Everything</b> also logs high-frequency traffic (live updates, status polls, image fetches). <b>Everything + payloads</b> additionally records the data body sent with each request (passwords are masked) — most detailed, biggest and noisiest.</div>
       </div>
       <select id="logLevel">
         <option value="events">Errors + events only</option>
         <option value="requests">Requests + events + errors</option>
         <option value="all">Everything (incl. live updates &amp; images)</option>
+        <option value="payloads">Everything + payloads (request data)</option>
       </select>
     </div>
     <div class="row">

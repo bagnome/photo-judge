@@ -22,12 +22,16 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,6 +54,8 @@ func (s *server) logDir() string { return filepath.Join(s.baseDir, "logs") }
 // on every request, and evaluates the auto-off timer. Caller holds s.mu.
 func (s *server) applyLogConfig() {
 	switch s.settings.LogLevel {
+	case logLevelPayloads:
+		s.logLevelV.Store(3)
 	case logLevelAll:
 		s.logLevelV.Store(2)
 	case logLevelEvents:
@@ -148,7 +154,7 @@ func (s *server) shouldLogRequest(path string, status int) bool {
 	switch s.logLevelV.Load() {
 	case 0: // events only — no per-request access lines except errors (handled above)
 		return false
-	case 2: // all — everything, including the noisy traffic
+	case 2, 3: // all / payloads — everything, including the noisy traffic
 		return true
 	default: // requests — the meaningful calls, minus the high-frequency noise
 		return !logIsNoise(path)
@@ -398,6 +404,12 @@ func (s *server) withLogging(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// At the payloads level, peek at the request body before the handler consumes it
+		// (captureBody splices it back so the handler still sees the full payload).
+		var reqBody string
+		if s.logDebugOn.Load() && s.logLevelV.Load() >= 3 && wantsPayload(r) {
+			reqBody = s.captureBody(r)
+		}
 		lw := &logResponseWriter{ResponseWriter: w}
 		start := time.Now()
 		next.ServeHTTP(lw, r)
@@ -412,7 +424,11 @@ func (s *server) withLogging(next http.Handler) http.Handler {
 			kind = "ERROR"
 		}
 		// Requests have no source file:line, so that column stays blank.
-		s.appendLog(kind, "", formatRequestMsg(r, lw, time.Since(start)))
+		msg := formatRequestMsg(r, lw, time.Since(start))
+		if reqBody != "" {
+			msg += " body=" + reqBody
+		}
+		s.appendLog(kind, "", msg)
 	})
 }
 
@@ -429,6 +445,142 @@ func formatRequestMsg(r *http.Request, lw *logResponseWriter, dur time.Duration)
 		fmt.Fprintf(&b, " ref=%q", ref)
 	}
 	return b.String()
+}
+
+// ---- request payloads (payloads level) ------------------------------------
+
+// logBodyMax caps how much of a request body is captured, so a large paste can't bloat
+// the log. Only the payloads level captures bodies at all.
+const logBodyMax = 8 << 10 // 8 KiB
+
+// wantsPayload reports whether r carries a text-shaped body worth capturing. It skips
+// bodiless methods and multipart/binary uploads (photos, logos) — those are large and not
+// human-readable, so logging them would be wasteful and pointless.
+func wantsPayload(r *http.Request) bool {
+	if r.Body == nil {
+		return false
+	}
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	default:
+		return false
+	}
+	ct := r.Header.Get("Content-Type")
+	return strings.HasPrefix(ct, "application/json") ||
+		strings.HasPrefix(ct, "application/x-www-form-urlencoded") ||
+		strings.HasPrefix(ct, "text/")
+}
+
+// captureBody reads up to logBodyMax bytes of the request body for the log, then splices
+// those bytes back in front of any unread remainder so the handler still receives the
+// full payload. It returns a compact, secret-redacted, single-line rendering for the row.
+func (s *server) captureBody(r *http.Request) string {
+	orig := r.Body
+	buf, _ := io.ReadAll(io.LimitReader(orig, logBodyMax+1))
+	// Restore the body: the handler reads the captured bytes, then anything still unread.
+	r.Body = &teeBody{Reader: io.MultiReader(bytes.NewReader(buf), orig), c: orig}
+	truncated := len(buf) > logBodyMax
+	if truncated {
+		buf = buf[:logBodyMax]
+	}
+	out := redactPayload(r.Header.Get("Content-Type"), buf)
+	if out != "" && truncated {
+		out += "…(truncated)"
+	}
+	return out
+}
+
+// teeBody re-presents a request body after the middleware peeked at it: Reader is the
+// captured-bytes-then-remainder stream, while Close still closes the original body.
+type teeBody struct {
+	io.Reader
+	c io.Closer
+}
+
+func (t *teeBody) Close() error { return t.c.Close() }
+
+// redactPayload renders a captured body as one log-friendly line with obvious secrets
+// masked. JSON is re-encoded compactly (keys like "password" → "***"); form bodies get
+// the same key masking; anything else is whitespace-collapsed to stay on one line.
+func redactPayload(ct string, body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+	if strings.HasPrefix(ct, "application/json") {
+		var v any
+		if json.Unmarshal(body, &v) == nil {
+			if b, err := json.Marshal(redactJSON(v)); err == nil {
+				return string(b)
+			}
+		}
+	}
+	if strings.HasPrefix(ct, "application/x-www-form-urlencoded") {
+		if vals, err := url.ParseQuery(string(body)); err == nil {
+			for k := range vals {
+				if isSecretKey(k) {
+					vals[k] = []string{"***"}
+				}
+			}
+			return vals.Encode()
+		}
+	}
+	// Fallback (non-JSON/form bodies, or JSON/form too truncated to parse): dump the
+	// text on one line, but still run the textual scrubber so a secret in the readable
+	// prefix of a truncated body can't slip through unmasked.
+	return scrubSecretsText(collapseWS(string(body)))
+}
+
+// Textual secret scrubbers for the fallback path, where structured parsing didn't apply.
+// They mask the value after any secret-looking key in both JSON ("key":"value") and form
+// (key=value) shapes, including a value left unterminated by truncation.
+var (
+	secretWords      = `password|passwd|pwd|secret|token|apikey`
+	reJSONSecret     = regexp.MustCompile(`(?i)("[^"]*(?:` + secretWords + `)[^"]*"\s*:\s*)"[^"]*"`)
+	reJSONSecretTail = regexp.MustCompile(`(?i)("[^"]*(?:` + secretWords + `)[^"]*"\s*:\s*)"[^"]*$`)
+	reFormSecret     = regexp.MustCompile(`(?i)([\w.\-]*(?:` + secretWords + `)[\w.\-]*=)[^&\s]*`)
+)
+
+// scrubSecretsText masks secret values in free-form (already whitespace-collapsed) text.
+func scrubSecretsText(s string) string {
+	s = reJSONSecret.ReplaceAllString(s, `${1}"***"`)
+	s = reJSONSecretTail.ReplaceAllString(s, `${1}"***"`)
+	s = reFormSecret.ReplaceAllString(s, `${1}***`)
+	return s
+}
+
+// redactJSON walks a decoded JSON value in place, masking the value of any object key that
+// looks like a secret. Nested objects and arrays are walked too.
+func redactJSON(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k := range t {
+			if isSecretKey(k) {
+				t[k] = "***"
+			} else {
+				t[k] = redactJSON(t[k])
+			}
+		}
+	case []any:
+		for i := range t {
+			t[i] = redactJSON(t[i])
+		}
+	}
+	return v
+}
+
+// isSecretKey flags field names whose value must never be written to a log file.
+func isSecretKey(k string) bool {
+	k = strings.ToLower(k)
+	return strings.Contains(k, "password") || strings.Contains(k, "passwd") ||
+		strings.Contains(k, "pwd") || strings.Contains(k, "secret") ||
+		strings.Contains(k, "token") || strings.Contains(k, "apikey")
+}
+
+// collapseWS squeezes every run of whitespace (including newlines) to a single space so a
+// captured body stays on one columnar line in the log file.
+func collapseWS(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // ---- HTTP handlers (Logs page) --------------------------------------------
@@ -513,6 +665,52 @@ func (s *server) handleLogFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+name+"\"")
 	w.Write(data)
+}
+
+// logViewTailMax bounds an in-browser tail view so opening a huge day file can't pull the
+// whole thing into memory at once; the Logs page requests a tail and offers "load full".
+const logViewTailMax = 2 << 20 // 2 MiB
+
+// handleLogView serves a log file inline as UTF-8 text for the in-browser viewer (no
+// download prompt). With ?tail=N it returns roughly the last N bytes, advanced to the next
+// line start so the view begins on a clean row; X-Log-Total / X-Log-Returned headers tell
+// the page whether it's seeing the whole file.
+func (s *server) handleLogView(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("name")
+	if !validLogName(name) {
+		http.Error(w, "bad name", 400)
+		return
+	}
+	path := filepath.Join(s.logDir(), name)
+	info, err := os.Stat(path)
+	if err != nil {
+		http.Error(w, "not found", 404)
+		return
+	}
+	total := info.Size()
+	tail, _ := strconv.ParseInt(r.URL.Query().Get("tail"), 10, 64)
+	if tail > logViewTailMax {
+		tail = logViewTailMax
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		http.Error(w, "not found", 404)
+		return
+	}
+	defer f.Close()
+	if tail > 0 && tail < total {
+		_, _ = f.Seek(total-tail, io.SeekStart)
+	}
+	buf, _ := io.ReadAll(f)
+	if int64(len(buf)) < total { // partial read: drop the first (clipped) line
+		if i := bytes.IndexByte(buf, '\n'); i >= 0 {
+			buf = buf[i+1:]
+		}
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Log-Total", strconv.FormatInt(total, 10))
+	w.Header().Set("X-Log-Returned", strconv.Itoa(len(buf)))
+	_, _ = w.Write(buf)
 }
 
 // handleLogsZip bundles selected files (or all of them) into a single zip download.

@@ -12,6 +12,7 @@
 /logo/
 /archives/
 /_import_tmp/
+/logs/
 *.pjs
 *.pjss
 /screens.json

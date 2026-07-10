@@ -44,7 +44,7 @@ type Settings struct {
 	// LogAutoOffMinutes turns logging back off after a while so it can't be left on;
 	// LogAlwaysErrors keeps errors flowing even when the master switch is off.
 	LoggingEnabled    bool   `json:"loggingEnabled"`    // master switch for debug logging
-	LogLevel          string `json:"logLevel"`          // "events" | "requests" | "all"
+	LogLevel          string `json:"logLevel"`          // "events" | "requests" | "all" | "payloads"
 	LogMaxMB          int    `json:"logMaxMB"`          // cap on the logs\ folder in MB (oldest deleted first)
 	LogAutoOffMinutes int    `json:"logAutoOffMinutes"` // auto-turn-off after N minutes (0 = never)
 	LogAlwaysErrors   bool   `json:"logAlwaysErrors"`   // log errors even when LoggingEnabled is off
@@ -59,14 +59,16 @@ func defaultSettings() Settings {
 	}
 }
 
-// Log detail levels, most to least verbose. levelAll logs everything (including the
-// high-frequency SSE/poll/photo traffic); levelRequests adds a per-request access line
-// for the meaningful calls but skips that noise; levelEvents keeps only the app's own
-// notable events and errors. Errors are captured at every level.
+// Log detail levels, least to most verbose. levelEvents keeps only the app's own notable
+// events and errors; levelRequests adds a per-request access line for the meaningful calls
+// but skips the high-frequency noise; levelAll logs everything (including the SSE/poll/
+// photo traffic); levelPayloads is levelAll plus the data body sent with each request
+// (secrets masked). Errors are captured at every level.
 const (
 	logLevelEvents   = "events"
 	logLevelRequests = "requests"
 	logLevelAll      = "all"
+	logLevelPayloads = "payloads"
 )
 
 // presentationMode reports whether any console-driven presentation mode is on. When it
@@ -127,7 +129,7 @@ func (s *server) sanitizeSettings() {
 	}
 	// Debug logging: keep the level to a known value and the numbers in sane bounds.
 	switch s.settings.LogLevel {
-	case logLevelEvents, logLevelRequests, logLevelAll:
+	case logLevelEvents, logLevelRequests, logLevelAll, logLevelPayloads:
 	default:
 		s.settings.LogLevel = logLevelRequests
 	}
@@ -267,7 +269,7 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		"boundLanAccess":       s.lanAccess, // what the running server actually bound with
 		"detectedWifiSSID":     s.detectedWifiSSID,
 		"detectedWifiPassword": s.detectedWifiPassword,
-		"logDir":               s.logDir(),          // absolute folder the log files live in
+		"logDir":               s.logDir(), // absolute folder the log files live in
 		"logActive":            s.settings.LoggingEnabled && !s.logExpired(),
 		"logRemainingSeconds":  s.logRemainingSeconds(), // -1 = no auto-off, else seconds left
 	}

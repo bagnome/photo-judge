@@ -222,11 +222,14 @@ that workflow.
   to a **single rolling log file per day** (e.g. `2026-07-10.log`) in a `logs\` folder next
   to the exe, one **columnar** row per request and per app event (timestamp, type, a
   file:line source location where there is one, then the message). A **detail level**
-  (errors + events / requests + events + errors / everything) sets how much is captured; a
-  **max size (MB)** caps the folder (oldest day files deleted first); an **auto-off timer**
-  turns logging back off after a set number of minutes so it can't be left running; and an
-  **always-log-errors** switch keeps recording genuine server errors even while the master
-  toggle is off. A **Logs** page lists the day files (with their on-disk directory) and
+  (errors + events / requests + events + errors / everything / everything + payloads) sets
+  how much is captured — the most detailed level also records the **data body sent with
+  each request** (secret-looking fields masked, large bodies truncated, binary uploads
+  skipped); a **max size (MB)** caps the folder (oldest day files deleted first); an
+  **auto-off timer** turns logging back off after a set number of minutes so it can't be
+  left running; and an **always-log-errors** switch keeps recording genuine server errors
+  even while the master toggle is off. A **Logs** page lists the day files (with their
+  on-disk directory), **views** any one right in the browser (with a line filter), and
   downloads any one, a selection, or all of them as a zip; **Delete all logs** clears them.
   Standard-library only (no logging framework).
 - **Consistent in-app dialogs** — confirmations, prompts, and messages use the app's own

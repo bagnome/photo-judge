@@ -39,7 +39,29 @@
  .toast{background:#2e7d46;color:#fff;padding:10px 14px;border-radius:6px;font-size:14px;box-shadow:0 3px 12px rgba(0,0,0,.45);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s;max-width:340px}
  .toast.show{opacity:1;transform:none}
  .toast.del{background:#a83232}
- @media (max-width:760px){ th.ua,td.ua{display:none} }
+ td.act{white-space:nowrap}
+ /* in-browser log viewer */
+ .vmodal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:6000}
+ .vmodal.show{display:flex}
+ .vbox{background:#1e2126;border:1px solid #3a3e45;border-radius:8px;width:min(1100px,calc(100vw - 32px));height:calc(100vh - 64px);display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.55)}
+ .vhead{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #2c2f35}
+ .vtitle{font-weight:600;font-size:14px;font-family:ui-monospace,Consolas,monospace;white-space:nowrap}
+ .vmeta{color:#8a9099;font-size:12.5px;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .vclose{background:#2a2d33;border:1px solid #444;color:#eee;border-radius:5px;padding:6px 11px;cursor:pointer;font-size:14px}
+ .vclose:hover{background:#363a42}
+ .vtools{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #2c2f35;flex-wrap:wrap}
+ .vtools input[type=text]{flex:1;min-width:150px;font-size:13px;padding:7px 10px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px}
+ .vtools input[type=text]:focus{border-color:#2d6cdf;outline:none}
+ .vcount{color:#8a9099;font-size:12.5px;white-space:nowrap}
+ .vwrap{color:#b9bec6;font-size:13px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+ .vbody{flex:1;overflow:auto;padding:8px 0}
+ .vbody pre{margin:0;padding:0 16px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.5;color:#d6d9de;white-space:pre;tab-size:4}
+ .vbody pre.wrap{white-space:pre-wrap;word-break:break-word}
+ .vbody .ln{display:block;min-height:1em}
+ .vbody .ln.err{color:#ff9b9b}
+ .vbody .ln.evt{color:#8fc8ff}
+ .vempty{color:#777;font-size:13px;padding:16px}
+ @media (max-width:760px){ th.ua,td.ua{display:none} .vbox{height:calc(100vh - 20px);width:calc(100vw - 12px)} }
 </style>
 </head>
 <body>
@@ -69,7 +91,7 @@
     </div>
     <div id="listWrap">
       <table id="tbl">
-        <thead><tr><th style="width:26px"></th><th>File</th><th>Date</th><th>Size</th><th style="width:70px"></th></tr></thead>
+        <thead><tr><th style="width:26px"></th><th>File</th><th>Date</th><th>Size</th><th style="width:130px"></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="empty" id="empty" style="display:none">No log files yet.</div>
@@ -83,6 +105,24 @@
 
 </div>
 <div id="toasts"></div>
+
+<div id="viewer" class="vmodal">
+  <div class="vbox">
+    <div class="vhead">
+      <div class="vtitle" id="vTitle">log</div>
+      <div class="vmeta" id="vMeta"></div>
+      <button type="button" class="vclose" id="vClose" title="Close (Esc)">✕</button>
+    </div>
+    <div class="vtools">
+      <input type="text" id="vFilter" placeholder="Filter lines…" autocomplete="off">
+      <span class="vcount" id="vCount"></span>
+      <label class="vwrap"><input type="checkbox" id="vWrap"> Wrap</label>
+      <button type="button" id="vFull" style="display:none">⤓ Load full file</button>
+      <a class="dl" id="vDownload" href="#">Download</a>
+    </div>
+    <div class="vbody" id="vBody"><pre id="vPre"></pre></div>
+  </div>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -155,9 +195,13 @@ function render(){
      '<td class="name">'+esc(f.name)+'</td>' +
      '<td class="time">'+esc(f.time||'')+'</td>' +
      '<td class="size">'+fmtBytes(f.size)+'</td>' +
-     '<td><a class="dl" href="/api/log/file?name='+enc(f.name)+'">Download</a></td>';
+     '<td class="act"><a class="dl" href="#" data-view="'+esc(f.name)+'">View</a>' +
+       ' &middot; <a class="dl" href="/api/log/file?name='+enc(f.name)+'">Download</a></td>';
    rows.appendChild(tr);
  });
+ document.querySelectorAll('[data-view]').forEach(a => a.addEventListener('click', e => {
+   e.preventDefault(); openViewer(a.getAttribute('data-view'));
+ }));
  document.querySelectorAll('.sel').forEach(c => c.addEventListener('change', updateSel));
  $('selAll').checked = false;
  updateSel();
@@ -170,7 +214,12 @@ function render(){
 }
 
 function levelLabel(l){
- return l === 'all' ? 'Everything' : l === 'events' ? 'Errors + events' : 'Requests + events + errors';
+ switch(l){
+   case 'all': return 'Everything';
+   case 'payloads': return 'Everything + payloads';
+   case 'events': return 'Errors + events';
+   default: return 'Requests + events + errors';
+ }
 }
 
 function selectedNames(){
@@ -215,6 +264,77 @@ $('clearAll').addEventListener('click', async () => {
 $('refresh').addEventListener('click', () => load());
 $('prev').addEventListener('click', () => { if(page>1){ page--; load(); } });
 $('next').addEventListener('click', () => { page++; load(); });
+
+// ---- in-browser viewer -----------------------------------------------------
+// Column offsets match logColumns() in logging.go: timestamp (29) + 2 spaces = 31,
+// then the 7-wide TYPE column. We colour ERROR/EVENT rows off that fixed slot.
+const VIEW_TAIL = 400 * 1024; // bytes fetched on first open; big files offer "load full"
+let vName = null, vLines = [], vTotal = 0;
+
+async function openViewer(name){
+ vName = name;
+ $('vTitle').textContent = name;
+ $('vDownload').href = '/api/log/file?name=' + enc(name);
+ $('vFilter').value = '';
+ $('vWrap').checked = false; $('vPre').classList.remove('wrap');
+ $('viewer').classList.add('show');
+ await loadViewer(VIEW_TAIL);
+}
+async function loadViewer(tail){
+ $('vMeta').textContent = 'loading…';
+ let r;
+ try { r = await fetch('/api/log/view?name=' + enc(vName) + (tail > 0 ? '&tail=' + tail : '')); }
+ catch(e){ $('vMeta').textContent = 'could not load'; return; }
+ if(!r.ok){ $('vMeta').textContent = 'could not load'; return; }
+ const total = parseInt(r.headers.get('X-Log-Total') || '0', 10);
+ const returned = parseInt(r.headers.get('X-Log-Returned') || '0', 10);
+ const text = await r.text();
+ vTotal = total;
+ vLines = text ? text.replace(/\n$/, '').split('\n') : [];
+ const partial = returned < total;
+ $('vFull').style.display = partial ? '' : 'none';
+ $('vMeta').textContent = partial
+   ? ('showing last ' + fmtBytes(returned) + ' of ' + fmtBytes(total) + ' — newest first is at the bottom')
+   : (fmtBytes(total) + ', ' + vLines.length + ' lines');
+ renderViewer();
+ const body = $('vBody'); body.scrollTop = body.scrollHeight; // jump to newest
+}
+function lineClass(line){
+ const typ = line.slice(31, 38).trim();
+ if(typ === 'ERROR') return 'ln err';
+ if(typ === 'EVENT') return 'ln evt';
+ return 'ln';
+}
+function renderViewer(){
+ const filter = $('vFilter').value.toLowerCase();
+ const pre = $('vPre');
+ const frag = document.createDocumentFragment();
+ let shown = 0;
+ for(const line of vLines){
+   if(filter && !line.toLowerCase().includes(filter)) continue;
+   const span = document.createElement('span');
+   span.className = lineClass(line);
+   span.textContent = line;
+   frag.appendChild(span);
+   shown++;
+ }
+ pre.textContent = '';
+ pre.appendChild(frag);
+ $('vCount').textContent = filter ? (shown + ' of ' + vLines.length + ' lines') : (vLines.length + ' lines');
+}
+function closeViewer(){ $('viewer').classList.remove('show'); vLines = []; $('vPre').textContent = ''; }
+
+$('vClose').addEventListener('click', closeViewer);
+$('viewer').addEventListener('click', e => { if(e.target === $('viewer')) closeViewer(); });
+document.addEventListener('keydown', e => {
+ if(e.key === 'Escape' && $('viewer').classList.contains('show')) closeViewer();
+});
+$('vFilter').addEventListener('input', renderViewer);
+$('vWrap').addEventListener('change', () => $('vPre').classList.toggle('wrap', $('vWrap').checked));
+$('vFull').addEventListener('click', async () => {
+ if(vTotal > 4*1024*1024 && !await pjConfirm('This file is '+fmtBytes(vTotal)+'. Loading all of it in the browser may be slow. Continue?', {title:'Load full file', okLabel:'Load'})) return;
+ await loadViewer(0);
+});
 
 load();
 </script>
