@@ -28,7 +28,9 @@
  input[type=text],input[type=password]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:100%}
  input[type=text]:focus,input[type=password]:focus,input[type=number]:focus{border-color:#2d6cdf;outline:none}
  input[type=number]{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;box-sizing:border-box;width:90px}
- input:disabled{opacity:.45}
+ select{font-size:14px;padding:9px 11px;background:#2a2d33;color:#eee;border:1px solid #444;border-radius:5px;max-width:100%}
+ select:focus{border-color:#2d6cdf;outline:none}
+ input:disabled,select:disabled{opacity:.45}
  /* member-entry options greyed out while the master switch is off */
  .entry-dep.off{opacity:.4}
  .entry-dep.off .num .chk{color:#8a9099}
@@ -215,6 +217,55 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Debug logging</h2>
+    <div class="sub">Records what the app is doing to help diagnose problems. Off by default. When on, activity is appended to a <b>single log file per day</b> (one row per request and per app event, in columns) in a folder next to the app. Use it only while chasing an issue.</div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Enable debug logging</div>
+        <div class="d" id="lognote">Start capturing activity to log files. Turns itself off automatically after the time limit below so it can't be left running.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="loggingEnabled"><span class="sl"></span></label>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Detail level</div>
+        <div class="d">How much to capture. <b>Errors + events</b> keeps only the app's own notable events and any errors. <b>Requests + events + errors</b> adds a line per meaningful request. <b>Everything</b> also logs high-frequency traffic (live updates, status polls, image fetches) — biggest and noisiest.</div>
+      </div>
+      <select id="logLevel">
+        <option value="events">Errors + events only</option>
+        <option value="requests">Requests + events + errors</option>
+        <option value="all">Everything (incl. live updates &amp; images)</option>
+      </select>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Maximum log size</div>
+        <div class="d">When the log folder grows past this, the oldest files are deleted to stay under the limit.</div>
+      </div>
+      <div class="num"><input type="number" id="logMaxMB" min="1" max="5000" step="1"> <span style="color:#b9bec6;font-size:13px">MB</span></div>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Auto-turn-off after</div>
+        <div class="d">Automatically switch logging back off this many minutes after it's turned on, so it's never left running by accident. Set to <b>0</b> to never auto-off.</div>
+      </div>
+      <div class="num"><input type="number" id="logAutoOffMinutes" min="0" max="100000" step="1"> <span style="color:#b9bec6;font-size:13px">min</span></div>
+    </div>
+    <div class="row">
+      <div class="txt">
+        <div class="t">Always log errors</div>
+        <div class="d">Keep recording errors even when the switch above is off. Errors are rare, so this is safe to leave on and means a problem is captured even if logging wasn't running.</div>
+      </div>
+      <label class="sw"><input type="checkbox" id="logAlwaysErrors"><span class="sl"></span></label>
+    </div>
+    <div class="sub" style="margin:14px 0 8px">Log files are stored in:<br><code id="logDirPath" style="color:#c9ccd1;word-break:break-all">…</code></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <a href="/logs" style="text-decoration:none"><button type="button" class="primary">📂 View &amp; download logs</button></a>
+      <button type="button" id="logClear">🗑 Delete all logs</button>
+    </div>
+  </div>
+
 </div>
 <div id="toasts"></div>
 
@@ -223,7 +274,7 @@ const $ = id => document.getElementById(id);
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const enc = encodeURIComponent;
-const TOGGLES = ['lockScorekeeper','guidedPresentation','scoreKeeperEnabled','judgeScoringEnabled','scorekeeperScreen','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval'];
+const TOGGLES = ['lockScorekeeper','guidedPresentation','scoreKeeperEnabled','judgeScoringEnabled','scorekeeperScreen','singleLiveScreen','spreadPhotographers','lanAccess','importPhotographer','importTitle','entriesEnabled','entryRequireApproval','loggingEnabled','logAlwaysErrors'];
 let state = null; // last GET response
 
 function toast(msg, kind){
@@ -254,7 +305,12 @@ function collect(){
    maxEntriesPerCompetitor: $('unlimPer').checked ? 0 : (parseInt($('maxPer').value,10) || 0),
    maxEntriesPerCategory: $('unlimCat').checked ? 0 : (parseInt($('maxCat').value,10) || 0),
    wifiSSID: $('wifiSSID').value,
-   wifiPassword: $('wifiPassword').value
+   wifiPassword: $('wifiPassword').value,
+   loggingEnabled: $('loggingEnabled').checked,
+   logLevel: $('logLevel').value,
+   logMaxMB: parseInt($('logMaxMB').value,10) || 1,
+   logAutoOffMinutes: Math.max(0, parseInt($('logAutoOffMinutes').value,10) || 0),
+   logAlwaysErrors: $('logAlwaysErrors').checked
  };
 }
 
@@ -316,8 +372,43 @@ function apply(st){
    ? '<span class="warn">Turned off by importMetadata=false in photo-judge.properties — set it to true there to use these.</span>'
    : 'When a photo has the matching info embedded, fill it in automatically on upload.';
 
+ // Debug logging
+ $('loggingEnabled').checked = s.loggingEnabled;
+ $('logAlwaysErrors').checked = s.logAlwaysErrors;
+ if(document.activeElement !== $('logLevel')){ $('logLevel').value = s.logLevel || 'requests'; }
+ if(document.activeElement !== $('logMaxMB')){ $('logMaxMB').value = s.logMaxMB || 20; }
+ if(document.activeElement !== $('logAutoOffMinutes')){ $('logAutoOffMinutes').value = (s.logAutoOffMinutes==null ? 120 : s.logAutoOffMinutes); }
+ $('logDirPath').textContent = st.logDir || '';
+ logRemaining = (typeof st.logRemainingSeconds === 'number') ? st.logRemainingSeconds : -1;
+ renderLogStatus(st.logActive);
+
  renderLogos(st);
 }
+
+// Live status line under the logging toggle, with a ticking auto-off countdown.
+let logRemaining = -1;
+function fmtDur(sec){
+ sec = Math.max(0, Math.round(sec));
+ const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+ if(h) return h+'h '+m+'m';
+ if(m) return m+'m '+s+'s';
+ return s+'s';
+}
+function renderLogStatus(active){
+ const base = 'Start capturing activity to log files. Turns itself off automatically after the time limit below so it can\'t be left running.';
+ if(active){
+   let msg = '<span style="color:#5fbf7a">● Logging is ON.</span>';
+   if(logRemaining >= 0) msg += ' Auto-off in <b>'+fmtDur(logRemaining)+'</b>.';
+   else msg += ' No auto-off set — remember to turn it back off.';
+   $('lognote').innerHTML = msg;
+ } else {
+   $('lognote').innerHTML = base;
+ }
+}
+setInterval(() => {
+ if(!$('loggingEnabled').checked) return;
+ if(logRemaining > 0){ logRemaining--; renderLogStatus(true); if(logRemaining === 0) setTimeout(load, 1200); }
+}, 1000);
 
 // When member entries are off, disable and grey out every dependent option (approval,
 // per-competitor limits, and the entry Wi-Fi card). The master switch stays live.
@@ -392,6 +483,16 @@ TOGGLES.forEach(id => $(id).addEventListener('change', save));
 $('entriesEnabled').addEventListener('change', syncEntries); // grey out deps immediately
 $('pdfHeader').addEventListener('input', () => { $('pdfcount').textContent = $('pdfHeader').value.length; });
 $('pdfHeader').addEventListener('change', save);
+
+// Debug logging inputs
+['logLevel','logMaxMB','logAutoOffMinutes'].forEach(id => $(id).addEventListener('change', save));
+$('logClear').addEventListener('click', async () => {
+ if(!await pjConfirm('Delete all log files? This can\'t be undone.', {title:'Delete all logs', okLabel:'Delete', danger:true})) return;
+ const r = await post('/api/logs/clear', {});
+ if(!r.ok){ toast('Could not delete logs', 'del'); return; }
+ const j = await r.json();
+ toast('Deleted '+ (j.removed||0) +' log file'+((j.removed===1)?'':'s'), 'del');
+});
 
 // Member-entry limits + Wi-Fi
 ['maxPer','maxCat','wifiSSID','wifiPassword'].forEach(id => $(id).addEventListener('change', save));

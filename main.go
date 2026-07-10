@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -339,6 +340,20 @@ type server struct {
 	// fields blank, and surfaced as placeholders on the Settings page.
 	detectedWifiSSID     string
 	detectedWifiPassword string
+
+	// Debug logging (see logging.go). The atomics are the hot-path snapshot read on
+	// every request without taking s.mu; applyLogConfig refreshes them from settings.
+	// logMu guards the on-disk index (logIndex, oldest-first day files) and its running
+	// byte total used to enforce the size cap, plus the currently-open day file.
+	logDebugOn   atomic.Bool  // logging master switch is on AND not auto-expired
+	logLevelV    atomic.Int32 // 0 events, 1 requests, 2 all
+	logAlwaysErr atomic.Bool  // capture errors even when logDebugOn is false
+	logMaxBytes  atomic.Int64 // folder cap in bytes
+	logMu        sync.Mutex
+	logIndex     []logEntry // day files, oldest-first (name sorts chronologically)
+	logTotal     int64      // sum of logIndex sizes
+	logCurDay    string     // date (2006-01-02) of the currently-open day file
+	logCurFile   *os.File   // append handle for today's log file (nil until first write)
 
 	shutdownCh   chan struct{}
 	shutdownOnce sync.Once
@@ -2202,6 +2217,13 @@ func main() {
 	}
 
 	s := &server{baseDir: baseDir, screens: map[string]*Screen{}, h: newHub(), shutdownCh: make(chan struct{})}
+	// Mirror the standard logger into the debug-log tee so log.Printf lines can be
+	// captured as EVENT rows when logging is on (it still writes to stderr, so the
+	// console window keeps showing them). Lshortfile adds a "file.go:NN" source
+	// location, which becomes the file:line column in the log file. Installed early;
+	// nothing is captured until the operator turns logging on (the atomics default off).
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	log.SetOutput(&logTee{s: s, std: os.Stderr})
 	if err := os.MkdirAll(filepath.Join(baseDir, "photos"), 0o755); err != nil {
 		log.Fatalf("cannot write to %s — is the folder writable? (%v)", baseDir, err)
 	}
@@ -2218,6 +2240,18 @@ func main() {
 	s.loadScreens()
 	s.sweepImportTmp() // clear any leftover import staging from a previous run
 	s.detectWifi()     // best-effort host Wi-Fi (name/password) for entry instructions
+
+	// Debug logging: if a previous run left it on but its auto-off window already
+	// lapsed, turn it off now; then publish the config to the hot-path atomics, load
+	// any existing log files into the size index, and start the auto-off ticker.
+	if s.settings.LoggingEnabled && s.logExpired() {
+		s.settings.LoggingEnabled = false
+		s.settings.LogEnabledAt = 0
+		_ = s.saveSettings()
+	}
+	s.applyLogConfig()
+	s.seedLogIndex()
+	s.startLogAutoOff()
 
 	sub, _ := fs.Sub(webFS, "web")
 	mux := http.NewServeMux()
@@ -2245,6 +2279,7 @@ func main() {
 	mux.HandleFunc("/archived", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "archived.html") })
 	mux.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "stats.html") })
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "settings.html") })
+	mux.HandleFunc("/logs", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "logs.html") })
 	mux.HandleFunc("/nav.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "nav.js") })
 	mux.HandleFunc("/modal.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "modal.js") })
 	mux.HandleFunc("/portation.js", func(w http.ResponseWriter, r *http.Request) { serveAsset(w, sub, "portation.js") })
@@ -2323,6 +2358,10 @@ func main() {
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/logo/upload", s.handleLogoUpload)
 	mux.HandleFunc("/api/logo/delete", s.handleLogoDelete)
+	mux.HandleFunc("/api/logs", s.handleLogsList)
+	mux.HandleFunc("/api/log/file", s.handleLogFile)
+	mux.HandleFunc("/api/logs/zip", s.handleLogsZip)
+	mux.HandleFunc("/api/logs/clear", s.handleLogsClear)
 
 	// Resolve the listen port: photo-judge.properties (default 80, or a free port
 	// when autoPort=true) sets it; PHOTOJUDGE_PORT overrides for dev/testing.
@@ -2381,7 +2420,7 @@ func main() {
 	}
 	u := "http://127.0.0.1:" + s.port + "/console"
 
-	srv := &http.Server{Handler: mux}
+	srv := &http.Server{Handler: s.withLogging(mux)}
 	go func() {
 		<-s.shutdownCh
 		log.Println("Close App pressed — shutting down.")

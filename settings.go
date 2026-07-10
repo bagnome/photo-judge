@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const pdfHeaderMax = 90 // characters — kept short enough to stay within ~2 PDF lines
@@ -38,11 +39,35 @@ type Settings struct {
 	MaxEntriesPerCategory   int    `json:"maxEntriesPerCategory"`   // 0 = unlimited (per competitor)
 	WifiSSID                string `json:"wifiSSID"`                // network competitors join ("" = auto-detect)
 	WifiPassword            string `json:"wifiPassword"`            // password for that network
+	// Debug logging (see logging.go). One file per request/event under logs\. LogLevel
+	// picks how much is captured; LogMaxMB caps the folder (oldest deleted first);
+	// LogAutoOffMinutes turns logging back off after a while so it can't be left on;
+	// LogAlwaysErrors keeps errors flowing even when the master switch is off.
+	LoggingEnabled    bool   `json:"loggingEnabled"`    // master switch for debug logging
+	LogLevel          string `json:"logLevel"`          // "events" | "requests" | "all"
+	LogMaxMB          int    `json:"logMaxMB"`          // cap on the logs\ folder in MB (oldest deleted first)
+	LogAutoOffMinutes int    `json:"logAutoOffMinutes"` // auto-turn-off after N minutes (0 = never)
+	LogAlwaysErrors   bool   `json:"logAlwaysErrors"`   // log errors even when LoggingEnabled is off
+	LogEnabledAt      int64  `json:"logEnabledAt"`      // unix seconds logging was switched on (server-managed; drives auto-off)
 }
 
 func defaultSettings() Settings {
-	return Settings{LanAccess: true, ImportPhotographer: true, ImportTitle: true, EntriesEnabled: true, EntryRequireApproval: true}
+	return Settings{
+		LanAccess: true, ImportPhotographer: true, ImportTitle: true,
+		EntriesEnabled: true, EntryRequireApproval: true,
+		LogLevel: "requests", LogMaxMB: 20, LogAutoOffMinutes: 120, LogAlwaysErrors: true,
+	}
 }
+
+// Log detail levels, most to least verbose. levelAll logs everything (including the
+// high-frequency SSE/poll/photo traffic); levelRequests adds a per-request access line
+// for the meaningful calls but skips that noise; levelEvents keeps only the app's own
+// notable events and errors. Errors are captured at every level.
+const (
+	logLevelEvents   = "events"
+	logLevelRequests = "requests"
+	logLevelAll      = "all"
+)
 
 // presentationMode reports whether any console-driven presentation mode is on. When it
 // is, the operator drives a guided run from the console (Start/Pause/End) instead of
@@ -99,6 +124,27 @@ func (s *server) sanitizeSettings() {
 	}
 	if len(s.settings.WifiPassword) > 64 {
 		s.settings.WifiPassword = s.settings.WifiPassword[:64]
+	}
+	// Debug logging: keep the level to a known value and the numbers in sane bounds.
+	switch s.settings.LogLevel {
+	case logLevelEvents, logLevelRequests, logLevelAll:
+	default:
+		s.settings.LogLevel = logLevelRequests
+	}
+	if s.settings.LogMaxMB < 1 {
+		s.settings.LogMaxMB = 1
+	}
+	if s.settings.LogMaxMB > 5000 {
+		s.settings.LogMaxMB = 5000
+	}
+	if s.settings.LogAutoOffMinutes < 0 {
+		s.settings.LogAutoOffMinutes = 0
+	}
+	if s.settings.LogAutoOffMinutes > 100000 {
+		s.settings.LogAutoOffMinutes = 100000
+	}
+	if !s.settings.LoggingEnabled {
+		s.settings.LogEnabledAt = 0 // cleared while off so re-enabling starts a fresh timer
 	}
 }
 
@@ -178,10 +224,23 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
+		// LogEnabledAt is server-managed (the client never sends a meaningful value):
+		// stamp "now" only on an off→on transition so re-enabling starts the auto-off
+		// timer fresh, and preserve it while logging stays on so saving other settings
+		// doesn't reset the countdown.
+		wasLogging, prevEnabledAt := s.settings.LoggingEnabled, s.settings.LogEnabledAt
 		// Preserve fields the client shouldn't overwrite is unnecessary — the page
 		// always sends the full set. Just sanitize and apply.
 		s.settings = body
 		s.sanitizeSettings()
+		if s.settings.LoggingEnabled {
+			if wasLogging && prevEnabledAt > 0 {
+				s.settings.LogEnabledAt = prevEnabledAt
+			} else {
+				s.settings.LogEnabledAt = time.Now().Unix()
+			}
+		}
+		s.applyLogConfig() // push the new logging config to the hot-path atomics
 		s.refreshLogo()
 		if !s.settings.EntriesEnabled {
 			s.entryOpen = false // turning the feature off closes any open entry form
@@ -208,6 +267,9 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		"boundLanAccess":       s.lanAccess, // what the running server actually bound with
 		"detectedWifiSSID":     s.detectedWifiSSID,
 		"detectedWifiPassword": s.detectedWifiPassword,
+		"logDir":               s.logDir(),          // absolute folder the log files live in
+		"logActive":            s.settings.LoggingEnabled && !s.logExpired(),
+		"logRemainingSeconds":  s.logRemainingSeconds(), // -1 = no auto-off, else seconds left
 	}
 	s.mu.Unlock()
 	writeJSON(w, resp)
