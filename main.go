@@ -2360,6 +2360,7 @@ func main() {
 	mux.HandleFunc("/api/logo/delete", s.handleLogoDelete)
 	mux.HandleFunc("/api/logs", s.handleLogsList)
 	mux.HandleFunc("/api/log/file", s.handleLogFile)
+	mux.HandleFunc("/api/log/view", s.handleLogView)
 	mux.HandleFunc("/api/logs/zip", s.handleLogsZip)
 	mux.HandleFunc("/api/logs/clear", s.handleLogsClear)
 

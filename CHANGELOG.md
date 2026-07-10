@@ -21,8 +21,11 @@ not yet released.
   the exe — one **columnar** row per request and per app event (timestamp, type, a
   file:line source location where there is one, then the message).
   - **Detail level** picks how much is captured: **Errors + events only**, **Requests +
-    events + errors**, or **Everything** (also logs the high-frequency live-update,
-    status-poll and image traffic).
+    events + errors**, **Everything** (also logs the high-frequency live-update,
+    status-poll and image traffic), or **Everything + payloads** — the most detailed
+    level, which also records the **data body sent with each request** (`body=…` on the
+    row). Passwords and other secret-looking fields are **masked**; large bodies are
+    truncated and binary uploads (photos, logos) are skipped.
   - **Maximum log size (MB)** caps the folder — when it's exceeded, the **oldest day
     files are deleted** first.
   - **Auto-turn-off after N minutes** switches logging back off on its own, so it can't
@@ -32,6 +35,9 @@ not yet released.
   - A **Delete all logs** button (on Settings and the Logs page) clears them, and a new
     **Logs** page (in the side menu) lists the files with the folder's on-disk path and
     lets you **download** any one, a selected set, or **all** of them (as a zip).
+  - Each file also has a **View** action that opens it **in the browser** — no download
+    needed — with a line **filter** box, a **wrap** toggle, and (for large files) a tail
+    preview with a **Load full file** button.
 
 ## [1.4.11.3] - 2026-06-30 — "Denali"
 
