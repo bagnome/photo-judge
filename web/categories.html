@@ -140,6 +140,7 @@
 </div>
 
 <div id="manager">
+  <div id="pres-lock" class="note" style="display:none;color:#ffd27a;margin:0 0 12px">● A presentation is running on this session — the category list is locked. Press <b>End</b> on the <a href="/console" style="color:#7fa9f0">Console</a> to make changes.</div>
   <div class="addrow">
     <label>Add category</label>
     <input id="newcat" type="text" placeholder="e.g. Nature" maxlength="100">
@@ -170,15 +171,21 @@
 <script>
 const $ = id => document.getElementById(id);
 const enc = encodeURIComponent;
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const post = (u,b) => fetch(u, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)});
 let sessions = [];
 let detail = {active:[], inactive:[], used:[]};
 let selActive = null, selInactive = null;
 let loadedFor = null;            // session id whose detail is currently shown
 let screens = [];                // output screens, for the solo-mode assignment dropdowns
+let soloState = null;            // live presentation run (from the console SSE), or null
 
 const sid = () => $('session').value;
 const curSessionObj = () => sessions.find(s => s.id === sid());
+// A presentation is "active" for the shown session when a run is in progress on it
+// (running or paused). Categories stay visible, but their order/set is locked then —
+// editing mid-run would desync the live segments — until End is pressed on the Console.
+const presentationActive = () => !!(soloState && soloState.active && soloState.sessionId === sid());
 
 function toast(msg, kind){
  const t=document.createElement('div'); t.className='toast'+(kind?' '+kind:''); t.textContent=msg;
@@ -202,8 +209,9 @@ function applyState(st){
  populateScreenSelects();
  updateView();
  const cs = sid();
- if(cs && cs !== loadedFor) loadDetail();        // first session / selection arrived via SSE
- else if(!cs) loadedFor = null;
+ if(!cs) loadedFor = null;
+ else if(cs !== loadedFor) loadDetail();          // first session / selection arrived via SSE
+ else render();                                   // same session — refresh the lock from live solo status
 }
 
 // Fill the landscape/portrait screen dropdowns from the live screen list, keeping any
@@ -333,11 +341,17 @@ function render(){
  });
 
  const aIdx = active.indexOf(selActive);
- $('actUp').disabled = !(selActive && aIdx>0);
- $('actDown').disabled = !(selActive && aIdx>=0 && aIdx<active.length-1);
- $('actDeactivate').disabled = !selActive;
- $('actActivate').disabled = !selInactive;
- $('actDelete').disabled = !(selInactive && !used.has((selInactive||'').toLowerCase()));
+ // While a presentation is running on this session, keep the lists visible but lock
+ // every edit control (add / activate / deactivate / reorder / delete).
+ const locked = presentationActive();
+ $('pres-lock').style.display = locked ? '' : 'none';
+ $('newcat').disabled = locked;
+ $('addbtn').disabled = locked;
+ $('actUp').disabled = locked || !(selActive && aIdx>0);
+ $('actDown').disabled = locked || !(selActive && aIdx>=0 && aIdx<active.length-1);
+ $('actDeactivate').disabled = locked || !selActive;
+ $('actActivate').disabled = locked || !selInactive;
+ $('actDelete').disabled = locked || !(selInactive && !used.has((selInactive||'').toLowerCase()));
 }
 
 async function mutate(url, body, okMsg, kind){
