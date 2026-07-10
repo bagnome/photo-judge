@@ -982,6 +982,11 @@ func (s *server) categoryMutation(w http.ResponseWriter, r *http.Request, fn fun
 		http.Error(w, "no such session", 404)
 		return
 	}
+	if s.solo != nil && s.solo.sessionID == ss.ID {
+		s.mu.Unlock()
+		http.Error(w, "a presentation is running on this session — End it first to change categories", http.StatusConflict)
+		return
+	}
 	if code, msg := fn(ss, name); code != 0 {
 		s.mu.Unlock()
 		http.Error(w, msg, code)
@@ -1073,6 +1078,11 @@ func (s *server) handleCategoryReorder(w http.ResponseWriter, r *http.Request) {
 	if ss == nil {
 		s.mu.Unlock()
 		http.Error(w, "no such session", 404)
+		return
+	}
+	if s.solo != nil && s.solo.sessionID == ss.ID {
+		s.mu.Unlock()
+		http.Error(w, "a presentation is running on this session — End it first to reorder categories", http.StatusConflict)
 		return
 	}
 	seen := map[string]bool{}

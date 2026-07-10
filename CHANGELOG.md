@@ -13,6 +13,21 @@ not yet released.
 
 ## [Unreleased]
 
+### Fixed
+- **Session Management no longer loses a session's categories once it has been presented.**
+  Selecting a session that had been **started** (or ended) showed an empty category
+  manager — no Active/Inactive lists and no way to reorder them — because the page threw a
+  `ReferenceError` (an undefined `esc` helper) while rendering the session's start/end
+  status, which aborted loading before the categories were drawn. A fresh, never-run
+  session was unaffected, which is why it only appeared after starting a presentation. The
+  categories now load for any session.
+- **Category editing is locked while a presentation is running on that session.** The
+  category list stays **visible** during a run, but adding, activating/deactivating,
+  reordering, and deleting are disabled (with an on-page notice) until you press **End** on
+  the Console — editing mid-run would desync the live presentation. The server also rejects
+  these changes while a run is active. Once the presentation is stopped, editing the order
+  works normally again.
+
 ## [1.4.11.3] - 2026-06-30 — "Denali"
 
 ### Changed
