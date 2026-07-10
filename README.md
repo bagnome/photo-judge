@@ -217,6 +217,18 @@ that workflow.
   member-entry limits (per competitor and per category), and the Wi-Fi name/password shown on
   the Entry-QR screen. Saved to `settings.json`; the LAN and metadata toggles are gated by
   `photo-judge.properties` (a `false` there wins).
+- **Debug logging** — an operator-toggled trace for diagnosing problems, off by default
+  and enabled from a **Debug logging** card on the Settings page. When on, the app appends
+  to a **single rolling log file per day** (e.g. `2026-07-10.log`) in a `logs\` folder next
+  to the exe, one **columnar** row per request and per app event (timestamp, type, a
+  file:line source location where there is one, then the message). A **detail level**
+  (errors + events / requests + events + errors / everything) sets how much is captured; a
+  **max size (MB)** caps the folder (oldest day files deleted first); an **auto-off timer**
+  turns logging back off after a set number of minutes so it can't be left running; and an
+  **always-log-errors** switch keeps recording genuine server errors even while the master
+  toggle is off. A **Logs** page lists the day files (with their on-disk directory) and
+  downloads any one, a selection, or all of them as a zip; **Delete all logs** clears them.
+  Standard-library only (no logging framework).
 - **Consistent in-app dialogs** — confirmations, prompts, and messages use the app's own
   dark modals (matching the QR-code dialog) instead of the browser's plain pop-ups, with a
   red action button for destructive choices; **Enter** confirms and **Esc** cancels.
@@ -365,7 +377,9 @@ new sessions — copy to the local drive for an event).
 | `metadata.go` | Reads photographer / title from JPEG EXIF & PNG text chunks on upload |
 | `physical.go` | Physical-print scoring (no image file) — store/search per session |
 | `settings.go` | App settings (`settings.json`) + logo library; gated by properties |
-| `web/settings.html` | Settings page (toggles, logo library, PDF header) |
+| `logging.go` | Debug logging — per-day columnar log file, size-cap, auto-off, request middleware, Logs-page handlers |
+| `web/logs.html` | Logs page — browse/download (zip) and delete the daily debug log files |
+| `web/settings.html` | Settings page (toggles, logo library, PDF header, debug logging) |
 | `qr.go` | Standard-library QR-code encoder for the "connect over LAN" code |
 | `web/console.html` | Operator console (private control surface) |
 | `web/nav.js` | Shared right-side navigation menu injected into every control page |

@@ -13,6 +13,26 @@ not yet released.
 
 ## [Unreleased]
 
+### Added
+- **Debug logging** — a new operator-toggled trace of what the app is doing, for
+  diagnosing problems after the fact. It's **off by default**; turn it on from a new
+  **Debug logging** card on the **Settings** page. While on, the app appends to a
+  **single rolling log file per day** (e.g. `2026-07-10.log`) in a `logs\` folder next to
+  the exe — one **columnar** row per request and per app event (timestamp, type, a
+  file:line source location where there is one, then the message).
+  - **Detail level** picks how much is captured: **Errors + events only**, **Requests +
+    events + errors**, or **Everything** (also logs the high-frequency live-update,
+    status-poll and image traffic).
+  - **Maximum log size (MB)** caps the folder — when it's exceeded, the **oldest day
+    files are deleted** first.
+  - **Auto-turn-off after N minutes** switches logging back off on its own, so it can't
+    be left running by accident (0 = never). The Settings card shows a live countdown.
+  - **Always log errors** keeps capturing genuine server errors even when the master
+    switch is off, so a failure is recorded even if logging wasn't running.
+  - A **Delete all logs** button (on Settings and the Logs page) clears them, and a new
+    **Logs** page (in the side menu) lists the files with the folder's on-disk path and
+    lets you **download** any one, a selected set, or **all** of them (as a zip).
+
 ## [1.4.11.3] - 2026-06-30 — "Denali"
 
 ### Changed

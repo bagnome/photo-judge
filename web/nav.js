@@ -14,6 +14,7 @@
     { href: '/archived',        icon: '🗄️', label: 'Archived Sessions' },
     { href: '/stats',           icon: '📊', label: 'Statistics' },
     { href: '/settings',        icon: '⚙️', label: 'Settings' },
+    { href: '/logs',            icon: '📄', label: 'Logs' },
     { href: '/how-to', icon: '📖', label: 'How To' }
   ];
   var RAIL = 54, OPEN = 248, MOBILE = 760;
